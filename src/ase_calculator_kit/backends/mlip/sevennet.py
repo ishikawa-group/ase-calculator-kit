@@ -61,17 +61,17 @@ class SevenNetBackend(BaseBackend):
             includes nonlocal dispersion); ``matpes_r2scan`` needs an explicit
             ``dispersion_xc``. See ``docs/models.md``.
         """
-        try:
-            from sevenn.calculator import SevenNetCalculator
-        except ImportError as exc:  # pragma: no cover - exercised via tests with mocks
-            raise MissingDependencyError("SevenNet") from exc
-
-        resolved_device = resolve_device(device)
         # Validate the dispersion policy before loading the model (fail fast).
         d3_xc = precheck_dispersion_xc(
             self.name, modal if modal is not None else "default",
             dispersion=dispersion, dispersion_xc=dispersion_xc,
         )
+        resolved_device = resolve_device(device)
+
+        try:
+            from sevenn.calculator import SevenNetCalculator
+        except ImportError as exc:  # pragma: no cover - exercised via tests with mocks
+            raise MissingDependencyError("SevenNet") from exc
 
         params: dict = {
             "model": model,

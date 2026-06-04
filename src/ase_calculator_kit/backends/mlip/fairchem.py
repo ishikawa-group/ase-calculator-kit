@@ -59,16 +59,16 @@ class FairChemBackend(BaseBackend):
             (RPBE+D3 already included) and ``omol`` (wB97M-V nonlocal dispersion);
             ``odac``/``omc`` need an explicit ``dispersion_xc``. See ``docs/models.md``.
         """
-        try:
-            from fairchem.core import FAIRChemCalculator, pretrained_mlip
-        except ImportError as exc:  # pragma: no cover - exercised via tests with mocks
-            raise MissingDependencyError("fairchem-core") from exc
-
-        resolved_device = resolve_device(device)
         # Validate the dispersion policy before loading the model (fail fast).
         d3_xc = precheck_dispersion_xc(
             self.name, task, dispersion=dispersion, dispersion_xc=dispersion_xc,
         )
+        resolved_device = resolve_device(device)
+
+        try:
+            from fairchem.core import FAIRChemCalculator, pretrained_mlip
+        except ImportError as exc:  # pragma: no cover - exercised via tests with mocks
+            raise MissingDependencyError("fairchem-core") from exc
 
         predictor = pretrained_mlip.get_predict_unit(model, device=resolved_device)
         bare = FAIRChemCalculator(predictor, task_name=task, **kwargs)

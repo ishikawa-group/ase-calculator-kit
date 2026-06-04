@@ -49,12 +49,6 @@ class MatterSimBackend(BaseBackend):
             Add a Grimme-D3(BJ) correction (MatterSim is PBE, so ``xc="pbe"`` by
             default). See ``docs/models.md``.
         """
-        try:
-            from mattersim.forcefield import MatterSimCalculator
-        except ImportError as exc:  # pragma: no cover - exercised via tests with mocks
-            raise MissingDependencyError("MatterSim") from exc
-
-        resolved_device = resolve_device(device)
         if model in {"1M", "MatterSim-v1.0.0-1M"}:
             key = "1M"
         elif model in {"5M", "MatterSim-v1.0.0-5M"}:
@@ -65,6 +59,12 @@ class MatterSimBackend(BaseBackend):
         d3_xc = precheck_dispersion_xc(
             self.name, key, dispersion=dispersion, dispersion_xc=dispersion_xc,
         )
+        resolved_device = resolve_device(device)
+
+        try:
+            from mattersim.forcefield import MatterSimCalculator
+        except ImportError as exc:  # pragma: no cover - exercised via tests with mocks
+            raise MissingDependencyError("MatterSim") from exc
 
         params: dict = {"device": resolved_device}
 

@@ -44,17 +44,17 @@ class CHGNetBackend(BaseBackend):
             Add a Grimme-D3(BJ) correction (CHGNet is PBE+U, so ``xc="pbe"`` by
             default). See ``docs/models.md`` for the per-model policy.
         """
-        try:
-            from chgnet.model.dynamics import CHGNetCalculator
-        except ImportError as exc:  # pragma: no cover - exercised via tests with mocks
-            raise MissingDependencyError("CHGNet") from exc
-
-        use_device = resolve_device(device, allow_mps=True)
         # Validate the dispersion policy before loading the model (fail fast).
         d3_xc = precheck_dispersion_xc(
             self.name, model or "default",
             dispersion=dispersion, dispersion_xc=dispersion_xc,
         )
+        use_device = resolve_device(device, allow_mps=True)
+
+        try:
+            from chgnet.model.dynamics import CHGNetCalculator
+        except ImportError as exc:  # pragma: no cover - exercised via tests with mocks
+            raise MissingDependencyError("CHGNet") from exc
 
         if checkpoint is not None:
             bare = CHGNetCalculator.from_file(
