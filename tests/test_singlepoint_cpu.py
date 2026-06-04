@@ -93,3 +93,31 @@ def test_cpu_single_point(model, kwargs, make_system, singlepoint_progress):
     # ASE backends may return a numpy float scalar; accept any finite real number.
     assert isinstance(energy, numbers.Real)
     assert math.isfinite(float(energy))
+
+
+@pytest.mark.parametrize(
+    "model,kwargs",
+    [("chgnet", {}), ("uma", {"task": "oc20"})],
+    ids=["chgnet", "uma-oc20"],
+)
+def test_dispersion_changes_energy(model, kwargs, singlepoint_progress):
+    """dispersion=True must add a (negative) D3 contribution vs the bare model."""
+    try:
+        bare = _bulk()
+        bare.calc = get_calculator(model, device="cpu", **kwargs)
+        e_bare = float(bare.get_potential_energy())
+
+        d3 = _bulk()
+        d3.calc = get_calculator(model, device="cpu", dispersion=True, **kwargs)
+        e_d3 = float(d3.get_potential_energy())
+    except MissingDependencyError as exc:
+        pytest.skip(f"backend not installed: {exc}")
+    except Exception as exc:  # noqa: BLE001 - classify env vs real failure
+        text = str(exc).lower()
+        if any(hint in text for hint in _ENV_HINTS):
+            pytest.skip(f"environmental (weights/network/HF): {type(exc).__name__}: {exc}")
+        raise
+
+    assert math.isfinite(e_d3)
+    # D3 dispersion is attractive, so the corrected energy should be lower.
+    assert e_d3 < e_bare

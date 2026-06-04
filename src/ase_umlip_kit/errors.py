@@ -7,6 +7,16 @@ class UMLIPError(Exception):
     """Base class for all errors raised by ``ase_umlip_kit``."""
 
 
+class DispersionError(UMLIPError, ValueError):
+    """Raised when a requested dispersion (D3) correction is not allowed.
+
+    Either the model already includes dispersion in its training functional
+    (so adding D3 would double-count), or the functional is unverified and no
+    explicit ``dispersion_xc`` override was provided. Subclasses ``ValueError``
+    so it is catchable as an ordinary usage error.
+    """
+
+
 class MissingDependencyError(UMLIPError, ImportError):
     """Raised when the backend package for a requested model is not installed.
 

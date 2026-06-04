@@ -12,6 +12,15 @@ Supported backends:
 - [MatterSim](https://github.com/microsoft/mattersim)
 - [UMA / fairchem](https://github.com/facebookresearch/fairchem)
 
+### Why no MACE?
+
+MACE is **intentionally excluded**. `mace-torch` requires an `e3nn` version that
+conflicts with the `e3nn` pinned by SevenNet (`sevenn`) and UMA (`fairchem-core`).
+Because this package installs all backends together in one environment, adding
+MACE would break dependency resolution and the "install all four and they just
+work" guarantee. If you need MACE, use the dedicated MACE tooling in a separate
+environment rather than this kit.
+
 ## Install
 
 ```bash
@@ -146,6 +155,37 @@ For molecular tasks (`omol`), set `atoms.info["charge"]` and
 
 CHGNet supports `device="mps"` on Apple Silicon in addition to `"cuda"`,
 `"cpu"`, and `"auto"`.
+
+## Dispersion (D3)
+
+Add a Grimme-D3(BJ) van-der-Waals correction on top of any model with
+`dispersion=True` (off by default):
+
+```python
+atoms.calc = get_calculator("uma", task="omat", dispersion=True)        # auto xc=pbe
+atoms.calc = get_calculator("uma", task="oc20", dispersion=True)        # auto xc=rpbe
+atoms.calc = get_calculator("chgnet", dispersion=True)                  # auto xc=pbe
+atoms.calc = get_calculator("uma", task="odac",
+                            dispersion=True, dispersion_xc="pbe")        # override
+```
+
+The correction is applied as `SumCalculator([model, TorchDFTD3Calculator(...)])`
+via [`torch-dftd`](https://github.com/pfnet-research/torch-dftd) (a core
+dependency). The D3 `xc` defaults to the model's training functional; override it
+with `dispersion_xc`.
+
+**Double-counting guard.** Some models already include dispersion in their
+training functional, so `dispersion=True` is refused for them with a
+`DispersionError`:
+
+- **Always refused** (dispersion already baked in): UMA `oc25` (RPBE+D3), UMA
+  `omol` and SevenNet `omol25_*` (ωB97M-V nonlocal dispersion).
+- **Refused unless you pass an explicit `dispersion_xc`** (training functional
+  unverified): UMA `odac`/`omc`, SevenNet `matpes_r2scan`, any unknown checkpoint.
+
+See **[docs/models.md](docs/models.md)** for the full per-model table (training
+dataset, DFT level, dispersion status). It is kept in sync with the policy in
+`src/ase_umlip_kit/dispersion.py`.
 
 ## Development
 

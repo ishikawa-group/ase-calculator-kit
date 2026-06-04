@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
-from .errors import MissingDependencyError, UMLIPError
+from .errors import DispersionError, MissingDependencyError, UMLIPError
 from .factory import attach_calculator, available_models, get_calculator
 
 try:
@@ -32,5 +32,6 @@ __all__ = [
     "utils_uMLIP_calculator",
     "UMLIPError",
     "MissingDependencyError",
+    "DispersionError",
     "__version__",
 ]

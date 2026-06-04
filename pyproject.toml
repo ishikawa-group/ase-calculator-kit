@@ -27,6 +27,7 @@ dependencies = [
     "sevenn",
     "mattersim",
     "fairchem-core>=2.16.0",
+    "torch-dftd",  # Grimme-D3 dispersion correction (get_calculator(..., dispersion=True))
 ]
 
 [project.optional-dependencies]

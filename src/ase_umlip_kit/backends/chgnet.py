@@ -5,6 +5,7 @@ from __future__ import annotations
 from ase.calculators.calculator import Calculator
 
 from ..device import resolve_device
+from ..dispersion import precheck_dispersion_xc, wrap_with_d3
 from ..errors import MissingDependencyError
 from .base import BaseBackend
 
@@ -18,6 +19,8 @@ class CHGNetBackend(BaseBackend):
         device: str = "auto",
         model: str | None = None,
         checkpoint: str | None = None,
+        dispersion: bool = False,
+        dispersion_xc: str | None = None,
         **kwargs,
     ) -> Calculator:
         """Create a :class:`chgnet.model.dynamics.CHGNetCalculator`.
@@ -37,6 +40,9 @@ class CHGNetBackend(BaseBackend):
         checkpoint:
             Optional path to a ``.pth`` checkpoint, loaded via
             ``CHGNetCalculator.from_file``.
+        dispersion, dispersion_xc:
+            Add a Grimme-D3(BJ) correction (CHGNet is PBE+U, so ``xc="pbe"`` by
+            default). See ``docs/models.md`` for the per-model policy.
         """
         try:
             from chgnet.model.dynamics import CHGNetCalculator
@@ -44,16 +50,24 @@ class CHGNetBackend(BaseBackend):
             raise MissingDependencyError("CHGNet") from exc
 
         use_device = resolve_device(device, allow_mps=True)
+        # Validate the dispersion policy before loading the model (fail fast).
+        d3_xc = precheck_dispersion_xc(
+            self.name, model or "default",
+            dispersion=dispersion, dispersion_xc=dispersion_xc,
+        )
 
         if checkpoint is not None:
-            return CHGNetCalculator.from_file(
+            bare = CHGNetCalculator.from_file(
                 checkpoint, use_device=use_device, **kwargs
             )
-
-        if model is not None:
+        elif model is not None:
             from chgnet.model.model import CHGNet
 
             loaded = CHGNet.load(model_name=model)
-            return CHGNetCalculator(model=loaded, use_device=use_device, **kwargs)
+            bare = CHGNetCalculator(model=loaded, use_device=use_device, **kwargs)
+        else:
+            bare = CHGNetCalculator(use_device=use_device, **kwargs)
 
-        return CHGNetCalculator(use_device=use_device, **kwargs)
+        if d3_xc is not None:
+            return wrap_with_d3(bare, xc=d3_xc, device=use_device)
+        return bare

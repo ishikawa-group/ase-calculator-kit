@@ -24,6 +24,12 @@ def get_calculator(name: str, *, device: str = "auto", **kwargs) -> Calculator:
         ``task=`` for UMA, ``model="5M"`` for MatterSim. See each backend's
         ``create_calculator`` docstring.
 
+        ``dispersion`` (bool, default ``False``) adds a Grimme-D3(BJ) correction
+        on top of the model, and ``dispersion_xc`` overrides the auto-selected
+        functional. Requesting dispersion for a model that already includes it
+        (e.g. UMA ``oc25``/``omol``, SevenNet ``omol25_*``) raises
+        :class:`~ase_umlip_kit.errors.DispersionError`; see ``docs/models.md``.
+
     Examples
     --------
     >>> calc = get_calculator("chgnet", device="mps")
