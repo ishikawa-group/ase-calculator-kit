@@ -73,7 +73,7 @@ CASES = [
 
 @pytest.mark.parametrize("model,kwargs,make_system", [c[1:] for c in CASES],
                          ids=[c[0] for c in CASES])
-def test_cpu_single_point(model, kwargs, make_system):
+def test_cpu_single_point(model, kwargs, make_system, singlepoint_progress):
     try:
         calc = get_calculator(model, device="cpu", **kwargs)
         atoms = make_system()

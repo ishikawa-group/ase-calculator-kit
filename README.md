@@ -70,6 +70,43 @@ attach_calculator(atoms, "uma", task="omat")   # sets atoms.calc, returns atoms
 
 `build_calculator` and `utils_uMLIP_calculator` are aliases of `get_calculator`.
 
+### Full ASE workflow
+
+`get_calculator` returns a plain `ase.Calculator`, so everything in ASE works
+unchanged — single points, relaxations, MD, EOS, etc.:
+
+```python
+from ase.build import bulk
+from ase.optimize import BFGS
+from ase.filters import FrechetCellFilter
+from ase_umlip_kit import get_calculator
+
+atoms = bulk("Si", "diamond", a=5.43)
+atoms.calc = get_calculator("mattersim", model="5M", device="cpu")
+
+# single point
+print("E  =", atoms.get_potential_energy(), "eV")
+print("F  =", atoms.get_forces())
+print("S  =", atoms.get_stress())
+
+# relax atoms + cell
+opt = BFGS(FrechetCellFilter(atoms))
+opt.run(fmax=0.02, steps=200)
+print("E_relaxed =", atoms.get_potential_energy(), "eV")
+```
+
+### Runnable example
+
+[`examples/run_all_models.py`](examples/run_all_models.py) runs a CPU single
+point with every model/variant and prints the energies, with a tqdm progress
+bar (weights download on first use):
+
+```bash
+.venv/bin/python examples/run_all_models.py                 # all variants, CPU
+.venv/bin/python examples/run_all_models.py --device auto
+.venv/bin/python examples/run_all_models.py --only chgnet sevennet
+```
+
 ## Choosing a model variant
 
 ### SevenNet `modal` (for the multi-fidelity `7net-omni` / `7net-mf-ompa`)
@@ -119,12 +156,15 @@ python -m venv .venv
 .venv/bin/pip install -e .[dev]
 .venv/bin/pytest -m "not slow"   # fast: factory + device logic
 .venv/bin/pytest                 # full: real CPU single-point across every variant
+.venv/bin/pytest -s              # full + live tqdm progress bar for the matrix
 ```
 
 The `slow` tests run a real CPU single-point for each backend and intra-model
 variant (CHGNet, every SevenNet `modal`, MatterSim 1M & 5M, every UMA `task`).
-Cases that need a model download / Hugging Face access are **skipped** (not
-failed) when the weights or credentials are unavailable.
+A tqdm progress bar tracks the matrix — pass `-s` to see it live (pytest
+captures output otherwise). Cases that need a model download / Hugging Face
+access are **skipped** (not failed) when the weights or credentials are
+unavailable.
 
 ## License
 
