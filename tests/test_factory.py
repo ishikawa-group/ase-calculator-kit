@@ -9,7 +9,7 @@ from ase_calculator_kit.registry import BACKENDS, DFT_BACKENDS, MLIP_BACKENDS
 
 
 def test_available_models():
-    assert kit.available_models() == [
+    expected = [
         "chgnet",
         "espresso",
         "fairchem",
@@ -20,6 +20,8 @@ def test_available_models():
         "uma",
         "vasp",
     ]
+    assert kit.available_models() == expected
+    assert kit.available_calculators() == expected
     assert kit.available_mlip_models() == [
         "chgnet",
         "fairchem",

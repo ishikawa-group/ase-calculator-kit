@@ -80,6 +80,9 @@ calculation conditions explicit and reproducible:
 get_calculator("vasp", encut=520)  # TypeError
 ```
 
+For reproducibility, VASP configs must explicitly specify `profile.command`;
+environment-variable-only execution is intentionally not used by this wrapper.
+
 Use `overrides=` for small dynamic changes:
 
 ```python
@@ -106,6 +109,7 @@ atoms.calc = get_calculator(
 ```python
 from ase_calculator_kit import (
     attach_calculator,
+    available_calculators,
     available_dft_calculators,
     available_mlip_models,
     available_models,
@@ -116,6 +120,7 @@ from ase_calculator_kit import (
 
 available_mlip_models()
 available_dft_calculators()
+available_calculators()
 available_models()
 attach_calculator(atoms, "uma", task="omat")
 ```

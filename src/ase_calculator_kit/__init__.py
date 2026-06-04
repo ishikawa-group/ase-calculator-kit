@@ -16,6 +16,7 @@ from .config import resolve_calculator_config
 from .errors import CalculatorKitError, DispersionError, MissingDependencyError
 from .factory import (
     attach_calculator,
+    available_calculators,
     available_dft_calculators,
     available_mlip_models,
     available_models,
@@ -34,6 +35,7 @@ __all__ = [
     "get_mlip_calculator",
     "get_dft_calculator",
     "attach_calculator",
+    "available_calculators",
     "available_models",
     "available_mlip_models",
     "available_dft_calculators",

@@ -16,7 +16,7 @@ def get_calculator(name: str, **kwargs) -> Calculator:
     Parameters
     ----------
     name:
-        One of ``available_models()``. Case-insensitive.
+        One of ``available_calculators()``. Case-insensitive.
     **kwargs:
         MLIP backends accept lightweight backend-specific options such as
         ``device=`` and ``model=``. DFT backends accept only ``config=`` plus
@@ -79,6 +79,11 @@ def attach_calculator(atoms: Atoms, name: str, **kwargs) -> Atoms:
 def available_models() -> list[str]:
     """Return the sorted list of accepted calculator names."""
     return sorted(BACKENDS)
+
+
+def available_calculators() -> list[str]:
+    """Return the sorted list of accepted calculator names."""
+    return available_models()
 
 
 def available_mlip_models() -> list[str]:

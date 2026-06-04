@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from ase.calculators.calculator import Calculator
@@ -16,7 +17,7 @@ class VaspBackend(BaseBackend):
     def create_calculator(
         self,
         *,
-        config: str | dict[str, Any],
+        config: str | Path | dict[str, Any],
         overrides: dict[str, Any] | None = None,
         write_resolved_config: bool = False,
     ) -> Calculator:

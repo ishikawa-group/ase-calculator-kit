@@ -8,14 +8,22 @@ import ase_calculator_kit as kit
 from ase_calculator_kit.registry import BACKENDS, DFT_BACKENDS
 
 
-def test_dft_requires_config():
+@pytest.mark.parametrize("name", ["vasp", "qe"])
+def test_dft_requires_config(name):
     with pytest.raises(TypeError, match="requires config"):
-        kit.get_calculator("vasp")
+        kit.get_calculator(name)
 
 
-def test_dft_rejects_unexpected_kwargs():
-    with pytest.raises(TypeError, match="Unexpected arguments: \\['encut'\\]"):
-        kit.get_calculator("vasp", encut=520)
+@pytest.mark.parametrize(
+    ("name", "kwargs"),
+    [
+        ("vasp", {"encut": 520}),
+        ("qe", {"pseudo_dir": "/path/to/pseudos"}),
+    ],
+)
+def test_dft_rejects_unexpected_kwargs(name, kwargs):
+    with pytest.raises(TypeError, match="accepts only config"):
+        kit.get_calculator(name, **kwargs)
 
 
 def test_get_dft_calculator_rejects_mlip_name():
@@ -37,4 +45,3 @@ def test_dft_aliases_route_to_backend(monkeypatch, name):
 
     assert kit.get_calculator(name, config={"calculator": name}) == "CALC"
     assert seen["kwargs"] == {"config": {"calculator": name}}
-
