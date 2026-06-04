@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ase-umlip-kit"
+version = "0.1.0"
+description = "Unified ASE calculator factory for universal machine-learning interatomic potentials."
+readme = "README.md"
+requires-python = ">=3.12"  # driven by MatterSim (requires >=3.12); within fairchem's <3.14 ceiling
+license = { text = "MIT" }
+authors = [{ name = "ishikawa-group" }]
+keywords = ["ase", "machine-learning", "interatomic-potential", "mlip", "chemistry", "materials"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
+# All four NNP backends are installed by default; individual extras below let a
+# user reinstall / pin a single backend if desired.
+dependencies = [
+    "ase>=3.23",
+    "chgnet>=0.4.0",
+    "sevenn",
+    "mattersim",
+    "fairchem-core>=2.16.0",
+]
+
+[project.optional-dependencies]
+chgnet = ["chgnet>=0.4.0"]
+sevennet = ["sevenn"]
+mattersim = ["mattersim"]
+uma = ["fairchem-core>=2.16.0"]
+dev = ["pytest", "ruff"]
+
+[project.urls]
+Homepage = "https://github.com/ishikawa-group/ase-umlip-kit"
+Repository = "https://github.com/ishikawa-group/ase-umlip-kit"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: real single-point calculations that download model weights",
+]
