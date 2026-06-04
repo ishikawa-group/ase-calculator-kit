@@ -6,8 +6,8 @@ import sys
 
 import pytest
 
-from ase_umlip_kit import DispersionError, get_calculator
-from ase_umlip_kit.dispersion import (
+from ase_calculator_kit import DispersionError, get_calculator
+from ase_calculator_kit.dispersion import (
     precheck_dispersion_xc,
     resolve_dispersion_xc,
     wrap_with_d3,

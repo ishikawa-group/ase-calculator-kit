@@ -3,14 +3,14 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ase-umlip-kit"
+name = "ase-calculator-kit"
 version = "0.1.0"
-description = "Unified ASE calculator factory for universal machine-learning interatomic potentials."
+description = "Unified ASE calculator factory for MLIP and DFT calculators."
 readme = "README.md"
 requires-python = ">=3.12,<3.14"  # MatterSim requires >=3.12; fairchem-core caps at <3.14
 license = { text = "MIT" }
 authors = [{ name = "ishikawa-group" }]
-keywords = ["ase", "machine-learning", "interatomic-potential", "mlip", "chemistry", "materials"]
+keywords = ["ase", "calculator", "dft", "machine-learning", "interatomic-potential", "mlip", "chemistry", "materials"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -23,6 +23,7 @@ classifiers = [
 # user reinstall / pin a single backend if desired.
 dependencies = [
     "ase>=3.23",
+    "pyyaml",
     "chgnet>=0.4.0",
     "sevenn",
     "mattersim",
@@ -35,8 +36,8 @@ dependencies = [
 dev = ["pytest", "ruff", "tqdm"]
 
 [project.urls]
-Homepage = "https://github.com/ishikawa-group/ase-umlip-kit"
-Repository = "https://github.com/ishikawa-group/ase-umlip-kit"
+Homepage = "https://github.com/ishikawa-group/ase-calculator-kit"
+Repository = "https://github.com/ishikawa-group/ase-calculator-kit"
 
 [tool.setuptools.packages.find]
 where = ["src"]

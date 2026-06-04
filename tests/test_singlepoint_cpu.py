@@ -22,8 +22,8 @@ import pytest
 from ase import Atoms
 from ase.build import bulk, molecule
 
-from ase_umlip_kit import get_calculator
-from ase_umlip_kit.errors import MissingDependencyError
+from ase_calculator_kit import get_calculator
+from ase_calculator_kit.errors import MissingDependencyError
 
 pytestmark = pytest.mark.slow
 

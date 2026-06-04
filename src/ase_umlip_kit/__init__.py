@@ -1,37 +1,11 @@
-"""ase-umlip-kit: a unified ASE calculator factory for universal MLIPs.
+"""Compatibility shim for the old ``ase_umlip_kit`` import name.
 
-Call any of the supported universal machine-learning interatomic potentials
-(CHGNet, SevenNet, MatterSim, UMA/fairchem) in one line::
-
-    from ase_umlip_kit import get_calculator
-    atoms.calc = get_calculator("uma", task="omat")
-    energy = atoms.get_potential_energy()
+Use ``ase_calculator_kit`` for new code. This namespace is kept temporarily so
+existing scripts continue to import the public API.
 """
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError, version
-
-from .errors import DispersionError, MissingDependencyError, UMLIPError
-from .factory import attach_calculator, available_models, get_calculator
-
-try:
-    __version__ = version("ase-umlip-kit")
-except PackageNotFoundError:  # not installed (e.g. running from a source tree)
-    __version__ = "0.0.0"
-
-# Aliases kept for continuity with existing scripts / earlier sketches.
-build_calculator = get_calculator
-utils_uMLIP_calculator = get_calculator
-
-__all__ = [
-    "get_calculator",
-    "attach_calculator",
-    "available_models",
-    "build_calculator",
-    "utils_uMLIP_calculator",
-    "UMLIPError",
-    "MissingDependencyError",
-    "DispersionError",
-    "__version__",
-]
+from ase_calculator_kit import *  # noqa: F403
+from ase_calculator_kit import __all__ as __all__
+from ase_calculator_kit import __version__ as __version__

@@ -1,20 +1,5 @@
-"""Mapping of model names to backend classes."""
+"""Compatibility shim for :mod:`ase_calculator_kit.registry`."""
 
 from __future__ import annotations
 
-from .backends import (
-    BaseBackend,
-    CHGNetBackend,
-    FairChemBackend,
-    MatterSimBackend,
-    SevenNetBackend,
-)
-
-#: Public model names accepted by :func:`ase_umlip_kit.get_calculator`.
-BACKENDS: dict[str, type[BaseBackend]] = {
-    "chgnet": CHGNetBackend,
-    "sevennet": SevenNetBackend,
-    "mattersim": MatterSimBackend,
-    "uma": FairChemBackend,
-    "fairchem": FairChemBackend,
-}
+from ase_calculator_kit.registry import *  # noqa: F403

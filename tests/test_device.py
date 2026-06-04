@@ -7,7 +7,7 @@ import types
 
 import pytest
 
-from ase_umlip_kit.device import resolve_device
+from ase_calculator_kit.device import resolve_device
 
 
 def _fake_torch(*, cuda: bool, mps_built: bool = False, mps_avail: bool = False):

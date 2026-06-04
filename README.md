@@ -1,56 +1,63 @@
-# ase-umlip-kit
+# ase-calculator-kit
 
 A thin, unified [ASE](https://wiki.fysik.dtu.dk/ase/) calculator factory for
-**universal machine-learning interatomic potentials (uMLIPs)**. Switch between
-several published models with a single line — every call returns a standard
-`ase.Calculator`, so the rest of your ASE workflow stays unchanged.
+machine-learning interatomic potentials and external DFT calculators. Every call
+returns a standard `ase.Calculator`, so the rest of your ASE workflow stays
+unchanged.
 
-Supported backends:
+Supported MLIP backends:
 
 - [CHGNet](https://github.com/CederGroupHub/chgnet)
 - [SevenNet](https://github.com/MDIL-SNU/SevenNet)
 - [MatterSim](https://github.com/microsoft/mattersim)
 - [UMA / fairchem](https://github.com/facebookresearch/fairchem)
 
-### Why no MACE?
+Supported DFT backends:
 
-MACE is **intentionally excluded**. `mace-torch` requires an `e3nn` version that
-conflicts with the `e3nn` pinned by SevenNet (`sevenn`) and UMA (`fairchem-core`).
-Because this package installs all backends together in one environment, adding
-MACE would break dependency resolution and the "install all four and they just
-work" guarantee. If you need MACE, use the dedicated MACE tooling in a separate
-environment rather than this kit.
+- VASP
+- Quantum ESPRESSO (`qe`, `espresso`, `quantum-espresso`)
 
 ## Install
 
 ```bash
-pip install ase-umlip-kit
+pip install ase-calculator-kit
 ```
 
-This installs all supported backends: CHGNet, SevenNet, MatterSim, and
-UMA/fairchem. Requires **Python >=3.12,<3.14** (MatterSim requires ≥ 3.12;
-fairchem-core caps at < 3.14).
+This installs ASE, PyYAML, and all supported MLIP backends. It requires
+**Python >=3.12,<3.14** because MatterSim requires Python >=3.12 and
+fairchem-core caps at <3.14.
 
 For a lightweight / custom environment, install without dependencies and manage
 the backend packages yourself:
 
 ```bash
-pip install --no-deps ase-umlip-kit
-pip install ase chgnet   # then add only the backends you need
+pip install --no-deps ase-calculator-kit
+pip install ase pyyaml chgnet
 ```
 
-UMA checkpoints are gated on Hugging Face — request access to the model and run
-`huggingface-cli login` before first use.
+The old import name remains temporarily available:
+
+```python
+from ase_umlip_kit import get_calculator  # deprecated compatibility import
+```
+
+Use this import for new code:
+
+```python
+from ase_calculator_kit import get_calculator
+```
 
 ## Usage
 
+MLIP calculators keep the lightweight keyword API:
+
 ```python
 from ase.build import bulk
-from ase_umlip_kit import get_calculator
+from ase_calculator_kit import get_calculator
 
 atoms = bulk("Cu", "fcc", a=3.6)
 
-atoms.calc = get_calculator("chgnet", device="mps")          # Apple Silicon ok
+atoms.calc = get_calculator("chgnet", device="mps")
 print(atoms.get_potential_energy())
 
 atoms.calc = get_calculator("sevennet", model="7net-omni", modal="mpa")
@@ -63,60 +70,87 @@ atoms.calc = get_calculator("uma", model="uma-s-1p2", task="omat")
 print(atoms.get_potential_energy())
 ```
 
-`device` defaults to `"auto"` (CUDA → MPS for CHGNet → CPU). Pass an explicit
-`"cuda"`, `"cpu"`, or `"mps"` for reproducible scripts.
-
-### Convenience helpers
+DFT calculators are config-only:
 
 ```python
-from ase_umlip_kit import attach_calculator, available_models
+from ase_calculator_kit import get_calculator
 
-available_models()                       # ['chgnet', 'fairchem', 'mattersim', 'sevennet', 'uma']
-attach_calculator(atoms, "uma", task="omat")   # sets atoms.calc, returns atoms
+atoms.calc = get_calculator("vasp", config="examples/dft/vasp_pbe_static.yaml")
+atoms.calc = get_calculator("qe", config="examples/dft/qe_pbe_static.yaml")
 ```
 
-`build_calculator` and `utils_uMLIP_calculator` are aliases of `get_calculator`.
-
-### Full ASE workflow
-
-`get_calculator` returns a plain `ase.Calculator`, so everything in ASE works
-unchanged — single points, relaxations, MD, EOS, etc.:
+For VASP and QE, arbitrary keyword arguments are intentionally rejected to keep
+calculation conditions explicit and reproducible:
 
 ```python
-from ase.build import bulk
-from ase.optimize import BFGS
-from ase.filters import FrechetCellFilter
-from ase_umlip_kit import get_calculator
-
-atoms = bulk("Si", "diamond", a=5.43)
-atoms.calc = get_calculator("mattersim", model="5M", device="cpu")
-
-# single point
-print("E  =", atoms.get_potential_energy(), "eV")
-print("F  =", atoms.get_forces())
-print("S  =", atoms.get_stress())
-
-# relax atoms + cell
-opt = BFGS(FrechetCellFilter(atoms))
-opt.run(fmax=0.02, steps=200)
-print("E_relaxed =", atoms.get_potential_energy(), "eV")
+get_calculator("vasp", encut=520)  # TypeError
 ```
 
-### Runnable example
+Use `overrides=` for small dynamic changes:
 
-[`examples/run_all_models.py`](examples/run_all_models.py) runs a CPU single
-point with every model/variant and prints the energies, with a tqdm progress
-bar (weights download on first use):
+```python
+atoms.calc = get_calculator(
+    "vasp",
+    config="examples/dft/vasp_pbe_static.yaml",
+    overrides={"directory": "runs/vasp/Cu_001"},
+)
+```
+
+Write the final merged config for auditability:
+
+```python
+atoms.calc = get_calculator(
+    "qe",
+    config="examples/dft/qe_pbe_static.yaml",
+    overrides={"directory": "runs/qe/Cu_001"},
+    write_resolved_config=True,
+)
+```
+
+## Public Helpers
+
+```python
+from ase_calculator_kit import (
+    attach_calculator,
+    available_dft_calculators,
+    available_models,
+    available_umlip_models,
+    get_dft_calculator,
+    get_umlip_calculator,
+    resolve_calculator_config,
+)
+
+available_umlip_models()
+available_dft_calculators()
+available_models()
+attach_calculator(atoms, "uma", task="omat")
+```
+
+`build_calculator` and `utils_uMLIP_calculator` remain aliases of
+`get_calculator` for continuity.
+
+## Examples
+
+Run a CPU single point with every MLIP model/variant:
 
 ```bash
-.venv/bin/python examples/run_all_models.py                 # all variants, CPU
+.venv/bin/python examples/run_all_models.py
 .venv/bin/python examples/run_all_models.py --device auto
 .venv/bin/python examples/run_all_models.py --only chgnet sevennet
 ```
 
-## Choosing a model variant
+Create DFT calculator objects from YAML without running VASP/QE:
 
-### SevenNet `modal` (for the multi-fidelity `7net-omni` / `7net-mf-ompa`)
+```bash
+.venv/bin/python examples/dft/create_dft_calculator_from_config.py vasp \
+  examples/dft/vasp_pbe_static.yaml
+```
+
+DFT YAML examples live in [`examples/dft`](examples/dft).
+
+## Choosing an MLIP Variant
+
+### SevenNet `modal`
 
 | `modal` | Use for |
 |---|---|
@@ -127,9 +161,9 @@ bar (weights download on first use):
 | `omol25_low` | Molecular / high-fidelity molecular systems |
 | `omol25_high` | High-spin molecular configurations only |
 
-Single-fidelity models such as `7net-0` do not take `modal` — pass `modal=None`.
+Single-fidelity models such as `7net-0` do not take `modal`; pass `modal=None`.
 
-### UMA `task` (for `uma-s-1p2`)
+### UMA `task`
 
 | `task` | Use for |
 |---|---|
@@ -137,73 +171,47 @@ Single-fidelity models such as `7net-0` do not take `modal` — pass `modal=None
 | `omol` | Molecules and polymers |
 | `oc20` | Catalyst surfaces and adsorption |
 | `oc22` | Oxide catalysis |
-| `oc25` | Electrochemistry / solid–liquid interfaces |
+| `oc25` | Electrochemistry / solid-liquid interfaces |
 | `odac` | MOFs and direct air capture |
 | `omc` | Molecular crystals |
 
 For molecular tasks (`omol`), set `atoms.info["charge"]` and
 `atoms.info["spin"]` before computing.
 
-### MatterSim checkpoint
+## Dispersion
 
-| `model` | Notes |
-|---|---|
-| `1M` (default) | Fast screening |
-| `5M` | More accurate; keep fixed across a campaign |
-
-### CHGNet device
-
-CHGNet supports `device="mps"` on Apple Silicon in addition to `"cuda"`,
-`"cpu"`, and `"auto"`.
-
-## Dispersion (D3)
-
-Add a Grimme-D3(BJ) van-der-Waals correction on top of any model with
-`dispersion=True` (off by default):
+Add a Grimme-D3(BJ) correction on top of MLIP models with `dispersion=True`:
 
 ```python
-atoms.calc = get_calculator("uma", task="omat", dispersion=True)        # auto xc=pbe
-atoms.calc = get_calculator("uma", task="oc20", dispersion=True)        # auto xc=rpbe
-atoms.calc = get_calculator("chgnet", dispersion=True)                  # auto xc=pbe
-atoms.calc = get_calculator("uma", task="odac",
-                            dispersion=True, dispersion_xc="pbe")        # override
+atoms.calc = get_calculator("uma", task="omat", dispersion=True)
+atoms.calc = get_calculator("uma", task="oc20", dispersion=True)
+atoms.calc = get_calculator("chgnet", dispersion=True)
+atoms.calc = get_calculator("uma", task="odac", dispersion=True, dispersion_xc="pbe")
 ```
 
-The correction is applied as `SumCalculator([model, TorchDFTD3Calculator(...)])`
-via [`torch-dftd`](https://github.com/pfnet-research/torch-dftd) (a core
-dependency). The D3 `xc` defaults to the model's training functional; override it
-with `dispersion_xc`.
+Some models already include dispersion in their training functional, so
+`dispersion=True` is refused for them with `DispersionError`. See
+[`docs/models.md`](docs/models.md) for the full per-model table.
 
-**Double-counting guard.** Some models already include dispersion in their
-training functional, so `dispersion=True` is refused for them with a
-`DispersionError`:
+## Why no MACE?
 
-- **Always refused** (dispersion already baked in): UMA `oc25` (RPBE+D3), UMA
-  `omol` and SevenNet `omol25_*` (ωB97M-V nonlocal dispersion).
-- **Refused unless you pass an explicit `dispersion_xc`** (training functional
-  unverified): UMA `odac`/`omc`, SevenNet `matpes_r2scan`, any unknown checkpoint.
-
-See **[docs/models.md](docs/models.md)** for the full per-model table (training
-dataset, DFT level, dispersion status). It is kept in sync with the policy in
-`src/ase_umlip_kit/dispersion.py`.
+MACE is intentionally excluded. `mace-torch` requires an `e3nn` version that
+conflicts with the `e3nn` pinned by SevenNet (`sevenn`) and UMA
+(`fairchem-core`). If you need MACE, use dedicated MACE tooling in a separate
+environment.
 
 ## Development
 
 ```bash
 python -m venv .venv
 .venv/bin/pip install -e .[dev]
-.venv/bin/pytest             # fast tests (factory + device); the default
-.venv/bin/pytest -m slow     # real calculator smoke tests (downloads weights)
-.venv/bin/pytest -m slow -s  # + live tqdm progress bar for the matrix
+.venv/bin/pytest
+.venv/bin/pytest -m slow
+.venv/bin/pytest -m slow -s
 ```
 
-`pytest` runs only the fast tests by default (`addopts = -m 'not slow'`). The
-`slow` tests run a real CPU single-point for each backend and intra-model
-variant (CHGNet, every SevenNet `modal`, MatterSim 1M & 5M, every UMA `task`).
-A tqdm progress bar tracks the matrix — pass `-s` to see it live (pytest
-captures output otherwise). Cases that need a model download / Hugging Face
-access are **skipped** (not failed) when the weights or credentials are
-unavailable.
+`pytest` runs only the fast tests by default. Slow tests run real MLIP CPU
+single-point calculations and may download model weights.
 
 ## License
 

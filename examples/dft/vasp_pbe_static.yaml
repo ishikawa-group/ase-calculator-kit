@@ -1,0 +1,23 @@
+calculator: vasp
+
+profile:
+  command: "mpirun -np 32 vasp_std"
+  txt: "vasp.out"
+
+directory: "runs/vasp/static"
+
+parameters:
+  xc: "PBE"
+  pp: "PBE"
+  pp_version: "64"
+  encut: 520
+  kpts: [4, 4, 4]
+  gamma: true
+  ismear: 0
+  sigma: 0.05
+  ediff: 1.0e-5
+  ibrion: -1
+  nsw: 0
+  isif: 2
+  lwave: false
+  lcharg: false

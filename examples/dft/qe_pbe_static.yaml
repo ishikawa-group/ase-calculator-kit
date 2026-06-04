@@ -1,0 +1,28 @@
+calculator: qe
+
+profile:
+  command: "mpirun -np 32 pw.x"
+  pseudo_dir: "/path/to/SSSP_efficiency"
+
+directory: "runs/qe/static"
+
+pseudopotentials:
+  Cu: "Cu.pbe-dn-kjpaw_psl.1.0.0.UPF"
+  O: "O.pbe-n-kjpaw_psl.0.1.UPF"
+  H: "H.pbe-kjpaw_psl.1.0.0.UPF"
+  Pt: "Pt.pbe-spn-kjpaw_psl.1.0.0.UPF"
+
+parameters:
+  kpts: [4, 4, 4]
+  input_data:
+    control:
+      calculation: "scf"
+      disk_io: "low"
+    system:
+      ecutwfc: 60
+      ecutrho: 480
+      occupations: "smearing"
+      smearing: "cold"
+      degauss: 0.01
+    electrons:
+      conv_thr: 1.0e-8

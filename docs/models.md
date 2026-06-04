@@ -1,7 +1,7 @@
 # Models, training data, and dispersion policy
 
 This table is the human-readable form of the dispersion (D3) policy encoded in
-[`src/ase_umlip_kit/dispersion.py`](../src/ase_umlip_kit/dispersion.py). **The two
+[`src/ase_calculator_kit/dispersion.py`](../src/ase_calculator_kit/dispersion.py). **The two
 must be kept in sync** — if you change one, change the other.
 
 It records, for each model / task / modal: the training dataset, the DFT level

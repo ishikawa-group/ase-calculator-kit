@@ -4,19 +4,42 @@ from __future__ import annotations
 
 import pytest
 
-import ase_umlip_kit as kit
-from ase_umlip_kit.registry import BACKENDS
+import ase_calculator_kit as kit
+from ase_calculator_kit.registry import BACKENDS, DFT_BACKENDS, UMLIP_BACKENDS
 
 
 def test_available_models():
-    assert kit.available_models() == ["chgnet", "fairchem", "mattersim", "sevennet", "uma"]
+    assert kit.available_models() == [
+        "chgnet",
+        "espresso",
+        "fairchem",
+        "mattersim",
+        "qe",
+        "quantum-espresso",
+        "sevennet",
+        "uma",
+        "vasp",
+    ]
+    assert kit.available_umlip_models() == [
+        "chgnet",
+        "fairchem",
+        "mattersim",
+        "sevennet",
+        "uma",
+    ]
+    assert kit.available_dft_calculators() == [
+        "espresso",
+        "qe",
+        "quantum-espresso",
+        "vasp",
+    ]
 
 
 def test_unknown_model_raises_valueerror():
     with pytest.raises(ValueError) as exc:
         kit.get_calculator("does-not-exist")
     msg = str(exc.value)
-    assert "Unknown MLIP" in msg
+    assert "Unknown calculator" in msg
     # Error lists the valid names.
     for name in ("chgnet", "sevennet", "mattersim", "uma"):
         assert name in msg
@@ -26,7 +49,7 @@ def test_name_is_case_insensitive(monkeypatch):
     seen = {}
 
     class FakeBackend:
-        def create_calculator(self, *, device, **kwargs):
+        def create_calculator(self, *, device="auto", **kwargs):
             seen["device"] = device
             seen["kwargs"] = kwargs
             return "CALC"
@@ -40,6 +63,11 @@ def test_uma_and_fairchem_share_backend():
     assert BACKENDS["uma"] is BACKENDS["fairchem"]
 
 
+def test_registry_groups_are_split():
+    assert UMLIP_BACKENDS["uma"] is BACKENDS["uma"]
+    assert DFT_BACKENDS["vasp"] is BACKENDS["vasp"]
+
+
 def test_aliases_point_to_get_calculator():
     assert kit.build_calculator is kit.get_calculator
     assert kit.utils_uMLIP_calculator is kit.get_calculator
@@ -49,7 +77,7 @@ def test_attach_calculator_sets_calc(monkeypatch):
     from ase.build import bulk
 
     class FakeBackend:
-        def create_calculator(self, *, device, **kwargs):
+        def create_calculator(self, *, device="auto", **kwargs):
             return "CALC"
 
     monkeypatch.setitem(BACKENDS, "chgnet", FakeBackend)

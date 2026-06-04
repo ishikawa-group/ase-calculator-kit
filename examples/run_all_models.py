@@ -19,7 +19,7 @@ from ase import Atoms
 from ase.build import bulk, molecule
 from tqdm import tqdm
 
-from ase_umlip_kit import get_calculator
+from ase_calculator_kit import get_calculator
 
 
 def make_bulk() -> Atoms:
