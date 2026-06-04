@@ -18,7 +18,7 @@ def _singlepoint_bar(request):
     total = sum(
         1 for item in request.session.items if item.get_closest_marker("slow")
     )
-    bar = tqdm(total=total, desc="uMLIP CPU single-point", unit="variant")
+    bar = tqdm(total=total, desc="MLIP CPU single-point", unit="variant")
     yield bar
     bar.close()
 

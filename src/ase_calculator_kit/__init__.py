@@ -13,15 +13,15 @@ from __future__ import annotations
 from importlib.metadata import PackageNotFoundError, version
 
 from .config import resolve_calculator_config
-from .errors import CalculatorKitError, DispersionError, MissingDependencyError, UMLIPError
+from .errors import CalculatorKitError, DispersionError, MissingDependencyError
 from .factory import (
     attach_calculator,
     available_dft_calculators,
+    available_mlip_models,
     available_models,
-    available_umlip_models,
     get_calculator,
     get_dft_calculator,
-    get_umlip_calculator,
+    get_mlip_calculator,
 )
 
 try:
@@ -29,23 +29,16 @@ try:
 except PackageNotFoundError:  # not installed (e.g. running from a source tree)
     __version__ = "0.0.0"
 
-# Aliases kept for continuity with existing scripts / earlier sketches.
-build_calculator = get_calculator
-utils_uMLIP_calculator = get_calculator
-
 __all__ = [
     "get_calculator",
-    "get_umlip_calculator",
+    "get_mlip_calculator",
     "get_dft_calculator",
     "attach_calculator",
     "available_models",
-    "available_umlip_models",
+    "available_mlip_models",
     "available_dft_calculators",
     "resolve_calculator_config",
-    "build_calculator",
-    "utils_uMLIP_calculator",
     "CalculatorKitError",
-    "UMLIPError",
     "MissingDependencyError",
     "DispersionError",
     "__version__",

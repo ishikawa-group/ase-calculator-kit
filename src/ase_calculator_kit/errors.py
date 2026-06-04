@@ -7,11 +7,7 @@ class CalculatorKitError(Exception):
     """Base class for all errors raised by ``ase_calculator_kit``."""
 
 
-class UMLIPError(CalculatorKitError):
-    """Backward-compatible base class for MLIP-related errors."""
-
-
-class DispersionError(UMLIPError, ValueError):
+class DispersionError(CalculatorKitError, ValueError):
     """Raised when a requested dispersion (D3) correction is not allowed.
 
     Either the model already includes dispersion in its training functional
@@ -21,7 +17,7 @@ class DispersionError(UMLIPError, ValueError):
     """
 
 
-class MissingDependencyError(UMLIPError, ImportError):
+class MissingDependencyError(CalculatorKitError, ImportError):
     """Raised when the backend package for a requested model is not installed.
 
     MLIP backends are installed by default with ``pip install

@@ -5,7 +5,7 @@ from __future__ import annotations
 from ase import Atoms
 from ase.calculators.calculator import Calculator
 
-from .registry import BACKENDS, DFT_BACKENDS, UMLIP_BACKENDS
+from .registry import BACKENDS, DFT_BACKENDS, MLIP_BACKENDS
 
 _DFT_ALLOWED_KWARGS = {"config", "overrides", "write_resolved_config"}
 
@@ -43,15 +43,15 @@ def get_calculator(name: str, **kwargs) -> Calculator:
     return backend_cls().create_calculator(**kwargs)
 
 
-def get_umlip_calculator(name: str, **kwargs) -> Calculator:
-    """Create an ASE calculator for a supported universal MLIP."""
+def get_mlip_calculator(name: str, **kwargs) -> Calculator:
+    """Create an ASE calculator for a supported MLIP."""
     key = name.lower()
     try:
-        backend_cls = UMLIP_BACKENDS[key]
+        backend_cls = MLIP_BACKENDS[key]
     except KeyError as exc:
-        valid = ", ".join(sorted(UMLIP_BACKENDS))
+        valid = ", ".join(sorted(MLIP_BACKENDS))
         raise ValueError(
-            f"Unknown uMLIP calculator '{name}'. Available: {valid}"
+            f"Unknown MLIP calculator '{name}'. Available: {valid}"
         ) from exc
     return backend_cls().create_calculator(**kwargs)
 
@@ -81,9 +81,9 @@ def available_models() -> list[str]:
     return sorted(BACKENDS)
 
 
-def available_umlip_models() -> list[str]:
+def available_mlip_models() -> list[str]:
     """Return the sorted list of accepted MLIP calculator names."""
-    return sorted(UMLIP_BACKENDS)
+    return sorted(MLIP_BACKENDS)
 
 
 def available_dft_calculators() -> list[str]:

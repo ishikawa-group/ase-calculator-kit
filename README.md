@@ -35,12 +35,6 @@ pip install --no-deps ase-calculator-kit
 pip install ase pyyaml chgnet
 ```
 
-The old import name remains temporarily available:
-
-```python
-from ase_umlip_kit import get_calculator  # deprecated compatibility import
-```
-
 Use this import for new code:
 
 ```python
@@ -113,21 +107,18 @@ atoms.calc = get_calculator(
 from ase_calculator_kit import (
     attach_calculator,
     available_dft_calculators,
+    available_mlip_models,
     available_models,
-    available_umlip_models,
     get_dft_calculator,
-    get_umlip_calculator,
+    get_mlip_calculator,
     resolve_calculator_config,
 )
 
-available_umlip_models()
+available_mlip_models()
 available_dft_calculators()
 available_models()
 attach_calculator(atoms, "uma", task="omat")
 ```
-
-`build_calculator` and `utils_uMLIP_calculator` remain aliases of
-`get_calculator` for continuity.
 
 ## Examples
 

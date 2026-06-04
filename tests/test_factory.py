@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 import ase_calculator_kit as kit
-from ase_calculator_kit.registry import BACKENDS, DFT_BACKENDS, UMLIP_BACKENDS
+from ase_calculator_kit.registry import BACKENDS, DFT_BACKENDS, MLIP_BACKENDS
 
 
 def test_available_models():
@@ -20,7 +20,7 @@ def test_available_models():
         "uma",
         "vasp",
     ]
-    assert kit.available_umlip_models() == [
+    assert kit.available_mlip_models() == [
         "chgnet",
         "fairchem",
         "mattersim",
@@ -64,13 +64,21 @@ def test_uma_and_fairchem_share_backend():
 
 
 def test_registry_groups_are_split():
-    assert UMLIP_BACKENDS["uma"] is BACKENDS["uma"]
+    assert MLIP_BACKENDS["uma"] is BACKENDS["uma"]
     assert DFT_BACKENDS["vasp"] is BACKENDS["vasp"]
 
 
-def test_aliases_point_to_get_calculator():
-    assert kit.build_calculator is kit.get_calculator
-    assert kit.utils_uMLIP_calculator is kit.get_calculator
+def test_get_mlip_calculator_routes_to_mlip_backend(monkeypatch):
+    seen = {}
+
+    class FakeBackend:
+        def create_calculator(self, **kwargs):
+            seen["kwargs"] = kwargs
+            return "CALC"
+
+    monkeypatch.setitem(MLIP_BACKENDS, "chgnet", FakeBackend)
+    assert kit.get_mlip_calculator("chgnet", device="cpu") == "CALC"
+    assert seen["kwargs"] == {"device": "cpu"}
 
 
 def test_attach_calculator_sets_calc(monkeypatch):

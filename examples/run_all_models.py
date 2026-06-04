@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Run a CPU single-point with every supported uMLIP and print the energies.
+"""Run a CPU single-point with every supported MLIP and print the energies.
 
 This doubles as a usage demo: each calculator is created in one line via
 ``get_calculator`` and attached to an ASE ``Atoms`` object exactly as you would
@@ -75,7 +75,7 @@ def main() -> None:
 
     results: list[tuple[str, str]] = []
     for label, name, kwargs, make_system in tqdm(
-        variants, desc="uMLIP single-point", unit="variant"
+        variants, desc="MLIP single-point", unit="variant"
     ):
         try:
             atoms = make_system()

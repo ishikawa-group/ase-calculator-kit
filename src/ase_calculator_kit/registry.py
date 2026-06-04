@@ -13,7 +13,7 @@ from .backends import (
 )
 
 #: Public MLIP names accepted by :func:`ase_calculator_kit.get_calculator`.
-UMLIP_BACKENDS: dict[str, type[BaseBackend]] = {
+MLIP_BACKENDS: dict[str, type[BaseBackend]] = {
     "chgnet": CHGNetBackend,
     "sevennet": SevenNetBackend,
     "mattersim": MatterSimBackend,
@@ -30,6 +30,6 @@ DFT_BACKENDS: dict[str, type[BaseBackend]] = {
 }
 
 BACKENDS: dict[str, type[BaseBackend]] = {
-    **UMLIP_BACKENDS,
+    **MLIP_BACKENDS,
     **DFT_BACKENDS,
 }

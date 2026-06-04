@@ -38,9 +38,3 @@ def test_dft_aliases_route_to_backend(monkeypatch, name):
     assert kit.get_calculator(name, config={"calculator": name}) == "CALC"
     assert seen["kwargs"] == {"config": {"calculator": name}}
 
-
-def test_compatibility_import_exposes_new_api():
-    import ase_umlip_kit as old_kit
-
-    assert old_kit.get_calculator is kit.get_calculator
-    assert old_kit.available_dft_calculators is kit.available_dft_calculators
