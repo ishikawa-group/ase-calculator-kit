@@ -51,6 +51,9 @@ def _molecule(*, charge: int | None = None, spin: int | None = None) -> Atoms:
 
 
 # (test id, model name, kwargs, system factory)
+# NOTE: the tiny bulk("Cu") / H2O systems below are intentionally API smoke-test
+# structures to confirm each calculator can be built and run on CPU. They are NOT
+# scientifically meaningful benchmark systems for each domain head (task/modal).
 CASES = [
     ("chgnet", "chgnet", {}, _bulk),
     ("sevennet-mpa", "sevennet", {"modal": "mpa"}, _bulk),

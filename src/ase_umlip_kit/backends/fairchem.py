@@ -11,7 +11,6 @@ from .base import BaseBackend
 
 class FairChemBackend(BaseBackend):
     name = "uma"
-    extra = "uma"
 
     def create_calculator(
         self,
@@ -55,7 +54,7 @@ class FairChemBackend(BaseBackend):
         try:
             from fairchem.core import FAIRChemCalculator, pretrained_mlip
         except ImportError as exc:  # pragma: no cover - exercised via tests with mocks
-            raise MissingDependencyError("fairchem-core", self.extra) from exc
+            raise MissingDependencyError("fairchem-core") from exc
 
         predictor = pretrained_mlip.get_predict_unit(model, device=resolve_device(device))
         return FAIRChemCalculator(predictor, task_name=task, **kwargs)

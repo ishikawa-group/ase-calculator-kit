@@ -20,7 +20,6 @@ _DEFAULT_MODELS = {"1M", "MatterSim-v1.0.0-1M"}
 
 class MatterSimBackend(BaseBackend):
     name = "mattersim"
-    extra = "mattersim"
 
     def create_calculator(
         self,
@@ -47,7 +46,7 @@ class MatterSimBackend(BaseBackend):
         try:
             from mattersim.forcefield import MatterSimCalculator
         except ImportError as exc:  # pragma: no cover - exercised via tests with mocks
-            raise MissingDependencyError("MatterSim", self.extra) from exc
+            raise MissingDependencyError("MatterSim") from exc
 
         params: dict = {"device": resolve_device(device)}
 

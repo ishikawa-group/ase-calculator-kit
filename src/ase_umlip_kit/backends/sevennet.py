@@ -11,7 +11,6 @@ from .base import BaseBackend
 
 class SevenNetBackend(BaseBackend):
     name = "sevennet"
-    extra = "sevennet"
 
     def create_calculator(
         self,
@@ -57,7 +56,7 @@ class SevenNetBackend(BaseBackend):
         try:
             from sevenn.calculator import SevenNetCalculator
         except ImportError as exc:  # pragma: no cover - exercised via tests with mocks
-            raise MissingDependencyError("SevenNet", self.extra) from exc
+            raise MissingDependencyError("SevenNet") from exc
 
         params: dict = {
             "model": model,

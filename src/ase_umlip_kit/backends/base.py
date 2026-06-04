@@ -17,8 +17,6 @@ class BaseBackend(ABC):
 
     #: Canonical backend name (e.g. ``"chgnet"``).
     name: str
-    #: pip extra used in the "not installed" hint (e.g. ``"chgnet"``).
-    extra: str
 
     @abstractmethod
     def create_calculator(self, *, device: str = "auto", **kwargs) -> Calculator:

@@ -10,10 +10,15 @@ Call any of the supported universal machine-learning interatomic potentials
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version
+
 from .errors import MissingDependencyError, UMLIPError
 from .factory import attach_calculator, available_models, get_calculator
 
-__version__ = "0.1.0"
+try:
+    __version__ = version("ase-umlip-kit")
+except PackageNotFoundError:  # not installed (e.g. running from a source tree)
+    __version__ = "0.0.0"
 
 # Aliases kept for continuity with existing scripts / earlier sketches.
 build_calculator = get_calculator

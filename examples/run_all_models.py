@@ -36,6 +36,9 @@ def make_molecule(*, charge: int | None = None, spin: int | None = None) -> Atom
 
 
 # (label, model name, kwargs for get_calculator, system factory)
+# NOTE: the tiny bulk("Cu") / H2O systems are API smoke-test structures to show
+# each calculator running on CPU — not domain-representative benchmark systems
+# for each task/modal.
 VARIANTS = [
     ("chgnet", "chgnet", {}, make_bulk),
     ("sevennet 7net-omni/mpa", "sevennet", {"modal": "mpa"}, make_bulk),

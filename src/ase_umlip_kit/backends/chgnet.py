@@ -11,7 +11,6 @@ from .base import BaseBackend
 
 class CHGNetBackend(BaseBackend):
     name = "chgnet"
-    extra = "chgnet"
 
     def create_calculator(
         self,
@@ -42,7 +41,7 @@ class CHGNetBackend(BaseBackend):
         try:
             from chgnet.model.dynamics import CHGNetCalculator
         except ImportError as exc:  # pragma: no cover - exercised via tests with mocks
-            raise MissingDependencyError("CHGNet", self.extra) from exc
+            raise MissingDependencyError("CHGNet") from exc
 
         use_device = resolve_device(device, allow_mps=True)
 

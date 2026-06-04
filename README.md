@@ -14,22 +14,20 @@ Supported backends:
 
 ## Install
 
-All four backends are installed by default:
-
 ```bash
 pip install ase-umlip-kit
 ```
 
-Requires **Python ≥ 3.12** (driven by MatterSim; fairchem caps at < 3.14).
+This installs all supported backends: CHGNet, SevenNet, MatterSim, and
+UMA/fairchem. Requires **Python >=3.12,<3.14** (MatterSim requires ≥ 3.12;
+fairchem-core caps at < 3.14).
 
-If you only want a subset, install the package without its heavy deps and pick
-extras instead:
+For a lightweight / custom environment, install without dependencies and manage
+the backend packages yourself:
 
 ```bash
-pip install ase-umlip-kit[chgnet]      # just CHGNet
-pip install ase-umlip-kit[sevennet]    # just SevenNet
-pip install ase-umlip-kit[mattersim]   # just MatterSim
-pip install ase-umlip-kit[uma]         # just UMA / fairchem
+pip install --no-deps ase-umlip-kit
+pip install ase chgnet   # then add only the backends you need
 ```
 
 UMA checkpoints are gated on Hugging Face — request access to the model and run
@@ -154,12 +152,13 @@ CHGNet supports `device="mps"` on Apple Silicon in addition to `"cuda"`,
 ```bash
 python -m venv .venv
 .venv/bin/pip install -e .[dev]
-.venv/bin/pytest -m "not slow"   # fast: factory + device logic
-.venv/bin/pytest                 # full: real CPU single-point across every variant
-.venv/bin/pytest -s              # full + live tqdm progress bar for the matrix
+.venv/bin/pytest             # fast tests (factory + device); the default
+.venv/bin/pytest -m slow     # real calculator smoke tests (downloads weights)
+.venv/bin/pytest -m slow -s  # + live tqdm progress bar for the matrix
 ```
 
-The `slow` tests run a real CPU single-point for each backend and intra-model
+`pytest` runs only the fast tests by default (`addopts = -m 'not slow'`). The
+`slow` tests run a real CPU single-point for each backend and intra-model
 variant (CHGNet, every SevenNet `modal`, MatterSim 1M & 5M, every UMA `task`).
 A tqdm progress bar tracks the matrix — pass `-s` to see it live (pytest
 captures output otherwise). Cases that need a model download / Hugging Face

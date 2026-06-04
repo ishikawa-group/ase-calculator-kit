@@ -10,15 +10,14 @@ class UMLIPError(Exception):
 class MissingDependencyError(UMLIPError, ImportError):
     """Raised when the backend package for a requested model is not installed.
 
-    The four supported backends (CHGNet, SevenNet, MatterSim, fairchem/UMA) are
-    installed by default with ``pip install ase-umlip-kit``. If you installed
-    only a subset via extras, the missing one raises this with an install hint.
+    All four supported backends (CHGNet, SevenNet, MatterSim, fairchem/UMA) are
+    installed by default with ``pip install ase-umlip-kit``; this is raised only
+    if a backend's package is missing or broken in the environment.
     """
 
-    def __init__(self, backend: str, extra: str) -> None:
+    def __init__(self, backend: str) -> None:
         self.backend = backend
-        self.extra = extra
         super().__init__(
             f"{backend} is not installed. "
-            f"Install with: pip install ase-umlip-kit[{extra}]"
+            f"Install or repair with: pip install ase-umlip-kit"
         )

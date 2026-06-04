@@ -22,9 +22,23 @@ def _fake_torch(*, cuda: bool, mps_built: bool = False, mps_avail: bool = False)
     return torch
 
 
-@pytest.mark.parametrize("explicit", ["cuda", "cpu", "mps"])
+@pytest.mark.parametrize("explicit", ["cuda", "cpu"])
 def test_explicit_device_passthrough(explicit):
     assert resolve_device(explicit) == explicit
+
+
+def test_mps_passthrough_only_when_allowed():
+    assert resolve_device("mps", allow_mps=True) == "mps"
+
+
+def test_mps_rejected_without_allow_mps():
+    with pytest.raises(ValueError, match="only for CHGNet"):
+        resolve_device("mps")
+
+
+def test_unknown_device_raises():
+    with pytest.raises(ValueError, match="Unknown device"):
+        resolve_device("tpu")
 
 
 def test_auto_prefers_cuda(monkeypatch):
