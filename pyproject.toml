@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64", "wheel"]
+requires = ["setuptools==82.0.1", "wheel==0.47.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -22,18 +22,18 @@ classifiers = [
 # All four NNP backends are installed by default; individual extras below let a
 # user reinstall / pin a single backend if desired.
 dependencies = [
-    "ase>=3.28.0",
-    "pyyaml>=6.0.3",
-    "chgnet>=0.4.2",
-    "sevenn>=0.12.1",
-    "mattersim>=1.2.5",
-    "fairchem-core>=2.20.0",
-    "torch-dftd>=0.5.3",  # Grimme-D3 dispersion correction (get_calculator(..., dispersion=True))
+    "ase==3.28.0",
+    "pyyaml==6.0.3",
+    "chgnet==0.4.2",
+    "sevenn==0.12.1",
+    "mattersim==1.2.5",
+    "fairchem-core==2.20.0",
+    "torch-dftd==0.5.3",  # Grimme-D3 dispersion correction (get_calculator(..., dispersion=True))
 ]
 
 [project.optional-dependencies]
 # All four backends are core dependencies above; only dev tooling lives here.
-dev = ["pytest>=9.0.3", "ruff>=0.15.15", "tqdm>=4.67.3"]
+dev = ["pytest==9.0.3", "ruff==0.15.15", "tqdm==4.67.3"]
 
 [project.urls]
 Homepage = "https://github.com/ishikawa-group/ase-calculator-kit"
