@@ -32,7 +32,10 @@ class FairChemBackend(BaseBackend):
         Parameters
         ----------
         device:
-            ``"auto"`` (cuda > cpu) or explicit ``"cuda"`` / ``"cpu"``.
+            ``"auto"`` (cuda > cpu) or explicit ``"cuda"`` / ``"cpu"``. Apple
+            Silicon ``"mps"`` is not supported: fairchem-core's predict unit
+            asserts ``device in {"cpu", "cuda"}``, so ``"mps"`` is rejected
+            before this wrapper runs.
         model:
             UMA model name. Defaults to ``"uma-s-1p2"``.
         task:

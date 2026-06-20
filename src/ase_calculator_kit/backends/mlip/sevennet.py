@@ -30,7 +30,9 @@ class SevenNetBackend(BaseBackend):
         Parameters
         ----------
         device:
-            ``"auto"`` (cuda > cpu) or explicit ``"cuda"`` / ``"cpu"``.
+            ``"auto"`` (cuda > mps > cpu), or explicit ``"cuda"`` / ``"mps"`` /
+            ``"cpu"``. SevenNet supports Apple Silicon ``"mps"`` (validated
+            locally with the ``7net-omni`` model).
         model:
             Pretrained keyword. Defaults to ``"7net-omni"``. Other options
             include ``"7net-mf-ompa"``, ``"7net-omat"``, ``"7net-l3i5"`` and
@@ -66,7 +68,7 @@ class SevenNetBackend(BaseBackend):
             self.name, modal if modal is not None else "default",
             dispersion=dispersion, dispersion_xc=dispersion_xc,
         )
-        resolved_device = resolve_device(device)
+        resolved_device = resolve_device(device, allow_mps=True)
 
         try:
             from sevenn.calculator import SevenNetCalculator

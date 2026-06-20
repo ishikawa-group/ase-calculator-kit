@@ -24,6 +24,9 @@ htmlcov/
 *.pt
 *.ckpt
 
+# Scratch / experiment output
+temp/
+
 # OS / editor
 .DS_Store
 .idea/

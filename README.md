@@ -148,6 +148,24 @@ Create DFT calculator objects from YAML without running VASP/QE:
 
 DFT YAML examples live in [`examples/dft`](examples/dft).
 
+## Apple Silicon (MPS) support
+
+Every MLIP backend was run on a single point (`bulk("Cu")`) with `device="mps"`
+on an Apple Silicon Mac (arm64, PyTorch 2.8, MPS available). Results:
+
+| Backend | `device="mps"` | Notes |
+|---|---|---|
+| CHGNet | ✅ supported | validated locally |
+| SevenNet | ✅ supported | validated locally (`7net-omni`) |
+| MatterSim | ✅ supported | validated locally |
+| NequIP OAM | ❌ not supported | PyTorch MPS lacks float64; the packaged OAM models use float64 buffers |
+| UMA / fairchem | ❌ not supported | `fairchem-core` asserts `device in {"cpu", "cuda"}` |
+
+For the MPS-supported backends, `device="auto"` resolves to `mps` on Apple
+Silicon when no CUDA device is present. NequIP and UMA accept only `"cpu"` /
+`"cuda"`; passing `device="mps"` raises a clear `ValueError`, and `device="auto"`
+falls back to `cpu`.
+
 ## Choosing an MLIP Variant
 
 ### SevenNet `modal`
@@ -175,17 +193,17 @@ Single-fidelity models such as `7net-0` do not take `modal`; pass `modal=None`.
 NequIP OAM models are loaded through NequIP's `nequip.net:` loader and cached by
 NequIP. To avoid a download, pass `model_path="path/to/model.nequip.zip"`.
 
-NequIP OAM currently supports `device="cpu"` and `device="cuda"` in this
-wrapper. Local Apple Silicon testing on an M4 MacBook showed that OAM-S runs on
-CPU, but `device="mps"` fails because PyTorch MPS does not support float64
-tensors used by the packaged model, so MPS is intentionally disabled for NequIP.
+NequIP OAM supports `device="cpu"` and `device="cuda"`. `device="mps"` is not
+supported: Apple Silicon testing fails with `Cannot convert a MPS Tensor to
+float64` because the packaged OAM models use float64 buffers and PyTorch MPS has
+no float64. See the [Apple Silicon (MPS) support](#apple-silicon-mps-support)
+matrix above.
 
 ### MatterSim `device`
 
 MatterSim supports `device="cpu"`, `device="cuda"`, `device="mps"`, and
-`device="auto"`. Local Apple Silicon testing on an M4 MacBook confirmed
-`MatterSimCalculator(device="mps")` can compute energy and forces for a small Si
-bulk structure.
+`device="auto"`. Apple Silicon testing confirmed `MatterSimCalculator(device="mps")`
+computes energy and forces for a small bulk structure.
 
 ### UMA `task`
 
@@ -201,6 +219,10 @@ bulk structure.
 
 For molecular tasks (`omol`), set `atoms.info["charge"]` and
 `atoms.info["spin"]` before computing.
+
+UMA supports `device="cpu"` and `device="cuda"` only; `fairchem-core` asserts
+`device in {"cpu", "cuda"}`, so `device="mps"` is rejected. See the
+[Apple Silicon (MPS) support](#apple-silicon-mps-support) matrix above.
 
 ## Dispersion
 

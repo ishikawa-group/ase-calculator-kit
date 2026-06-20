@@ -12,7 +12,7 @@ def resolve_device(device: str = "auto", *, allow_mps: bool = False) -> str:
         ``"auto"`` (default), or an explicit ``"cuda"``, ``"cpu"`` or ``"mps"``.
         Explicit values are passed through unchanged (after validation).
     allow_mps:
-        When ``True`` (for example CHGNet or MatterSim on Apple Silicon),
+        When ``True`` (CHGNet, SevenNet, or MatterSim on Apple Silicon),
         ``"mps"`` is accepted and ``"auto"`` may resolve to ``"mps"``. Backends
         that have not validated MPS call this with ``allow_mps=False``; an
         explicit ``device="mps"`` then raises, and ``"auto"`` falls back to

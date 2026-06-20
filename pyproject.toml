@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ase-calculator-kit"
-version = "0.2.0"
+version = "0.2.1"
 description = "Unified ASE calculator factory for MLIP and DFT calculators."
 readme = "README.md"
 requires-python = ">=3.12,<3.14"  # MatterSim requires >=3.12; fairchem-core caps at <3.14

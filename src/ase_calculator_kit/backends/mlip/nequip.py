@@ -43,8 +43,10 @@ class NequIPBackend(BaseBackend):
         ----------
         device:
             ``"auto"`` (cuda > cpu) or explicit ``"cuda"`` / ``"cpu"``. Apple
-            Silicon ``"mps"`` is intentionally not enabled for NequIP OAM yet:
-            local testing failed because PyTorch MPS does not support float64.
+            Silicon ``"mps"`` is intentionally not enabled for NequIP OAM:
+            local testing fails with ``Cannot convert a MPS Tensor to float64``
+            because the packaged OAM models use float64 buffers and PyTorch MPS
+            does not support float64.
         model:
             OAM model size: ``"S"``, ``"M"``, ``"L"`` (default), or ``"XL"``.
             Case-insensitive.
