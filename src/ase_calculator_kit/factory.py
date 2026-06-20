@@ -27,6 +27,7 @@ def get_calculator(name: str, **kwargs) -> Calculator:
     >>> calc = get_calculator("chgnet", device="mps")
     >>> calc = get_calculator("sevennet", model="7net-omni", modal="mpa")
     >>> calc = get_calculator("mattersim", model="5M")
+    >>> calc = get_calculator("nequip", model="L")
     >>> calc = get_calculator("uma", model="uma-s-1p2", task="omat")
     >>> calc = get_calculator("vasp", config="examples/dft/vasp_pbe_static.yaml")
     """

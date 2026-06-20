@@ -8,6 +8,7 @@ from .backends import (
     EspressoBackend,
     FairChemBackend,
     MatterSimBackend,
+    NequIPBackend,
     SevenNetBackend,
     VaspBackend,
 )
@@ -17,6 +18,7 @@ MLIP_BACKENDS: dict[str, type[BaseBackend]] = {
     "chgnet": CHGNetBackend,
     "sevennet": SevenNetBackend,
     "mattersim": MatterSimBackend,
+    "nequip": NequIPBackend,
     "uma": FairChemBackend,
     "fairchem": FairChemBackend,
 }

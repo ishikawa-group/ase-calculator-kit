@@ -37,7 +37,8 @@ class MatterSimBackend(BaseBackend):
         Parameters
         ----------
         device:
-            ``"auto"`` (cuda > cpu) or explicit ``"cuda"`` / ``"cpu"``.
+            ``"auto"`` (cuda > mps > cpu), or explicit ``"cuda"`` / ``"mps"`` /
+            ``"cpu"``. MatterSim supports Apple Silicon ``"mps"``.
         model:
             ``"1M"`` (default, fast screening) or ``"5M"`` (more accurate).
             Keep the checkpoint fixed across a campaign.
@@ -59,7 +60,7 @@ class MatterSimBackend(BaseBackend):
         d3_xc = precheck_dispersion_xc(
             self.name, key, dispersion=dispersion, dispersion_xc=dispersion_xc,
         )
-        resolved_device = resolve_device(device)
+        resolved_device = resolve_device(device, allow_mps=True)
 
         try:
             from mattersim.forcefield import MatterSimCalculator

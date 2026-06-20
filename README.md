@@ -10,6 +10,7 @@ Supported MLIP backends:
 - [CHGNet](https://github.com/CederGroupHub/chgnet)
 - [SevenNet](https://github.com/MDIL-SNU/SevenNet)
 - [MatterSim](https://github.com/microsoft/mattersim)
+- [NequIP OAM](https://www.nequip.net/)
 - [UMA / fairchem](https://github.com/facebookresearch/fairchem)
 
 Supported DFT backends:
@@ -58,6 +59,9 @@ atoms.calc = get_calculator("sevennet", model="7net-omni", modal="mpa")
 print(atoms.get_potential_energy())
 
 atoms.calc = get_calculator("mattersim", model="5M")
+print(atoms.get_potential_energy())
+
+atoms.calc = get_calculator("nequip", model="L")
 print(atoms.get_potential_energy())
 
 atoms.calc = get_calculator("uma", model="uma-s-1p2", task="omat")
@@ -132,7 +136,7 @@ Run a CPU single point with every MLIP model/variant:
 ```bash
 .venv/bin/python examples/run_all_models.py
 .venv/bin/python examples/run_all_models.py --device auto
-.venv/bin/python examples/run_all_models.py --only chgnet sevennet
+.venv/bin/python examples/run_all_models.py --only chgnet sevennet nequip
 ```
 
 Create DFT calculator objects from YAML without running VASP/QE:
@@ -158,6 +162,30 @@ DFT YAML examples live in [`examples/dft`](examples/dft).
 | `omol25_high` | High-spin molecular configurations only |
 
 Single-fidelity models such as `7net-0` do not take `modal`; pass `modal=None`.
+
+### NequIP OAM `model`
+
+| `model` | Use for |
+|---|---|
+| `S` | Smallest OAM model for quick checks |
+| `M` | Medium OAM model |
+| `L` (default) | Recommended general OAM model for inorganic solids |
+| `XL` | Largest OAM model when higher capacity is worth the cost |
+
+NequIP OAM models are loaded through NequIP's `nequip.net:` loader and cached by
+NequIP. To avoid a download, pass `model_path="path/to/model.nequip.zip"`.
+
+NequIP OAM currently supports `device="cpu"` and `device="cuda"` in this
+wrapper. Local Apple Silicon testing on an M4 MacBook showed that OAM-S runs on
+CPU, but `device="mps"` fails because PyTorch MPS does not support float64
+tensors used by the packaged model, so MPS is intentionally disabled for NequIP.
+
+### MatterSim `device`
+
+MatterSim supports `device="cpu"`, `device="cuda"`, `device="mps"`, and
+`device="auto"`. Local Apple Silicon testing on an M4 MacBook confirmed
+`MatterSimCalculator(device="mps")` can compute energy and forces for a small Si
+bulk structure.
 
 ### UMA `task`
 

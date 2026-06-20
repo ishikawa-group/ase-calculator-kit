@@ -12,11 +12,11 @@ def resolve_device(device: str = "auto", *, allow_mps: bool = False) -> str:
         ``"auto"`` (default), or an explicit ``"cuda"``, ``"cpu"`` or ``"mps"``.
         Explicit values are passed through unchanged (after validation).
     allow_mps:
-        When ``True`` (CHGNet on Apple Silicon), ``"mps"`` is accepted and
-        ``"auto"`` may resolve to ``"mps"``. The other backends (SevenNet,
-        MatterSim, UMA) do not support MPS, so they call this with
-        ``allow_mps=False``; an explicit ``device="mps"`` then raises, and
-        ``"auto"`` falls back to ``"cpu"`` when CUDA is unavailable.
+        When ``True`` (for example CHGNet or MatterSim on Apple Silicon),
+        ``"mps"`` is accepted and ``"auto"`` may resolve to ``"mps"``. Backends
+        that have not validated MPS call this with ``allow_mps=False``; an
+        explicit ``device="mps"`` then raises, and ``"auto"`` falls back to
+        ``"cpu"`` when CUDA is unavailable.
 
     Returns
     -------
@@ -42,7 +42,9 @@ def resolve_device(device: str = "auto", *, allow_mps: bool = False) -> str:
         )
 
     if device == "mps" and not allow_mps:
-        raise ValueError("device='mps' is currently supported only for CHGNet.")
+        raise ValueError(
+            "device='mps' is currently supported only for MPS-validated backends."
+        )
 
     if device != "auto":
         return device

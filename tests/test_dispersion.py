@@ -52,7 +52,15 @@ def test_included_models_always_error(backend, key):
 
 @pytest.mark.parametrize(
     "backend,key",
-    [("uma", "odac"), ("uma", "omc"), ("sevennet", "matpes_r2scan")],
+    [
+        ("uma", "odac"),
+        ("uma", "omc"),
+        ("sevennet", "matpes_r2scan"),
+        ("nequip", "S"),
+        ("nequip", "M"),
+        ("nequip", "L"),
+        ("nequip", "XL"),
+    ],
 )
 def test_unverified_requires_explicit_xc(backend, key):
     with pytest.raises(DispersionError, match="not verified"):

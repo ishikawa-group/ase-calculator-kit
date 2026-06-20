@@ -49,6 +49,10 @@ VARIANTS = [
     ("sevennet 7net-omni/omol25_high", "sevennet", {"modal": "omol25_high"}, make_molecule),
     ("mattersim 1M", "mattersim", {"model": "1M"}, make_bulk),
     ("mattersim 5M", "mattersim", {"model": "5M"}, make_bulk),
+    ("nequip OAM-S", "nequip", {"model": "S"}, make_bulk),
+    ("nequip OAM-M", "nequip", {"model": "M"}, make_bulk),
+    ("nequip OAM-L", "nequip", {"model": "L"}, make_bulk),
+    ("nequip OAM-XL", "nequip", {"model": "XL"}, make_bulk),
     ("uma-s-1p2/omat", "uma", {"task": "omat"}, make_bulk),
     ("uma-s-1p2/oc20", "uma", {"task": "oc20"}, make_bulk),
     ("uma-s-1p2/oc22", "uma", {"task": "oc22"}, make_bulk),
@@ -64,7 +68,7 @@ def main() -> None:
     parser.add_argument("--device", default="cpu", help="cpu (default), cuda, mps, or auto")
     parser.add_argument(
         "--only", nargs="*", default=None,
-        help="restrict to these model names (chgnet sevennet mattersim uma)",
+        help="restrict to these model names (chgnet sevennet mattersim nequip uma)",
     )
     args = parser.parse_args()
 

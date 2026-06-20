@@ -8,7 +8,8 @@ it. See ``docs/models.md`` for the human-readable version of these tables — th
 two MUST be kept in sync.
 
 Three tiers (keyed by ``(backend, key)`` where ``key`` is the model's functional
-discriminator — CHGNet model, MatterSim model, SevenNet modal, or UMA task):
+discriminator — CHGNet model, MatterSim model, NequIP model, SevenNet modal,
+or UMA task):
 
 1. Allowed   -> a default D3 ``xc`` is known; ``dispersion=True`` wraps the model.
 2. Included  -> dispersion is already in the training functional; always an error.

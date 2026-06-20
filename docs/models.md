@@ -19,6 +19,7 @@ interaction and give wrong energies. So such models reject `dispersion=True`.
 |---|---|---|---|---|
 | **CHGNet** (default) | MPtrj | PBE+U | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **MatterSim** 1M / 5M | MatterSim set (MPtrj + T/P-sampled structures) | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **NequIP OAM** S / M / L / XL | OMat24 pre-training + sAlex / MPTrj fine-tuning | PBE(+U)-level materials data | ⚠️ unverified | ⚠️ conservative error — error unless `dispersion_xc` given |
 | **SevenNet** `mpa` | MPtrj + sAlex | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `omat24` | OMat24 | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `matpes_pbe` | MatPES | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
@@ -48,6 +49,9 @@ explicit `dispersion_xc`) · ⛔ always refused (model already includes dispersi
   `dispersion_xc` (e.g. `dispersion_xc="pbe"`) acknowledges you have checked the
   functional yourself and unlocks the correction. The *already-includes-dispersion*
   rows cannot be overridden — remove `dispersion=True` instead.
+- **NequIP OAM.** OAM models are kept in the unverified tier until this project
+  has a stronger source for the exact dispersion treatment across the released
+  package variants.
 - **ωB97M-V** is a range-separated hybrid with the VV10 nonlocal correlation term,
   which already captures long-range dispersion; adding D3 would double-count it.
 - These functional assignments reflect the datasets as of mid-2026; if upstream

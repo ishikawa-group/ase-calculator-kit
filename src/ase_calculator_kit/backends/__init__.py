@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from .base import BaseBackend
 from .dft import EspressoBackend, VaspBackend
-from .mlip import CHGNetBackend, FairChemBackend, MatterSimBackend, SevenNetBackend
+from .mlip import (
+    CHGNetBackend,
+    FairChemBackend,
+    MatterSimBackend,
+    NequIPBackend,
+    SevenNetBackend,
+)
 
 __all__ = [
     "BaseBackend",
@@ -12,6 +18,7 @@ __all__ = [
     "EspressoBackend",
     "FairChemBackend",
     "MatterSimBackend",
+    "NequIPBackend",
     "SevenNetBackend",
     "VaspBackend",
 ]

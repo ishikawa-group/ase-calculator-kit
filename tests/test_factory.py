@@ -14,6 +14,7 @@ def test_available_models():
         "espresso",
         "fairchem",
         "mattersim",
+        "nequip",
         "qe",
         "quantum-espresso",
         "sevennet",
@@ -26,6 +27,7 @@ def test_available_models():
         "chgnet",
         "fairchem",
         "mattersim",
+        "nequip",
         "sevennet",
         "uma",
     ]
@@ -43,7 +45,7 @@ def test_unknown_model_raises_valueerror():
     msg = str(exc.value)
     assert "Unknown calculator" in msg
     # Error lists the valid names.
-    for name in ("chgnet", "sevennet", "mattersim", "uma"):
+    for name in ("chgnet", "sevennet", "mattersim", "nequip", "uma"):
         assert name in msg
 
 

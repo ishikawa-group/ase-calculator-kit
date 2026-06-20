@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ase-calculator-kit"
-version = "0.1.0"
+version = "0.2.0"
 description = "Unified ASE calculator factory for MLIP and DFT calculators."
 readme = "README.md"
 requires-python = ">=3.12,<3.14"  # MatterSim requires >=3.12; fairchem-core caps at <3.14
@@ -19,7 +19,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Physics",
 ]
 
-# All four NNP backends are installed by default; individual extras below let a
+# All five MLIP backends are installed by default; individual extras below let a
 # user reinstall / pin a single backend if desired.
 dependencies = [
     "ase==3.28.0",
@@ -27,12 +27,13 @@ dependencies = [
     "chgnet==0.4.2",
     "sevenn==0.12.1",
     "mattersim==1.2.5",
+    "nequip==0.18.0",
     "fairchem-core==2.20.0",
     "torch-dftd==0.5.3",  # Grimme-D3 dispersion correction (get_calculator(..., dispersion=True))
 ]
 
 [project.optional-dependencies]
-# All four backends are core dependencies above; only dev tooling lives here.
+# All MLIP backends are core dependencies above; only dev tooling lives here.
 dev = ["pytest==9.0.3", "ruff==0.15.15", "tqdm==4.67.3"]
 
 [project.urls]

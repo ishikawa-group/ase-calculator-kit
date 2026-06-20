@@ -32,7 +32,7 @@ def test_mps_passthrough_only_when_allowed():
 
 
 def test_mps_rejected_without_allow_mps():
-    with pytest.raises(ValueError, match="only for CHGNet"):
+    with pytest.raises(ValueError, match="MPS-validated"):
         resolve_device("mps")
 
 
@@ -51,7 +51,7 @@ def test_auto_uses_mps_only_when_allowed(monkeypatch):
     monkeypatch.setitem(
         sys.modules, "torch", _fake_torch(cuda=False, mps_built=True, mps_avail=True)
     )
-    # CHGNet (allow_mps=True) gets mps; others fall back to cpu.
+    # MPS-validated backends get mps; others fall back to cpu.
     assert resolve_device("auto", allow_mps=True) == "mps"
     assert resolve_device("auto") == "cpu"
 
