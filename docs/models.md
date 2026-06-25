@@ -17,14 +17,17 @@ interaction and give wrong energies. So such models reject `dispersion=True`.
 
 | Model / task | Training dataset | DFT level (functional) | Dispersion in training? | `dispersion=True` behavior |
 |---|---|---|---|---|
-| **CHGNet** (default) | MPtrj | PBE+U | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **CHGNet** `0.3.0` (default) / `0.2.0` | MPtrj | PBE+U | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **CHGNet** `r2scan` | MatPES r2SCAN transfer-learning | r2SCAN | ✗ none | ✅ allowed — D3 `xc=r2scan` |
 | **MatterSim** 1M / 5M | MatterSim set (MPtrj + T/P-sampled structures) | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
-| **NequIP OAM** S / M / L / XL | OMat24 pre-training + sAlex / MPTrj fine-tuning | PBE(+U)-level materials data | ⚠️ unverified | ⚠️ conservative error — error unless `dispersion_xc` given |
+| **NequIP OAM** S / M / L / XL | OMat24 pre-training + sAlex / MPTrj fine-tuning | PBE(+U)-level materials data | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `mpa` | MPtrj + sAlex | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `omat24` | OMat24 | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `matpes_pbe` | MatPES | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **SevenNet** `oc20` | OC20 | RPBE | ✗ none | ✅ allowed — D3 `xc=rpbe` |
+| **SevenNet** `oc22` | OC22 | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** (single-fidelity, e.g. `7net-0`) | MPtrj etc. | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
-| **SevenNet** `matpes_r2scan` | MatPES | r2SCAN | ✗ none | ⚠️ unverified — error unless `dispersion_xc` given (torch-dftd r2scan params to confirm) |
+| **SevenNet** `matpes_r2scan` | MatPES | r2SCAN | ✗ none | ✅ allowed — D3 `xc=r2scan` |
 | **SevenNet** `omol25_low` / `omol25_high` | OMol25 | ωB97M-V | ✓ yes (VV10 nonlocal) | ⛔ error (double-counting) |
 | **UMA** `omat` | OMat24 | PBE+U | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **UMA** `oc20` | OC20 | RPBE | ✗ none | ✅ allowed — D3 `xc=rpbe` |
@@ -49,9 +52,14 @@ explicit `dispersion_xc`) · ⛔ always refused (model already includes dispersi
   `dispersion_xc` (e.g. `dispersion_xc="pbe"`) acknowledges you have checked the
   functional yourself and unlocks the correction. The *already-includes-dispersion*
   rows cannot be overridden — remove `dispersion=True` instead.
-- **NequIP OAM.** OAM models are kept in the unverified tier until this project
-  has a stronger source for the exact dispersion treatment across the released
-  package variants.
+- **NequIP OAM.** OAM (S/M/L/XL) is trained on PBE(+U)-level materials data
+  (OMat24 pre-training + sAlex / MPtrj fine-tuning) and does not include
+  dispersion, so D3 with `xc=pbe` is applied.
+- **CHGNet** is keyed by the model name: the MPtrj checkpoints `0.3.0`/`0.2.0`
+  are PBE (`xc=pbe`), while the `r2scan` transfer-learning checkpoint is r2SCAN
+  (`xc=r2scan`).
+- **r2SCAN models** (CHGNet `r2scan`, SevenNet `matpes_r2scan`) use D3(BJ) with
+  `xc=r2scan`, which torch-dftd supports.
 - **ωB97M-V** is a range-separated hybrid with the VV10 nonlocal correlation term,
   which already captures long-range dispersion; adding D3 would double-count it.
 - These functional assignments reflect the datasets as of mid-2026; if upstream

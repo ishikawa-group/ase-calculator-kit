@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.2
+
+- Verify dispersion functionals for models that were previously refused, moving
+  them from the "unverified" tier to "allowed" (auto `xc`):
+  - NequIP OAM (S/M/L/XL): PBE(+U)-level -> D3 `xc=pbe`.
+  - SevenNet `oc20` -> `xc=rpbe`, `oc22` -> `xc=pbe`, `matpes_r2scan` -> `xc=r2scan`.
+  - CHGNet keyed by model name: `0.3.0`/`0.2.0` (MPtrj, PBE) -> `xc=pbe`,
+    `r2scan` (r2SCAN transfer learning) -> `xc=r2scan`. Fixes `dispersion=True`
+    being refused for an explicitly-named CHGNet model.
+- Keep `docs/models.md` and `dispersion.py` in sync with the above.
+
 ## 0.2.1
 
 - Probe every MLIP backend on Apple Silicon (MPS) with a real single point and

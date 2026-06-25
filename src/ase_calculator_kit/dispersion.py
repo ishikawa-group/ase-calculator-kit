@@ -52,6 +52,21 @@ _DEFAULT_XC: dict[tuple[str, str], str] = {
     ("uma", "omat"): "pbe",            # OMat24, PBE+U
     ("uma", "oc20"): "rpbe",           # OC20, RPBE
     ("uma", "oc22"): "pbe",            # OC22, PBE(+U)
+    # --- v0.2.2: functionals verified for models that were previously refused ---
+    # CHGNet is keyed by the model name (``model or "default"``); the bundled
+    # checkpoints are MPtrj/PBE except the r2SCAN transfer-learning checkpoint.
+    ("chgnet", "0.3.0"): "pbe",        # MPtrj, PBE (current default checkpoint)
+    ("chgnet", "0.2.0"): "pbe",        # MPtrj, PBE (deprecated checkpoint)
+    ("chgnet", "r2scan"): "r2scan",    # r2SCAN transfer-learning checkpoint
+    # NequIP-OAM is PBE(+U)-level materials data (keyed by upper-cased size).
+    ("nequip", "S"): "pbe",
+    ("nequip", "M"): "pbe",
+    ("nequip", "L"): "pbe",
+    ("nequip", "XL"): "pbe",
+    # SevenNet multi-fidelity OC / r2SCAN heads.
+    ("sevennet", "oc20"): "rpbe",      # OC20, RPBE
+    ("sevennet", "oc22"): "pbe",       # OC22, PBE
+    ("sevennet", "matpes_r2scan"): "r2scan",  # MatPES, r2SCAN
 }
 
 
