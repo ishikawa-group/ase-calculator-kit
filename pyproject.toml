@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ase-calculator-kit"
-version = "0.2.2"
+version = "0.3.0"
 description = "Unified ASE calculator factory for MLIP and DFT calculators."
 readme = "README.md"
-requires-python = ">=3.12,<3.14"  # MatterSim requires >=3.12; fairchem-core caps at <3.14
+requires-python = ">=3.12,<3.14"
 license = { text = "MIT" }
 authors = [{ name = "ishikawa-group" }]
 keywords = ["ase", "calculator", "dft", "machine-learning", "interatomic-potential", "mlip", "chemistry", "materials"]
@@ -19,21 +19,26 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Physics",
 ]
 
-# All five MLIP backends are installed by default; individual extras below let a
-# user reinstall / pin a single backend if desired.
 dependencies = [
     "ase==3.28.0",
     "pyyaml==6.0.3",
+]
+
+[project.optional-dependencies]
+chgnet = ["chgnet==0.4.2"]
+sevennet = ["sevenn==0.12.1"]
+mattersim = ["mattersim==1.2.5"]
+nequip = ["nequip==0.18.0"]
+uma = ["fairchem-core==2.20.0"]
+dispersion = ["torch-dftd==0.5.3"]
+all = [
     "chgnet==0.4.2",
     "sevenn==0.12.1",
     "mattersim==1.2.5",
     "nequip==0.18.0",
     "fairchem-core==2.20.0",
-    "torch-dftd==0.5.3",  # Grimme-D3 dispersion correction (get_calculator(..., dispersion=True))
+    "torch-dftd==0.5.3",
 ]
-
-[project.optional-dependencies]
-# All MLIP backends are core dependencies above; only dev tooling lives here.
 dev = ["pytest==9.0.3", "ruff==0.15.15", "tqdm==4.67.3"]
 
 [project.urls]

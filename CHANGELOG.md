@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- Make the default installation lightweight: only ASE and PyYAML are required.
+- Move each NNP stack into an explicit extra: `chgnet`, `sevennet`, `mattersim`,
+  `nequip`, and `uma`.
+- Add `all` for every supported NNP plus D3, and `dispersion` for D3 alone.
+- Improve missing-dependency errors so they show the exact extra to install.
+
 ## 0.2.2
 
 - Verify dispersion functionals for models that were previously refused, moving

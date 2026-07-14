@@ -145,10 +145,10 @@ def wrap_with_d3(base_calc: Calculator, *, xc: str, device: str) -> Calculator:
     try:
         from ase.calculators.mixing import SumCalculator
         from torch_dftd.torch_dftd3_calculator import TorchDFTD3Calculator
-    except ImportError as exc:  # pragma: no cover - torch-dftd is a core dep
+    except ImportError as exc:  # pragma: no cover - depends on the optional extra
         raise DispersionError(
-            "Dispersion requires 'torch-dftd'. Install or repair with: "
-            "pip install ase-calculator-kit"
+            "Dispersion requires 'torch-dftd'. Install it with: "
+            "pip install 'ase-calculator-kit[dispersion]'"
         ) from exc
 
     # torch-dftd on MPS is unreliable; run the D3 part on CPU in that case.

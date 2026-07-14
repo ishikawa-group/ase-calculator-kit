@@ -20,14 +20,20 @@ class DispersionError(CalculatorKitError, ValueError):
 class MissingDependencyError(CalculatorKitError, ImportError):
     """Raised when the backend package for a requested model is not installed.
 
-    MLIP backends are installed by default with ``pip install
-    ase-calculator-kit``; this is raised only if a backend's package is missing
-    or broken in the environment.
+    NNP packages are optional. The error points to the smallest matching
+    packaging extra instead of asking users to install every backend.
     """
 
     def __init__(self, backend: str) -> None:
         self.backend = backend
+        extra = {
+            "chgnet": "chgnet",
+            "sevennet": "sevennet",
+            "mattersim": "mattersim",
+            "nequip": "nequip",
+            "fairchem-core": "uma",
+        }.get(backend.lower(), backend.lower())
         super().__init__(
             f"{backend} is not installed. "
-            f"Install or repair with: pip install ase-calculator-kit"
+            f"Install it with: pip install 'ase-calculator-kit[{extra}]'"
         )

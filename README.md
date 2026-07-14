@@ -27,17 +27,30 @@ Supported DFT backends:
 pip install ase-calculator-kit
 ```
 
-This installs ASE, PyYAML, and all supported MLIP backends. It requires
-**Python >=3.12,<3.14** because MatterSim requires Python >=3.12 and
-fairchem-core caps at <3.14.
-
-For a lightweight / custom environment, install without dependencies and manage
-the backend packages yourself:
+The default installation is intentionally lightweight: it installs ASE and
+PyYAML, but **does not install an NNP backend**. Install only the calculators
+needed by your workflow:
 
 ```bash
-pip install --no-deps ase-calculator-kit
-pip install ase pyyaml chgnet
+# One backend
+pip install "ase-calculator-kit[chgnet]"
+pip install "ase-calculator-kit[sevennet]"
+pip install "ase-calculator-kit[mattersim]"
+pip install "ase-calculator-kit[nequip]"
+pip install "ase-calculator-kit[uma]"
+
+# Several selected backends
+pip install "ase-calculator-kit[chgnet,sevennet]"
+
+# Every supported NNP backend and the optional D3 correction
+pip install "ase-calculator-kit[all]"
+
+# D3 correction without installing every NNP backend
+pip install "ase-calculator-kit[dispersion]"
 ```
+
+Python `>=3.12,<3.14` is supported. Missing backend packages are reported only
+when that calculator is requested, with the matching extra to install.
 
 Use this import for new code:
 
@@ -258,6 +271,9 @@ python -m venv .venv
 .venv/bin/pytest -m slow
 .venv/bin/pytest -m slow -s
 ```
+
+Install `.venv/bin/pip install -e '.[dev,all]'` before running every real-backend
+slow test.
 
 `pytest` runs only the fast tests by default. Slow tests run real MLIP CPU
 single-point calculations and may download model weights.
