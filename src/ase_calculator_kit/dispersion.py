@@ -22,52 +22,87 @@ The mechanism is ASE's :class:`~ase.calculators.mixing.SumCalculator` plus
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from ase.calculators.calculator import Calculator
 
 from .errors import DispersionError
 
-#: ``(backend, key)`` whose training functional already includes dispersion.
-#: Adding D3 would double-count it, so ``dispersion=True`` is always rejected.
-_DISPERSION_INCLUDED: dict[tuple[str, str], str] = {
-    ("uma", "oc25"): "the oc25 task is trained at RPBE+D3(BJ); D3 is already included",
-    ("uma", "omol"): "the omol task is trained at wB97M-V, which already includes "
-    "nonlocal (VV10) dispersion",
-    ("sevennet", "omol25_low"): "the omol25 modals are trained at wB97M-V, which "
-    "already includes nonlocal (VV10) dispersion",
-    ("sevennet", "omol25_high"): "the omol25 modals are trained at wB97M-V, which "
-    "already includes nonlocal (VV10) dispersion",
+@dataclass(frozen=True)
+class DispersionPolicy:
+    """Chemical meaning of an optional D3 correction for one model variant.
+
+    ``reference_level`` records the DFT level used for training. ``d3_xc`` is
+    the matching torch-dftd parameter when a correction may be added. If the
+    training reference already includes dispersion, ``includes_dispersion`` is
+    true and an additional D3 term is always rejected.
+    """
+
+    reference_level: str
+    d3_xc: str | None = None
+    includes_dispersion: bool = False
+    note: str = ""
+
+
+def _allowed(reference_level: str, d3_xc: str) -> DispersionPolicy:
+    return DispersionPolicy(reference_level=reference_level, d3_xc=d3_xc)
+
+
+def _included(reference_level: str, note: str) -> DispersionPolicy:
+    return DispersionPolicy(
+        reference_level=reference_level,
+        includes_dispersion=True,
+        note=note,
+    )
+
+
+# One row represents one chemically distinct checkpoint, task, or modal. Keep
+# this table synchronized with docs/models.md.
+_POLICIES: dict[tuple[str, str], DispersionPolicy] = {
+    # CHGNet: MPtrj is PBE(+U); the transfer-learning checkpoint is r2SCAN.
+    ("chgnet", "default"): _allowed("PBE+U", "pbe"),
+    ("chgnet", "0.3.0"): _allowed("PBE+U", "pbe"),
+    ("chgnet", "0.2.0"): _allowed("PBE+U", "pbe"),
+    ("chgnet", "r2scan"): _allowed("r2SCAN", "r2scan"),
+    # MatterSim and NequIP OAM use PBE-level materials reference data.
+    ("mattersim", "1M"): _allowed("PBE", "pbe"),
+    ("mattersim", "5M"): _allowed("PBE", "pbe"),
+    ("mattersim", "default"): _allowed("assumed PBE", "pbe"),
+    ("nequip", "S"): _allowed("PBE(+U)", "pbe"),
+    ("nequip", "M"): _allowed("PBE(+U)", "pbe"),
+    ("nequip", "L"): _allowed("PBE(+U)", "pbe"),
+    ("nequip", "XL"): _allowed("PBE(+U)", "pbe"),
+    # SevenNet: the modal selects both dataset and reference functional.
+    ("sevennet", "mpa"): _allowed("PBE(+U)", "pbe"),
+    ("sevennet", "omat24"): _allowed("PBE", "pbe"),
+    ("sevennet", "matpes_pbe"): _allowed("PBE", "pbe"),
+    ("sevennet", "matpes_r2scan"): _allowed("r2SCAN", "r2scan"),
+    ("sevennet", "oc20"): _allowed("RPBE", "rpbe"),
+    ("sevennet", "oc22"): _allowed("PBE", "pbe"),
+    ("sevennet", "default"): _allowed("PBE", "pbe"),
+    ("sevennet", "omol25_low"): _included(
+        "ωB97M-V", "the OMol25 modal already includes nonlocal VV10 dispersion"
+    ),
+    ("sevennet", "omol25_high"): _included(
+        "ωB97M-V", "the OMol25 modal already includes nonlocal VV10 dispersion"
+    ),
+    # UMA: each task is a separate chemical domain and DFT reference level.
+    ("uma", "omat"): _allowed("PBE+U", "pbe"),
+    ("uma", "oc20"): _allowed("RPBE", "rpbe"),
+    ("uma", "oc22"): _allowed("PBE(+U)", "pbe"),
+    ("uma", "oc25"): _included(
+        "RPBE+D3(BJ)", "the OC25 task already includes D3(BJ) dispersion"
+    ),
+    ("uma", "omol"): _included(
+        "ωB97M-V", "the OMol task already includes nonlocal VV10 dispersion"
+    ),
 }
 
-#: ``(backend, key)`` -> default D3 ``xc`` for models whose functional is known
-#: and does NOT include dispersion.
-_DEFAULT_XC: dict[tuple[str, str], str] = {
-    ("chgnet", "default"): "pbe",      # MPtrj, PBE+U
-    ("mattersim", "1M"): "pbe",        # PBE
-    ("mattersim", "5M"): "pbe",        # PBE
-    ("mattersim", "default"): "pbe",   # custom checkpoint, assumed PBE
-    ("sevennet", "mpa"): "pbe",        # MPtrj + sAlex, PBE
-    ("sevennet", "omat24"): "pbe",     # OMat24, PBE
-    ("sevennet", "matpes_pbe"): "pbe",  # MatPES, PBE
-    ("sevennet", "default"): "pbe",    # single-fidelity 7net-* (e.g. 7net-0), PBE
-    ("uma", "omat"): "pbe",            # OMat24, PBE+U
-    ("uma", "oc20"): "rpbe",           # OC20, RPBE
-    ("uma", "oc22"): "pbe",            # OC22, PBE(+U)
-    # --- v0.2.2: functionals verified for models that were previously refused ---
-    # CHGNet is keyed by the model name (``model or "default"``); the bundled
-    # checkpoints are MPtrj/PBE except the r2SCAN transfer-learning checkpoint.
-    ("chgnet", "0.3.0"): "pbe",        # MPtrj, PBE (current default checkpoint)
-    ("chgnet", "0.2.0"): "pbe",        # MPtrj, PBE (deprecated checkpoint)
-    ("chgnet", "r2scan"): "r2scan",    # r2SCAN transfer-learning checkpoint
-    # NequIP-OAM is PBE(+U)-level materials data (keyed by upper-cased size).
-    ("nequip", "S"): "pbe",
-    ("nequip", "M"): "pbe",
-    ("nequip", "L"): "pbe",
-    ("nequip", "XL"): "pbe",
-    # SevenNet multi-fidelity OC / r2SCAN heads.
-    ("sevennet", "oc20"): "rpbe",      # OC20, RPBE
-    ("sevennet", "oc22"): "pbe",       # OC22, PBE
-    ("sevennet", "matpes_r2scan"): "r2scan",  # MatPES, r2SCAN
-}
+
+def get_dispersion_policy(backend: str, key: str) -> DispersionPolicy | None:
+    """Return the documented chemistry for a model variant, if verified."""
+
+    return _POLICIES.get((backend, key))
 
 
 def resolve_dispersion_xc(
@@ -81,12 +116,11 @@ def resolve_dispersion_xc(
         If the model already includes dispersion (always), or if the model's
         functional is unverified and no explicit ``dispersion_xc`` was given.
     """
-    pair = (backend, key)
-
-    if pair in _DISPERSION_INCLUDED:
+    policy = get_dispersion_policy(backend, key)
+    if policy is not None and policy.includes_dispersion:
         raise DispersionError(
             f"dispersion=True is not allowed for {backend} '{key}': "
-            f"{_DISPERSION_INCLUDED[pair]}. Remove dispersion=True to avoid "
+            f"{policy.note}. Remove dispersion=True to avoid "
             "double-counting."
         )
 
@@ -95,8 +129,8 @@ def resolve_dispersion_xc(
         # hatch for the unverified tier).
         return dispersion_xc
 
-    if pair in _DEFAULT_XC:
-        return _DEFAULT_XC[pair]
+    if policy is not None and policy.d3_xc is not None:
+        return policy.d3_xc
 
     raise DispersionError(
         f"dispersion inclusion for {backend} '{key}' is not verified, so a D3 "

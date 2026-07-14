@@ -19,6 +19,19 @@ _MODEL_IDS = {
 }
 
 
+def _normalized_model_size(model: str) -> str:
+    normalized = model.upper()
+    if normalized not in _MODEL_IDS:
+        valid = ", ".join(_MODEL_IDS)
+        raise ValueError(f"Unknown NequIP OAM model '{model}'. Use one of: {valid}.")
+    return normalized
+
+
+def _load_target(model: str, model_path: str | Path | None) -> str:
+    """Return either an explicit local model or NequIP's pinned OAM identifier."""
+    return str(model_path) if model_path is not None else f"nequip.net:{_MODEL_IDS[model]}"
+
+
 class NequIPBackend(BaseBackend):
     name = "nequip"
 
@@ -61,22 +74,18 @@ class NequIPBackend(BaseBackend):
         compile_mode, model_name, neighborlist_backend, allow_tf32:
             Forwarded to NequIP's saved-model ASE loader.
         dispersion, dispersion_xc:
-            Add a Grimme-D3(BJ) correction only when an explicit
-            ``dispersion_xc`` is provided. The OAM dispersion policy is kept
-            conservative until the training functional / dispersion inclusion is
-            confirmed in this project.
+            Optionally add Grimme-D3(BJ). OAM uses PBE-level reference data, so
+            the default D3 parameters are PBE; an explicit ``dispersion_xc``
+            overrides that verified default.
         """
-        normalized_model = model.upper()
-        if normalized_model not in _MODEL_IDS:
-            valid = ", ".join(_MODEL_IDS)
-            raise ValueError(
-                f"Unknown NequIP OAM model '{model}'. Use one of: {valid}."
-            )
+        normalized_model = _normalized_model_size(model)
 
         # Validate the dispersion policy before loading the model (fail fast).
         d3_xc = precheck_dispersion_xc(
-            self.name, normalized_model,
-            dispersion=dispersion, dispersion_xc=dispersion_xc,
+            self.name,
+            normalized_model,
+            dispersion=dispersion,
+            dispersion_xc=dispersion_xc,
         )
         resolved_device = resolve_device(device)
 
@@ -85,13 +94,8 @@ class NequIPBackend(BaseBackend):
         except ImportError as exc:  # pragma: no cover - exercised via tests with mocks
             raise MissingDependencyError("NequIP") from exc
 
-        load_target = (
-            str(model_path)
-            if model_path is not None
-            else f"nequip.net:{_MODEL_IDS[normalized_model]}"
-        )
         bare = NequIPCalculator._from_saved_model(
-            load_target,
+            _load_target(normalized_model, model_path),
             device=resolved_device,
             chemical_species_to_atom_type_map=chemical_species_to_atom_type_map,
             allow_tf32=allow_tf32,

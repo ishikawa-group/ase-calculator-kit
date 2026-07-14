@@ -13,6 +13,7 @@ from __future__ import annotations
 from importlib.metadata import PackageNotFoundError, version
 
 from .config import resolve_calculator_config
+from .dispersion import DispersionPolicy, get_dispersion_policy
 from .errors import CalculatorKitError, DispersionError, MissingDependencyError
 from .factory import (
     attach_calculator,
@@ -40,6 +41,8 @@ __all__ = [
     "available_mlip_models",
     "available_dft_calculators",
     "resolve_calculator_config",
+    "DispersionPolicy",
+    "get_dispersion_policy",
     "CalculatorKitError",
     "MissingDependencyError",
     "DispersionError",

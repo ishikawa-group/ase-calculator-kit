@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from ase_calculator_kit import DispersionError, get_calculator
+from ase_calculator_kit import DispersionError, get_calculator, get_dispersion_policy
 from ase_calculator_kit.dispersion import (
     precheck_dispersion_xc,
     resolve_dispersion_xc,
@@ -79,6 +79,19 @@ def test_precheck_returns_none_when_disabled():
         precheck_dispersion_xc("uma", "oc25", dispersion=False, dispersion_xc=None)
         is None
     )
+
+
+def test_policy_exposes_training_reference_for_researchers():
+    pbe = get_dispersion_policy("sevennet", "matpes_pbe")
+    assert pbe is not None
+    assert pbe.reference_level == "PBE"
+    assert pbe.d3_xc == "pbe"
+    assert pbe.includes_dispersion is False
+
+    molecular = get_dispersion_policy("sevennet", "omol25_low")
+    assert molecular is not None
+    assert molecular.reference_level == "ωB97M-V"
+    assert molecular.includes_dispersion is True
 
 
 def test_get_calculator_included_task_fails_fast(monkeypatch):

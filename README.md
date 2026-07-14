@@ -5,6 +5,9 @@ machine-learning interatomic potentials and external DFT calculators. Every call
 returns a standard `ase.Calculator`, so the rest of your ASE workflow stays
 unchanged.
 
+実装を読む場合は、化学的な判断とモジュールの責務をまとめた
+[`docs/code-guide_ja.md`](docs/code-guide_ja.md)も参照してください。
+
 Supported MLIP backends:
 
 - [CHGNet](https://github.com/CederGroupHub/chgnet)
