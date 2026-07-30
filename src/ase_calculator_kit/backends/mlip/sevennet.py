@@ -2,12 +2,51 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
+import sys
+
 from ase.calculators.calculator import Calculator
 
 from ...device import resolve_device
 from ...dispersion import precheck_dispersion_xc, wrap_with_d3
 from ...errors import MissingDependencyError
 from ..base import BaseBackend
+
+# sevenn 0.12.1 unconditionally prints "cueq\n<bool>\nflash\n<bool>" from
+# SevenNetCalculator.__init__ (calculator.py). Drop exactly those pairs and
+# forward anything else the model load writes to stdout.
+_DEBUG_FLAGS = ("cueq", "flash")
+
+
+def _drop_debug_prints(text: str) -> list[str]:
+    lines = text.splitlines()
+    kept: list[str] = []
+    index = 0
+    while index < len(lines):
+        is_debug_pair = (
+            lines[index].strip() in _DEBUG_FLAGS
+            and index + 1 < len(lines)
+            and lines[index + 1].strip() in ("True", "False")
+        )
+        if is_debug_pair:
+            index += 2
+            continue
+        kept.append(lines[index])
+        index += 1
+    return kept
+
+
+@contextlib.contextmanager
+def _without_sevennet_debug_prints():
+    buffer = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buffer):
+            yield
+    finally:
+        kept = _drop_debug_prints(buffer.getvalue())
+        if kept:
+            print("\n".join(kept), file=sys.stdout)
 
 
 class SevenNetBackend(BaseBackend):
@@ -84,7 +123,8 @@ class SevenNetBackend(BaseBackend):
         if modal is not None:
             params["modal"] = modal
         params.update(kwargs)
-        bare = SevenNetCalculator(**params)
+        with _without_sevennet_debug_prints():
+            bare = SevenNetCalculator(**params)
 
         if d3_xc is not None:
             return wrap_with_d3(bare, xc=d3_xc, device=resolved_device)
