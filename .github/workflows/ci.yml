@@ -21,8 +21,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install (no heavyweight backends)
-        # NNP stacks are optional; the fast suite validates the lightweight core.
+      - name: Install (default deps only)
+        # Pulls SevenNet (a base dependency since 0.3.1) and its torch stack.
+        # The other NNP backends stay optional; the fast suite mocks them.
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e '.[dev]'
