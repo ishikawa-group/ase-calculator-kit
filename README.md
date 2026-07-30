@@ -5,13 +5,10 @@ machine-learning interatomic potentials and external DFT calculators. Every call
 returns a standard `ase.Calculator`, so the rest of your ASE workflow stays
 unchanged.
 
-実装を読む場合は、化学的な判断とモジュールの責務をまとめた
-[`docs/code-guide_ja.md`](docs/code-guide_ja.md)も参照してください。
-
 Supported MLIP backends:
 
+- [SevenNet](https://github.com/MDIL-SNU/SevenNet) (installed by default)
 - [CHGNet](https://github.com/CederGroupHub/chgnet)
-- [SevenNet](https://github.com/MDIL-SNU/SevenNet)
 - [MatterSim](https://github.com/microsoft/mattersim)
 - [NequIP OAM](https://www.nequip.net/)
 - [UMA / fairchem](https://github.com/facebookresearch/fairchem)
@@ -27,20 +24,19 @@ Supported DFT backends:
 pip install ase-calculator-kit
 ```
 
-The default installation is intentionally lightweight: it installs ASE and
-PyYAML, but **does not install an NNP backend**. Install only the calculators
-needed by your workflow:
+The default installation stays small: ASE, PyYAML, and **SevenNet as the default
+NNP backend**. Every other backend is an explicit extra, so install only what
+your workflow needs:
 
 ```bash
-# One backend
+# One extra backend
 pip install "ase-calculator-kit[chgnet]"
-pip install "ase-calculator-kit[sevennet]"
 pip install "ase-calculator-kit[mattersim]"
 pip install "ase-calculator-kit[nequip]"
 pip install "ase-calculator-kit[uma]"
 
 # Several selected backends
-pip install "ase-calculator-kit[chgnet,sevennet]"
+pip install "ase-calculator-kit[chgnet,mattersim]"
 
 # Every supported NNP backend and the optional D3 correction
 pip install "ase-calculator-kit[all]"
@@ -68,10 +64,10 @@ from ase_calculator_kit import get_calculator
 
 atoms = bulk("Cu", "fcc", a=3.6)
 
-atoms.calc = get_calculator("chgnet", device="mps")
+atoms.calc = get_calculator("sevennet", model="7net-omni", modal="mpa")
 print(atoms.get_potential_energy())
 
-atoms.calc = get_calculator("sevennet", model="7net-omni", modal="mpa")
+atoms.calc = get_calculator("chgnet", device="mps")
 print(atoms.get_potential_energy())
 
 atoms.calc = get_calculator("mattersim", model="5M")
@@ -100,7 +96,8 @@ calculation conditions explicit and reproducible:
 get_calculator("vasp", encut=520)  # TypeError
 ```
 
-For reproducibility, VASP configs must explicitly specify `profile.command`;
+For reproducibility, VASP configs must explicitly specify `profile.command`
+(QE additionally requires `profile.pseudo_dir` and `pseudopotentials`);
 environment-variable-only execution is intentionally not used by this wrapper.
 
 Use `overrides=` for small dynamic changes:
@@ -124,7 +121,51 @@ atoms.calc = get_calculator(
 )
 ```
 
-## Public Helpers
+## API Reference
+
+### Calculator names
+
+`get_calculator(name, **kwargs)` takes one of these names (case-insensitive);
+`available_calculators()` returns the same list at runtime.
+
+| `name` | Kind | Aliases |
+|---|---|---|
+| `sevennet` | MLIP | — |
+| `chgnet` | MLIP | — |
+| `mattersim` | MLIP | — |
+| `nequip` | MLIP | — |
+| `uma` | MLIP | `fairchem` |
+| `vasp` | DFT | — |
+| `qe` | DFT | `espresso`, `quantum-espresso` |
+
+An unknown name raises `ValueError` listing the valid names.
+
+### MLIP keyword arguments
+
+All MLIP backends accept `device=` (`"auto"` by default; see
+[Apple Silicon (MPS) support](#apple-silicon-mps-support)), `dispersion=False`,
+`dispersion_xc=None`, and forward any extra keywords to the underlying
+calculator.
+
+| `name` | Backend-specific keywords (defaults) |
+|---|---|
+| `sevennet` | `model="7net-omni"`, `modal="mpa"`, `enable_cueq=False`, `enable_flash=False` |
+| `chgnet` | `model=None` (bundled default), `checkpoint=None` (path to a `.pth`) |
+| `mattersim` | `model="1M"` (or `"5M"`), `load_path=None` |
+| `nequip` | `model="L"` (`S`/`M`/`L`/`XL`), `model_path=None`, `compile_mode="eager"`, `neighborlist_backend="matscipy"`, `allow_tf32=False` |
+| `uma` | `model="uma-s-1p2"`, `task="omat"` |
+
+### DFT keyword arguments
+
+DFT backends accept **only** these three; anything else raises `TypeError`.
+
+| Keyword | Default | Meaning |
+|---|---|---|
+| `config` | *required* | YAML path or `dict` of calculation conditions |
+| `overrides` | `None` | `dict` deep-merged over `config` |
+| `write_resolved_config` | `False` | Write the merged config into the run directory |
+
+### Public helpers
 
 ```python
 from ase_calculator_kit import (
@@ -138,27 +179,40 @@ from ase_calculator_kit import (
     resolve_calculator_config,
 )
 
-available_mlip_models()
-available_dft_calculators()
-available_calculators()
-available_models()
-attach_calculator(atoms, "uma", task="omat")
+available_mlip_models()     # ['chgnet', 'fairchem', 'mattersim', 'nequip', 'sevennet', 'uma']
+available_dft_calculators() # ['espresso', 'qe', 'quantum-espresso', 'vasp']
+available_calculators()     # both of the above; available_models() is an alias
+attach_calculator(atoms, "uma", task="omat")  # sets atoms.calc, returns atoms
 ```
+
+### Exceptions
+
+```python
+from ase_calculator_kit import CalculatorKitError, DispersionError, MissingDependencyError
+```
+
+| Exception | Also a | Raised when |
+|---|---|---|
+| `CalculatorKitError` | `Exception` | Base class for everything below |
+| `MissingDependencyError` | `ImportError` | The backend package is not installed; the message names the extra to install |
+| `DispersionError` | `ValueError` | `dispersion=True` is not allowed for that model (see [Dispersion](#dispersion)) |
+| `ValueError` | — | Unknown calculator name, unsupported `device`, or an incomplete DFT config |
+| `TypeError` | — | A DFT backend was given a keyword other than the three above, or `config=` was omitted |
 
 ## Examples
 
 Run a CPU single point with every MLIP model/variant:
 
 ```bash
-.venv/bin/python examples/run_all_models.py
-.venv/bin/python examples/run_all_models.py --device auto
-.venv/bin/python examples/run_all_models.py --only chgnet sevennet nequip
+python examples/run_all_models.py
+python examples/run_all_models.py --device auto
+python examples/run_all_models.py --only chgnet sevennet nequip
 ```
 
 Create DFT calculator objects from YAML without running VASP/QE:
 
 ```bash
-.venv/bin/python examples/dft/create_dft_calculator_from_config.py vasp \
+python examples/dft/create_dft_calculator_from_config.py vasp \
   examples/dft/vasp_pbe_static.yaml
 ```
 
@@ -171,8 +225,8 @@ on an Apple Silicon Mac (arm64, PyTorch 2.8, MPS available). Results:
 
 | Backend | `device="mps"` | Notes |
 |---|---|---|
-| CHGNet | ✅ supported | validated locally |
 | SevenNet | ✅ supported | validated locally (`7net-omni`) |
+| CHGNet | ✅ supported | validated locally |
 | MatterSim | ✅ supported | validated locally |
 | NequIP OAM | ❌ not supported | PyTorch MPS lacks float64; the packaged OAM models use float64 buffers |
 | UMA / fairchem | ❌ not supported | `fairchem-core` asserts `device in {"cpu", "cuda"}` |
@@ -209,17 +263,10 @@ Single-fidelity models such as `7net-0` do not take `modal`; pass `modal=None`.
 NequIP OAM models are loaded through NequIP's `nequip.net:` loader and cached by
 NequIP. To avoid a download, pass `model_path="path/to/model.nequip.zip"`.
 
-NequIP OAM supports `device="cpu"` and `device="cuda"`. `device="mps"` is not
-supported: Apple Silicon testing fails with `Cannot convert a MPS Tensor to
-float64` because the packaged OAM models use float64 buffers and PyTorch MPS has
-no float64. See the [Apple Silicon (MPS) support](#apple-silicon-mps-support)
-matrix above.
+### MatterSim `model`
 
-### MatterSim `device`
-
-MatterSim supports `device="cpu"`, `device="cuda"`, `device="mps"`, and
-`device="auto"`. Apple Silicon testing confirmed `MatterSimCalculator(device="mps")`
-computes energy and forces for a small bulk structure.
+`1M` (default) is for fast screening, `5M` is more accurate. Keep the checkpoint
+fixed across a campaign.
 
 ### UMA `task`
 
@@ -236,10 +283,6 @@ computes energy and forces for a small bulk structure.
 For molecular tasks (`omol`), set `atoms.info["charge"]` and
 `atoms.info["spin"]` before computing.
 
-UMA supports `device="cpu"` and `device="cuda"` only; `fairchem-core` asserts
-`device in {"cpu", "cuda"}`, so `device="mps"` is rejected. See the
-[Apple Silicon (MPS) support](#apple-silicon-mps-support) matrix above.
-
 ## Dispersion
 
 Add a Grimme-D3(BJ) correction on top of MLIP models with `dispersion=True`:
@@ -250,6 +293,11 @@ atoms.calc = get_calculator("uma", task="oc20", dispersion=True)
 atoms.calc = get_calculator("chgnet", dispersion=True)
 atoms.calc = get_calculator("uma", task="odac", dispersion=True, dispersion_xc="pbe")
 ```
+
+With `dispersion=True` the returned object is an ASE
+`SumCalculator([backend_calculator, d3_calculator])`, not the backend calculator
+itself — it satisfies the same `ase.Calculator` interface, but do not rely on
+backend-specific attributes or `isinstance` checks against the backend class.
 
 Some models already include dispersion in their training functional, so
 `dispersion=True` is refused for them with `DispersionError`. See
@@ -266,17 +314,23 @@ environment.
 
 ```bash
 python -m venv .venv
-.venv/bin/pip install -e .[dev]
+.venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest
-.venv/bin/pytest -m slow
-.venv/bin/pytest -m slow -s
 ```
 
-Install `.venv/bin/pip install -e '.[dev,all]'` before running every real-backend
-slow test.
+`pytest` runs only the fast tests by default. Slow tests
+(`pytest -m slow`) run real MLIP CPU single-point calculations and may download
+model weights; install `.[dev,all]` first so every backend is importable.
 
-`pytest` runs only the fast tests by default. Slow tests run real MLIP CPU
-single-point calculations and may download model weights.
+## Further Reading
+
+- [`docs/models.md`](docs/models.md) — per-model dispersion policy and training
+  functionals.
+- [`docs/code-guide_ja.md`](docs/code-guide_ja.md) — 実装の化学的な判断と
+  モジュールの責務（日本語）.
+- [`AGENTS.md`](AGENTS.md) — repository map, invariants, and conventions for
+  AI coding agents (Claude, GPT, and others).
+- [`CHANGELOG.md`](CHANGELOG.md) — release history.
 
 ## License
 
