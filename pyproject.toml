@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ase-calculator-kit"
-version = "0.3.0"
+version = "0.3.1"
 description = "Unified ASE calculator factory for MLIP and DFT calculators."
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
@@ -22,10 +22,12 @@ classifiers = [
 dependencies = [
     "ase==3.28.0",
     "pyyaml==6.0.3",
+    "sevenn==0.12.1",
 ]
 
 [project.optional-dependencies]
 chgnet = ["chgnet==0.4.2"]
+# Kept as a no-op alias: sevenn is now a base dependency.
 sevennet = ["sevenn==0.12.1"]
 mattersim = ["mattersim==1.2.5"]
 nequip = ["nequip==0.18.0"]

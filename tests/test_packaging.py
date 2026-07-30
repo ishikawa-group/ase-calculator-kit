@@ -1,4 +1,4 @@
-"""Release metadata should keep heavy NNP stacks opt-in."""
+"""Release metadata should ship SevenNet by default and keep other NNPs opt-in."""
 
 from __future__ import annotations
 
@@ -11,9 +11,14 @@ def _project_metadata() -> dict:
     return tomllib.loads(path.read_text(encoding="utf-8"))["project"]
 
 
-def test_default_install_has_no_nnp_or_dispersion_packages():
+def test_default_install_ships_sevennet_only():
     dependencies = _project_metadata()["dependencies"]
-    assert dependencies == ["ase==3.28.0", "pyyaml==6.0.3"]
+    assert dependencies == ["ase==3.28.0", "pyyaml==6.0.3", "sevenn==0.12.1"]
+
+
+def test_sevennet_extra_stays_available_as_an_alias():
+    extras = _project_metadata()["optional-dependencies"]
+    assert extras["sevennet"] == ["sevenn==0.12.1"]
 
 
 def test_individual_and_all_extras_are_consistent():
@@ -24,5 +29,5 @@ def test_individual_and_all_extras_are_consistent():
     assert set(extras["all"]) == expected_all
 
 
-def test_release_version_is_0_3_0():
-    assert _project_metadata()["version"] == "0.3.0"
+def test_release_version_is_0_3_1():
+    assert _project_metadata()["version"] == "0.3.1"

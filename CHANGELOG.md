@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1
+
+- Ship SevenNet (`sevenn`) as a base dependency, so `pip install
+  ase-calculator-kit` gives a working NNP backend out of the box.
+- Keep the `sevennet` extra as a no-op alias so existing
+  `ase-calculator-kit[sevennet]` installs keep working.
+- Suppress the `cueq/False/flash/False` debug lines that sevenn 0.12.1 prints
+  unconditionally when constructing `SevenNetCalculator`; any other stdout from
+  the model load is still forwarded.
+
 ## 0.3.0
 
 - Make the default installation lightweight: only ASE and PyYAML are required.
