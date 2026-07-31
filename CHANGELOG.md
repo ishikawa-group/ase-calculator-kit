@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.1
+
+- Suppress the `cueq/False/flash/False` debug lines that sevenn 0.12.1 prints
+  unconditionally when constructing `SevenNetCalculator`; any other stdout from
+  the model load is still forwarded.
+- Prepare for PyPI: publish compatible version ranges instead of exact `==`
+  pins (the tested combination moves to `constraints.txt`), declare the license
+  as a PEP 639 SPDX expression, add `py.typed` so downstream type checkers see
+  the annotations, add Changelog/Issues URLs and Python 3.12/3.13 classifiers,
+  and add a release workflow that builds on a `v*` tag.
+- Document the public API surface in the README and add `AGENTS.md`.
+
+
 ## 0.3.0
 
 - Make the default installation lightweight: only ASE and PyYAML are required.

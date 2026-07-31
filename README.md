@@ -314,13 +314,18 @@ environment.
 
 ```bash
 python -m venv .venv
-.venv/bin/pip install -e ".[dev]"
+.venv/bin/pip install -e ".[dev]" -c constraints.txt
 .venv/bin/pytest
 ```
 
+`pyproject.toml` declares compatible version ranges so the package installs
+next to whatever ASE/NNP versions you already have; `constraints.txt` pins the
+exact combination that is tested, and CI installs with it.
+
 `pytest` runs only the fast tests by default. Slow tests
 (`pytest -m slow`) run real MLIP CPU single-point calculations and may download
-model weights; install `.[dev,all]` first so every backend is importable.
+model weights; install `.[dev,all] -c constraints.txt` first so every backend is
+importable.
 
 ## Further Reading
 

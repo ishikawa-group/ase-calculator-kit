@@ -31,7 +31,9 @@ src/ase_calculator_kit/
   backends/base.py   BaseBackend: every backend implements create_calculator()
   backends/mlip/     chgnet.py sevennet.py mattersim.py nequip.py fairchem.py
   backends/dft/      vasp.py espresso.py
+  py.typed           PEP 561 marker; keep it listed in [tool.setuptools.package-data]
 tests/               fast unit tests + test_singlepoint_cpu.py (marked slow)
+constraints.txt      exact tested versions behind the pyproject ranges
 examples/            run_all_models.py, examples/dft/*.yaml
 docs/models.md       per-model training functional and dispersion policy
 docs/code-guide_ja.md 実装ガイド（日本語）
@@ -39,8 +41,8 @@ docs/code-guide_ja.md 実装ガイド（日本語）
 
 Adding a backend touches, in order: `backends/mlip/<name>.py`,
 `backends/__init__.py`, `registry.py`, `dispersion.py` (policy entry),
-`pyproject.toml` (extra + `all`), `errors.py` (extra mapping), tests, README,
-`docs/models.md`.
+`pyproject.toml` (extra + `all`), `constraints.txt` (exact tested version),
+`errors.py` (extra mapping), tests, README, `docs/models.md`.
 
 ## Invariants
 
@@ -73,13 +75,19 @@ These are deliberate design decisions, not oversights.
    without running the calculation; record the result in the README matrix.
 7. **MACE stays out.** `mace-torch` needs an `e3nn` version incompatible with
    the one pinned by `sevenn` and `fairchem-core`. Do not add it.
-8. **Every dependency is `==`-pinned** in `pyproject.toml`, including dev tools.
-   Keep exact pins when adding or bumping; `tests/test_packaging.py` asserts the
-   base dependency list, the version, and that `all` equals the union of the
-   individual extras.
-9. **SevenNet is a base dependency** (since 0.3.1), so a bare
-   `pip install ase-calculator-kit` pulls in torch. The `sevennet` extra is kept
-   as a no-op alias for backward compatibility — do not delete it.
+8. **Published requirements are ranges; exact pins live in `constraints.txt`.**
+   `pyproject.toml` uses compatible ranges (`ase>=3.28,<4`) so the package can be
+   installed alongside whatever ASE/NNP versions a user already has — an
+   `==`-pinned library is uninstallable for half its audience. `constraints.txt`
+   holds the exact tested combination and is what CI installs with `-c`. The
+   `dev` extra is the one exception and stays `==`-pinned, so a ruff release
+   cannot turn CI red on an unrelated PR. `tests/test_packaging.py` enforces
+   both halves of this. Widen a range only after testing the new version.
+9. **The default install stays lightweight** (since 0.3.0): the base
+   dependencies are ASE and PyYAML only, so a bare
+   `pip install ase-calculator-kit` does *not* pull in torch. Every NNP stack
+   lives behind its own extra. Promoting a backend to a base dependency reverses
+   a deliberate release decision — do not do it without agreement.
 
 ## Conventions
 
@@ -98,7 +106,7 @@ These are deliberate design decisions, not oversights.
 
 ```bash
 python -m venv .venv
-.venv/bin/pip install -e ".[dev]"      # add ,all for the slow suite
+.venv/bin/pip install -e ".[dev]" -c constraints.txt   # add ,all for slow tests
 .venv/bin/pytest                        # fast suite; slow tests deselected
 .venv/bin/ruff check src tests examples
 .venv/bin/pytest -m slow                # real single points, downloads weights
@@ -110,6 +118,11 @@ python -m venv .venv
   needs `.[dev,all]`.
 - CI (`.github/workflows/ci.yml`) runs the fast suite on Python 3.12 and 3.13
   plus `ruff check`. Assume no GPU and no Apple Silicon in CI.
+- Releases are cut by pushing a `v*` tag; `.github/workflows/release.yml`
+  builds, checks that the tag matches `[project].version`, and uploads to PyPI
+  via Trusted Publishing (OIDC, no stored token). PyPI filenames are immutable —
+  a version can be yanked but never re-uploaded, so use the `workflow_dispatch`
+  TestPyPI path first.
 - Backend tests inject fake modules into `sys.modules`
   (see `tests/test_sevennet_backend.py`) rather than importing real NNP
   packages. Follow that pattern for new backends — fast tests must not download
@@ -137,6 +150,8 @@ python -m venv .venv
 - Guessing keyword names (`model_name=`, `calculator=`, `xc=`). The accepted
   keywords per backend are tabulated in the README "API Reference" section and
   defined in each `create_calculator()` signature.
-- Loosening a pin to resolve a conflict. Pins are intentional; report the
-  conflict instead.
+- Widening a range in `pyproject.toml` to make a conflict go away. The upper
+  bounds mark "not tested above this"; report the conflict instead.
+- Adding an exact `==` pin to `pyproject.toml`, or editing `constraints.txt`
+  without also checking the range in `pyproject.toml` still contains it.
 - Editing `docs/models.md` or `dispersion.py` alone (see invariant 4).
