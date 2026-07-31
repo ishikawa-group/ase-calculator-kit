@@ -22,10 +22,12 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install (no heavyweight backends)
-        # NNP stacks are optional; the fast suite validates the lightweight core.
+        # NNP stacks are optional; the fast suite validates the lightweight core
+        # and mocks the backends. constraints.txt pins the exact tested versions
+        # behind the compatible ranges published in pyproject.toml.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e '.[dev]'
+          python -m pip install -e '.[dev]' -c constraints.txt
 
       - name: Run fast tests
         run: pytest
