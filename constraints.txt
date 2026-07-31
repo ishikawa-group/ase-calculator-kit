@@ -1,0 +1,19 @@
+# Exact known-good versions for reproducible development and CI runs.
+#
+# pyproject.toml intentionally publishes compatible *ranges* so this library can
+# be installed next to whatever ASE / NNP versions a user already has. This file
+# pins the combination that is actually tested:
+#
+#     pip install -e ".[dev]" -c constraints.txt
+#     pip install -e ".[dev,all]" -c constraints.txt   # for `pytest -m slow`
+#
+# Bump a pin here only together with a real test run of the affected backend.
+
+ase==3.28.0
+pyyaml==6.0.3
+sevenn==0.12.1
+chgnet==0.4.2
+mattersim==1.2.5
+nequip==0.18.0
+fairchem-core==2.20.0
+torch-dftd==0.5.3

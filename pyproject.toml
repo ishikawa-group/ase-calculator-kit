@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools==82.0.1", "wheel==0.47.0"]
+requires = ["setuptools==82.0.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,47 +8,62 @@ version = "0.3.1"
 description = "Unified ASE calculator factory for MLIP and DFT calculators."
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "ishikawa-group" }]
 keywords = ["ase", "calculator", "dft", "machine-learning", "interatomic-potential", "mlip", "chemistry", "materials"]
 classifiers = [
+    "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Chemistry",
     "Topic :: Scientific/Engineering :: Physics",
+    "Typing :: Typed",
 ]
 
+# Published metadata uses compatible ranges so this library can coexist with
+# whatever ASE / NNP versions are already in a user's environment. The exact
+# known-good versions live in constraints.txt for CI and local reproducibility.
 dependencies = [
-    "ase==3.28.0",
-    "pyyaml==6.0.3",
-    "sevenn==0.12.1",
+    "ase>=3.28,<4",
+    "pyyaml>=6.0,<7",
+    "sevenn>=0.12,<0.13",
 ]
 
 [project.optional-dependencies]
-chgnet = ["chgnet==0.4.2"]
+chgnet = ["chgnet>=0.4,<0.5"]
 # Kept as a no-op alias: sevenn is now a base dependency.
-sevennet = ["sevenn==0.12.1"]
-mattersim = ["mattersim==1.2.5"]
-nequip = ["nequip==0.18.0"]
-uma = ["fairchem-core==2.20.0"]
-dispersion = ["torch-dftd==0.5.3"]
+sevennet = ["sevenn>=0.12,<0.13"]
+mattersim = ["mattersim>=1.2,<2"]
+nequip = ["nequip>=0.18,<0.19"]
+uma = ["fairchem-core>=2.20,<3"]
+dispersion = ["torch-dftd>=0.5,<0.6"]
 all = [
-    "chgnet==0.4.2",
-    "sevenn==0.12.1",
-    "mattersim==1.2.5",
-    "nequip==0.18.0",
-    "fairchem-core==2.20.0",
-    "torch-dftd==0.5.3",
+    "chgnet>=0.4,<0.5",
+    "sevenn>=0.12,<0.13",
+    "mattersim>=1.2,<2",
+    "nequip>=0.18,<0.19",
+    "fairchem-core>=2.20,<3",
+    "torch-dftd>=0.5,<0.6",
 ]
+# Development tooling is not a library dependency, so it stays exactly pinned:
+# a ruff bump must not turn CI red on an unrelated pull request.
 dev = ["pytest==9.0.3", "ruff==0.15.15", "tqdm==4.67.3"]
 
 [project.urls]
 Homepage = "https://github.com/ishikawa-group/ase-calculator-kit"
 Repository = "https://github.com/ishikawa-group/ase-calculator-kit"
+Changelog = "https://github.com/ishikawa-group/ase-calculator-kit/blob/main/CHANGELOG.md"
+Issues = "https://github.com/ishikawa-group/ase-calculator-kit/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+ase_calculator_kit = ["py.typed"]
 
 [tool.pytest.ini_options]
 addopts = "-m 'not slow'"

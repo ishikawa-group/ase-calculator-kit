@@ -9,6 +9,11 @@
 - Suppress the `cueq/False/flash/False` debug lines that sevenn 0.12.1 prints
   unconditionally when constructing `SevenNetCalculator`; any other stdout from
   the model load is still forwarded.
+- Prepare for PyPI: publish compatible version ranges instead of exact `==`
+  pins (the tested combination moves to `constraints.txt`), declare the license
+  as a PEP 639 SPDX expression, add `py.typed` so downstream type checkers see
+  the annotations, add Changelog/Issues URLs and Python 3.12/3.13 classifiers,
+  and add a tag-triggered release workflow using PyPI Trusted Publishing.
 
 ## 0.3.0
 

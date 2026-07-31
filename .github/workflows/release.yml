@@ -1,0 +1,85 @@
+name: Release
+
+# Publishes to PyPI when a v* tag is pushed, using PyPI Trusted Publishing
+# (OIDC) — no API token is stored in this repository.
+#
+# One-time setup on https://pypi.org/manage/account/publishing/ (this works
+# before the project exists, as a "pending publisher"):
+#   owner: ishikawa-group   repository: ase-calculator-kit
+#   workflow: release.yml   environment: pypi
+#
+# Dry run first: push the tag, let `build` run, then use the manual
+# workflow_dispatch entry point with target=testpypi and configure a matching
+# pending publisher on test.pypi.org.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Where to upload"
+        type: choice
+        options: [testpypi, pypi]
+        default: testpypi
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          twine check dist/*
+
+      - name: Verify the tag matches the packaged version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          packaged=$(ls dist/*.tar.gz | sed -E 's/.*-([0-9][^-]*)\.tar\.gz/\1/')
+          tagged=${GITHUB_REF_NAME#v}
+          if [ "$packaged" != "$tagged" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match packaged version $packaged" >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  pypi:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
