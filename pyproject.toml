@@ -1,10 +1,9 @@
 [build-system]
-requires = ["setuptools==82.0.1"]
+requires = ["setuptools==82.0.1", "setuptools-scm==9.2.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ase-calculator-kit"
-version = "0.3.4"
 description = "Unified ASE calculator factory for MLIP and DFT calculators."
 readme = "README.md"
 # No upper bound: an upper cap is baked into every uploaded file and makes the
@@ -37,6 +36,13 @@ dependencies = [
     "pyyaml>=6.0,<7",
 ]
 
+# The version is derived from the git tag by setuptools-scm rather than written
+# here. It used to live in three places that had to agree, and once did not:
+# 0.3.3 shipped a CITATION.cff still announcing 0.3.2. The tag is now the single
+# source of truth, so building an untagged commit yields a .devN version and a
+# release cannot disagree with its own tag.
+dynamic = ["version"]
+
 [project.optional-dependencies]
 chgnet = ["chgnet>=0.4,<0.5"]
 sevennet = ["sevenn>=0.12,<0.13"]
@@ -61,6 +67,11 @@ Homepage = "https://github.com/ishikawa-group/ase-calculator-kit"
 Repository = "https://github.com/ishikawa-group/ase-calculator-kit"
 Changelog = "https://github.com/ishikawa-group/ase-calculator-kit/blob/main/CHANGELOG.md"
 Issues = "https://github.com/ishikawa-group/ase-calculator-kit/issues"
+
+[tool.setuptools_scm]
+# `git describe` output alone; no local-version (+g<sha>) segment, because PyPI
+# rejects local versions on upload.
+local_scheme = "no-local-version"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -3,10 +3,11 @@
 This is the whole path from "code is ready" to "there is a PyPI page and a DOI".
 Steps marked **(browser)** cannot be automated — they need a logged-in session.
 
-The repository already ships the automation: `.github/workflows/release.yml`
-builds the sdist/wheel on every `v*` tag and checks that the tag matches the
-version in `pyproject.toml`. Uploading is a separate, manual dispatch, and it
-goes through PyPI Trusted Publishing (OIDC), so no API token is stored here.
+The repository already ships the automation: publishing a GitHub Release runs
+the test suite, builds the sdist and wheel from the tag, and uploads them via
+PyPI Trusted Publishing (OIDC), so no API token is stored here. The same event
+is what Zenodo's webhook archives, so one action produces both the release and
+its DOI.
 
 Steps 1 and 3 are one-time setup and are **already done** — they are kept here
 for the record, and for whoever sets this up on the next project. A routine
@@ -83,38 +84,30 @@ toggle is on — an existing tag will not be picked up retroactively.
 
 ## 4. Cut the release
 
-Add the release date to `CITATION.cff` first (`date-released: "YYYY-MM-DD"`,
-directly under `version:`) and commit it, so the archived tarball carries it.
+Commit the release notes first — a `## X.Y.Z` section in `CHANGELOG.md`, plus
+the matching `version` and `date-released` in `CITATION.cff`, which a test
+checks against each other. There is no version to bump in `pyproject.toml`:
+`setuptools-scm` reads it from the tag.
 
 ```bash
 git tag -a vX.Y.Z -m "ase-calculator-kit X.Y.Z"
 git push origin vX.Y.Z
-```
-
-The tag push **builds but does not upload** — `release.yml` gates the upload
-behind `workflow_dispatch` so a tag can never publish by accident. Trigger the
-upload explicitly:
-
-```bash
-gh workflow run release.yml --ref vX.Y.Z -f target=pypi
-```
-
-Then publish a GitHub Release for that tag:
-
-```bash
 gh release create vX.Y.Z --title "ase-calculator-kit vX.Y.Z" --notes "..."
 ```
 
-All three steps are needed and they do different things:
+Publishing the release is the whole release. It runs `ci.yml`, builds from the
+tag, uploads to PyPI, and — through the webhook — hands the tarball to Zenodo.
+Nothing is uploaded if the suite fails.
 
-- the **tag push** builds the sdist/wheel and checks the tag against the
-  packaged version;
-- the **manual dispatch** uploads to PyPI via Trusted Publishing;
-- the **published GitHub Release** fires the webhook → Zenodo deposits the
-  tarball and mints the DOI.
+The tag itself does nothing until the release is published, so a stray tag
+cannot ship anything.
 
-Order matters for the last two: upload to PyPI first, so the archived record
-points at artifacts that already exist.
+To rehearse without touching PyPI, run the workflow by hand: a
+`workflow_dispatch` run always targets TestPyPI, whatever the ref.
+
+```bash
+gh workflow run release.yml --ref main
+```
 
 ## 5. Record the DOI
 
@@ -138,12 +131,11 @@ creates a DOI cannot cite it. That resolves from 0.3.5 onward.
 
 ## Every subsequent release
 
-1. Bump `version` in `pyproject.toml` **and** the assertion in
-   `tests/test_packaging.py::test_release_version_is_...`.
-2. Update `version` and `date-released` in `CITATION.cff`.
-3. Add a `CHANGELOG.md` entry.
-4. `git tag -a vX.Y.Z && git push origin vX.Y.Z`, then publish the GitHub
-   Release.
+1. Add a `## X.Y.Z` section to `CHANGELOG.md`.
+2. Set the matching `version` and `date-released` in `CITATION.cff`.
+3. Tag, push the tag, and publish the GitHub Release (step 4 above).
+
+Nothing else carries a version number.
 
 ## Notes
 

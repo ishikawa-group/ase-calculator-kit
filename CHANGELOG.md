@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.3.5
+
+Reworks how a release is cut, following pymatgen's arrangement. No runtime
+behavior changes.
+
+- **Publishing a GitHub Release is now the whole release.** It uploads to PyPI
+  *and* is the event the Zenodo webhook listens for, so the artifact and its
+  DOI can no longer come from different commits. Previously a tag push built
+  without uploading and a second manual dispatch did the upload — which is how
+  0.3.3 reached PyPI but never got a DOI. A manual run of the workflow is now
+  always a TestPyPI dry run; there is no path to PyPI except a published
+  release.
+- **The test suite gates the upload.** `release.yml` calls `ci.yml` and builds
+  nothing until it passes. Until now the two workflows were independent, so a
+  red suite could not stop a permanent PyPI upload.
+- **The version is derived from the git tag** via `setuptools-scm` instead of
+  being written into `pyproject.toml`. It had to be kept in step across three
+  files, and in 0.3.3 it was not: that release shipped a `CITATION.cff` still
+  announcing 0.3.2. `CITATION.cff` remains hand-written — Zenodo reads it — but
+  a test now holds it to the newest `CHANGELOG.md` entry.
+- Re-running a partly-failed upload is a no-op rather than an error
+  (`skip-existing`).
+
 ## 0.3.4
 
 A metadata-only release. No runtime behavior changes.

@@ -137,11 +137,15 @@ python -m venv .venv
   README, so it fails both when an extra stops resolving and when one we
   document as unavailable starts working. In the latter case, update the README
   table and the expectation list together.
-- Releases are cut by pushing a `v*` tag; `.github/workflows/release.yml`
-  builds, checks that the tag matches `[project].version`, and uploads to PyPI
-  via Trusted Publishing (OIDC, no stored token). PyPI filenames are immutable —
-  a version can be yanked but never re-uploaded, so use the `workflow_dispatch`
-  TestPyPI path first.
+- Releases are cut by publishing a GitHub Release for a `v*` tag.
+  `.github/workflows/release.yml` calls `ci.yml`, builds from the tag, and
+  uploads to PyPI via Trusted Publishing (OIDC, no stored token); the same event
+  drives the Zenodo webhook that mints the DOI. A tag alone ships nothing, and a
+  `workflow_dispatch` run always targets TestPyPI — use it to rehearse, because
+  PyPI filenames are immutable and a version can be yanked but never re-uploaded.
+- There is no version string in the tree: `setuptools-scm` derives it from the
+  tag. `CITATION.cff` is the exception, since Zenodo reads it, and a test holds
+  it to the newest `CHANGELOG.md` heading. See `docs/releasing.md`.
 - Backend tests inject fake modules into `sys.modules`
   (see `tests/test_sevennet_backend.py`) rather than importing real NNP
   packages. Follow that pattern for new backends — fast tests must not download

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
+
+import yaml
 
 _ROOT = Path(__file__).resolve().parents[1]
 
@@ -53,8 +56,30 @@ def test_constraints_cover_every_published_requirement():
     assert required.issubset(_distribution_names(pinned))
 
 
-def test_release_version_is_0_3_4():
-    assert _project_metadata()["version"] == "0.3.4"
+def test_version_comes_from_the_git_tag():
+    """A hand-written version is a second source of truth that can drift.
+
+    0.3.3 shipped a CITATION.cff still announcing 0.3.2 because the number
+    lived in several files at once. setuptools-scm derives it from the tag, so
+    a release cannot disagree with the tag it was built from.
+    """
+    project = _project_metadata()
+    assert "version" not in project
+    assert "version" in project["dynamic"]
+
+
+def test_citation_version_matches_the_newest_changelog_entry():
+    """CITATION.cff is the one place a version is still written by hand.
+
+    Zenodo reads it when minting the DOI, so a stale value misdescribes the
+    archived record rather than merely looking untidy.
+    """
+    changelog = (_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    released = re.findall(r"^## (\d+\.\d+\.\d+)$", changelog, flags=re.MULTILINE)
+    assert released, "CHANGELOG.md has no released version heading"
+
+    citation = yaml.safe_load((_ROOT / "CITATION.cff").read_text(encoding="utf-8"))
+    assert str(citation["version"]) == released[0]
 
 
 def test_requires_python_has_no_upper_bound():

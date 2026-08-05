@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # release.yml calls this workflow, so nothing reaches PyPI untested.
+  workflow_call:
 
 jobs:
   fast-tests:
@@ -15,6 +17,10 @@ jobs:
         python-version: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          # setuptools-scm derives the version from the tag, so the editable
+          # install below needs the history, not just the tip commit.
+          fetch-depth: 0
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -51,6 +57,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
