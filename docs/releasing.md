@@ -4,9 +4,13 @@ This is the whole path from "code is ready" to "there is a PyPI page and a DOI".
 Steps marked **(browser)** cannot be automated — they need a logged-in session.
 
 The repository already ships the automation: `.github/workflows/release.yml`
-builds the sdist/wheel on every `v*` tag, checks that the tag matches the
-version in `pyproject.toml`, and uploads via PyPI Trusted Publishing (OIDC), so
-no API token is ever stored here.
+builds the sdist/wheel on every `v*` tag and checks that the tag matches the
+version in `pyproject.toml`. Uploading is a separate, manual dispatch, and it
+goes through PyPI Trusted Publishing (OIDC), so no API token is stored here.
+
+Steps 1 and 3 are one-time setup and are **already done** — they are kept here
+for the record, and for whoever sets this up on the next project. A routine
+release starts at step 0 and runs through step 4.
 
 ---
 
@@ -47,7 +51,7 @@ exists, so no manual first upload is needed:
 
 Then create the matching GitHub environment: repository → Settings →
 Environments → **New environment** → `pypi`. (Adding required reviewers there is
-a good safety net: a tag push then waits for a human click before uploading.)
+a good safety net: the upload then waits for a human click.)
 
 For the optional dry run, repeat both steps on <https://test.pypi.org/> with
 environment name `testpypi`.
@@ -83,35 +87,54 @@ Add the release date to `CITATION.cff` first (`date-released: "YYYY-MM-DD"`,
 directly under `version:`) and commit it, so the archived tarball carries it.
 
 ```bash
-git tag -a v0.3.2 -m "ase-calculator-kit 0.3.2"
-git push origin v0.3.2
+git tag -a vX.Y.Z -m "ase-calculator-kit X.Y.Z"
+git push origin vX.Y.Z
 ```
 
-Then **(browser)** publish a GitHub Release for that tag (Releases → Draft a new
-release → choose `v0.3.2` → paste the `CHANGELOG.md` entry → Publish).
+The tag push **builds but does not upload** — `release.yml` gates the upload
+behind `workflow_dispatch` so a tag can never publish by accident. Trigger the
+upload explicitly:
 
-Both halves are needed and they do different things:
+```bash
+gh workflow run release.yml --ref vX.Y.Z -f target=pypi
+```
 
-- the **tag push** triggers `release.yml` → PyPI;
+Then publish a GitHub Release for that tag:
+
+```bash
+gh release create vX.Y.Z --title "ase-calculator-kit vX.Y.Z" --notes "..."
+```
+
+All three steps are needed and they do different things:
+
+- the **tag push** builds the sdist/wheel and checks the tag against the
+  packaged version;
+- the **manual dispatch** uploads to PyPI via Trusted Publishing;
 - the **published GitHub Release** fires the webhook → Zenodo deposits the
   tarball and mints the DOI.
+
+Order matters for the last two: upload to PyPI first, so the archived record
+points at artifacts that already exist.
 
 ## 5. Record the DOI
 
 Zenodo mints two DOIs:
 
 - a **concept DOI** that always resolves to the newest version — this is the one
-  to put in the README badge and in citations;
-- a **version DOI** for this specific release.
+  in the README badge and in citations;
+- a **version DOI** for each specific release.
 
-Fill both TODO blocks left in the tree:
+Both are already recorded, from the 0.3.4 archive that first created them:
 
-- `README.md` — the DOI badge near the title, and the BibTeX under `## Citation`.
-- `CITATION.cff` — the `identifiers:` block with the concept DOI.
+| | DOI |
+| --- | --- |
+| Concept (all versions) | [`10.5281/zenodo.21807793`](https://doi.org/10.5281/zenodo.21807793) |
+| 0.3.4 | `10.5281/zenodo.21807794` |
 
-Commit those to `main`. They apply from the *next* release onward, which is
-normal and expected: the archived tarball of the release that created the DOI
-cannot contain its own DOI.
+The concept DOI never changes, so nothing here needs editing per release — only
+the version DOI differs, and Zenodo assigns it automatically. Note that the
+0.3.4 tarball does not itself contain its DOI: the archive of the release that
+creates a DOI cannot cite it. That resolves from 0.3.5 onward.
 
 ## Every subsequent release
 

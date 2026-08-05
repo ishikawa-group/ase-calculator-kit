@@ -3,9 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/ase-calculator-kit)](https://pypi.org/project/ase-calculator-kit/)
 [![Python](https://img.shields.io/pypi/pyversions/ase-calculator-kit)](https://pypi.org/project/ase-calculator-kit/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-<!-- TODO(after the first Zenodo release): paste the concept-DOI badge here.
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
--->
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21807793.svg)](https://doi.org/10.5281/zenodo.21807793)
 
 A thin, unified [ASE](https://wiki.fysik.dtu.dk/ase/) calculator factory for
 machine-learning interatomic potentials and external DFT calculators. Every call
@@ -462,19 +460,20 @@ release. [`CITATION.cff`](CITATION.cff) holds the machine-readable metadata —
 GitHub renders it under "Cite this repository", and Zenodo reads it when
 minting the DOI.
 
-<!-- TODO(after the first Zenodo release): fill in the concept DOI (the one
-that always resolves to the newest version) and uncomment.
-
 ```bibtex
 @software{ase_calculator_kit,
   title  = {ase-calculator-kit: a unified ASE calculator factory for MLIP and DFT calculators},
   author = {Wakamiya, Taishiro and Ishikawa, Atsushi},
   year   = {2026},
-  doi    = {10.5281/zenodo.XXXXXXX},
+  doi    = {10.5281/zenodo.21807793},
   url    = {https://github.com/ishikawa-group/ase-calculator-kit}
 }
 ```
--->
+
+`10.5281/zenodo.21807793` is the *concept* DOI: it always resolves to the newest
+archived version. To cite one specific release instead, use its version DOI from
+the [Zenodo record](https://doi.org/10.5281/zenodo.21807793) — 0.3.4 is
+`10.5281/zenodo.21807794`.
 
 ## License
 

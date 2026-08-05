@@ -29,10 +29,9 @@ authors:
     orcid: "https://orcid.org/0000-0001-6908-831X"
     affiliation: "Institute of Science Tokyo"
 
-# TODO(after the first Zenodo release): uncomment and fill in the *concept*
-# DOI (the one that always resolves to the newest version), then keep `version`
-# and `date-released` in step with each tag.
-# identifiers:
-#   - type: doi
-#     value: "10.5281/zenodo.XXXXXXX"
-#     description: "Concept DOI for all versions"
+# The concept DOI always resolves to the newest version, so it stays fixed
+# across releases; only `version` and `date-released` move with each tag.
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.21807793"
+    description: "Concept DOI for all versions"
