@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/ase-calculator-kit)](https://pypi.org/project/ase-calculator-kit/)
 [![Python](https://img.shields.io/pypi/pyversions/ase-calculator-kit)](https://pypi.org/project/ase-calculator-kit/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21807793.svg)](https://doi.org/10.5281/zenodo.21807793)
 
 A thin, unified [ASE](https://wiki.fysik.dtu.dk/ase/) calculator factory for
@@ -240,7 +240,7 @@ python examples/dft/create_dft_calculator_from_config.py vasp \
   examples/dft/vasp_pbe_static.yaml
 ```
 
-DFT YAML examples live in [`examples/dft`](examples/dft).
+DFT YAML examples live in [`examples/dft`](https://github.com/ishikawa-group/ase-calculator-kit/tree/main/examples/dft).
 
 ## Apple Silicon (MPS) support
 
@@ -415,7 +415,7 @@ explicit D3(BJ) term, or MBD-NL). That verdict cannot be overridden with
 cover yet is refused by default but *can* be unlocked with an explicit
 `dispersion_xc` once you have checked its functional yourself.
 
-See [`docs/models.md`](docs/models.md) for the full per-model table.
+See [`docs/models.md`](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/models.md) for the full per-model table.
 
 ## Why no MACE?
 
@@ -443,20 +443,20 @@ importable.
 
 ## Further Reading
 
-- [`docs/models.md`](docs/models.md) — per-model dispersion policy and training
+- [`docs/models.md`](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/models.md) — per-model dispersion policy and training
   functionals.
-- [`docs/code-guide_ja.md`](docs/code-guide_ja.md) — 実装の化学的な判断と
+- [`docs/code-guide_ja.md`](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/code-guide_ja.md) — 実装の化学的な判断と
   モジュールの責務（日本語）.
-- [`AGENTS.md`](AGENTS.md) — repository map, invariants, and conventions for
+- [`AGENTS.md`](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/AGENTS.md) — repository map, invariants, and conventions for
   AI coding agents (Claude, GPT, and others).
-- [`CHANGELOG.md`](CHANGELOG.md) — release history.
-- [`docs/releasing.md`](docs/releasing.md) — how a release reaches PyPI and
+- [`CHANGELOG.md`](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/CHANGELOG.md) — release history.
+- [`docs/releasing.md`](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/releasing.md) — how a release reaches PyPI and
   Zenodo.
 
 ## Citation
 
 If this package contributed to published work, please cite the archived
-release. [`CITATION.cff`](CITATION.cff) holds the machine-readable metadata —
+release. [`CITATION.cff`](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/CITATION.cff) holds the machine-readable metadata —
 GitHub renders it under "Cite this repository", and Zenodo reads it when
 minting the DOI.
 
