@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ase-calculator-kit"
-version = "0.3.2"
+version = "0.3.3"
 description = "Unified ASE calculator factory for MLIP and DFT calculators."
 readme = "README.md"
 # No upper bound: an upper cap is baked into every uploaded file and makes the

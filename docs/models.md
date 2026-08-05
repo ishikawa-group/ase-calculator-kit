@@ -17,16 +17,16 @@ interaction and give wrong energies. So such models reject `dispersion=True`.
 
 | Model / task | Training dataset | DFT level (functional) | Dispersion in training? | `dispersion=True` behavior |
 |---|---|---|---|---|
-| **CHGNet** `0.3.0` (default) / `0.2.0` | MPtrj | PBE+U | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **CHGNet** `default` / `0.3.0` / `0.2.0` | MPtrj | PBE+U | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **CHGNet** `r2scan` | MatPES r2SCAN transfer-learning | r2SCAN | ✗ none | ✅ allowed — D3 `xc=r2scan` |
-| **MatterSim** 1M / 5M | MatterSim set (MPtrj + T/P-sampled structures) | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
-| **NequIP OAM** S / M / L / XL | OMat24 pre-training + sAlex / MPTrj fine-tuning | PBE(+U)-level materials data | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **MatterSim** `default` / `1M` / `5M` | MatterSim set (MPtrj + T/P-sampled structures) | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **NequIP OAM** `S` / `M` / `L` / `XL` | OMat24 pre-training + sAlex / MPTrj fine-tuning | PBE(+U)-level materials data | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `mpa` | MPtrj + sAlex | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `omat24` | OMat24 | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `matpes_pbe` | MatPES | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `oc20` | OC20 | RPBE | ✗ none | ✅ allowed — D3 `xc=rpbe` |
 | **SevenNet** `oc22` | OC22 | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
-| **SevenNet** (single-fidelity, e.g. `7net-0`) | MPtrj etc. | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **SevenNet** `default` (single-fidelity, e.g. 7net-0) | MPtrj etc. | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `matpes_r2scan` | MatPES | r2SCAN | ✗ none | ✅ allowed — D3 `xc=r2scan` |
 | **SevenNet** `mp_r2scan` | Materials Project r2SCAN | r2SCAN | ✗ none | ✅ allowed — D3 `xc=r2scan` |
 | **SevenNet** `pet_mad` | MAD | PBEsol | ✗ none | ✅ allowed — D3 `xc=pbesol` |

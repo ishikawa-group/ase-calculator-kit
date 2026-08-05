@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.3
+
+Turns two documented-but-unenforced invariants into tests. No runtime behavior
+changes.
+
+- **`dispersion.py` and `docs/models.md` are now checked for drift.** The two
+  were required to stay in sync, but nothing verified it — and that table is
+  where a reader learns *why* a model refuses `dispersion=True`.
+  `tests/test_models_doc_sync.py` parses the table and compares it against the
+  policy entries in both directions, including the D3 `xc` for every allowed
+  row. The table's first column now names every policy key in backticks, which
+  is what the parser reads (`default`, `1M`/`5M`, `S`/`M`/`L`/`XL`).
+- **CI resolves every extra on every supported Python** in a new
+  `extras-resolve` job, using `uv pip compile` — resolution only, nothing is
+  downloaded or installed, so it takes seconds. Until now the fast suite mocked
+  the NNP backends, so nothing noticed an upstream cap or conflict until a user
+  hit it; the `uma`/Python 3.14 incompatibility shipped in 0.3.2 was found by
+  hand. The job's expectations mirror the README support table, so it also
+  fails when an extra we document as unavailable starts working and the docs
+  need updating.
+- `docs/code-guide_ja.md` gains a section on molecular charge and spin — which
+  backend accepts them, that UMA silently falls back to a neutral singlet, and
+  why `get_calculator` has no `charge=`/`spin=` keyword.
+
 ## 0.3.2
 
 - **First release published to PyPI**: `pip install ase-calculator-kit`.
