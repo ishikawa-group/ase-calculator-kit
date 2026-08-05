@@ -24,12 +24,13 @@ Supported DFT backends:
 pip install ase-calculator-kit
 ```
 
-The default installation stays small: ASE, PyYAML, and **SevenNet as the default
-NNP backend**. Every other backend is an explicit extra, so install only what
-your workflow needs:
+The default installation is intentionally lightweight: it pulls in ASE and
+PyYAML and **no NNP backend**, so it does not drag in torch. Each backend is an
+explicit extra — install only what your workflow needs:
 
 ```bash
-# One extra backend
+# One backend
+pip install "ase-calculator-kit[sevennet]"
 pip install "ase-calculator-kit[chgnet]"
 pip install "ase-calculator-kit[mattersim]"
 pip install "ase-calculator-kit[nequip]"
@@ -45,8 +46,26 @@ pip install "ase-calculator-kit[all]"
 pip install "ase-calculator-kit[dispersion]"
 ```
 
-Python `>=3.12,<3.14` is supported. Missing backend packages are reported only
-when that calculator is requested, with the matching extra to install.
+Missing backend packages are reported only when that calculator is requested,
+with the matching extra to install.
+
+### Python versions
+
+Python 3.12 and newer. The package itself has no upper bound, but one backend
+currently does:
+
+| | 3.12 | 3.13 | 3.14 |
+|---|:--:|:--:|:--:|
+| Core, `chgnet`, `sevennet`, `mattersim`, `nequip`, `dispersion` | ✅ | ✅ | ✅ |
+| `uma` (and therefore `all`) | ✅ | ✅ | ❌ |
+
+`fairchem-core` declares `requires-python = ">=3.11,<3.14"` and pins
+`torch~=2.8.0`, which has no cp314 wheels, so `pip install
+"ase-calculator-kit[uma]"` fails on Python 3.14 with an error naming
+`fairchem-core`. Nothing here needs to change once fairchem-core supports 3.14.
+
+This is deliberately *not* hidden behind an environment marker: a marker would
+make the install succeed on 3.14 while silently leaving UMA out.
 
 Use this import for new code:
 

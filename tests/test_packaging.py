@@ -53,5 +53,16 @@ def test_constraints_cover_every_published_requirement():
     assert required.issubset(_distribution_names(pinned))
 
 
-def test_release_version_is_0_3_1():
-    assert _project_metadata()["version"] == "0.3.1"
+def test_release_version_is_0_3_2():
+    assert _project_metadata()["version"] == "0.3.2"
+
+
+def test_requires_python_has_no_upper_bound():
+    """An upper cap makes the package invisible to a newer interpreter.
+
+    It is also permanent: the value is baked into every file uploaded to PyPI,
+    so a cap can only be lifted by cutting a new release. Backends that lag a
+    Python release cap themselves, and pip then names the backend.
+    """
+    requires_python = _project_metadata()["requires-python"]
+    assert "<" not in requires_python, requires_python

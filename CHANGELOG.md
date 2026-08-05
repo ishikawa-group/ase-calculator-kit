@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.2
+
+- **First release published to PyPI**: `pip install ase-calculator-kit`.
+- **Support Python 3.14.** `requires-python` drops its `<3.14` upper bound: a
+  cap is baked into every uploaded file and makes the package invisible to a
+  newer interpreter even where it works, and it can only be lifted by a new
+  release. The core plus the `chgnet`, `sevennet`, `mattersim`, `nequip`, and
+  `dispersion` extras are verified on 3.14; CI now runs 3.12, 3.13, and 3.14.
+- The `uma` extra (and therefore `all`) does **not** install on Python 3.14:
+  `fairchem-core` declares `requires-python = ">=3.11,<3.14"` and pins
+  `torch~=2.8.0`, which has no cp314 wheels. Left unmarked on purpose, so pip
+  fails with an error naming `fairchem-core` rather than quietly installing
+  nothing. No change here will be needed once fairchem-core supports 3.14.
+- Fix a stale README claim that SevenNet ships as a base dependency; the default
+  install has been ASE + PyYAML only since 0.3.0.
+
 ## 0.3.1
 
 ### Molecular systems
