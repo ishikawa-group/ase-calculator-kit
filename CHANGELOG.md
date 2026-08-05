@@ -1,9 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.3.4
+
+A metadata-only release. No runtime behavior changes.
 
 - Correct `CITATION.cff`, which shipped in 0.3.3 still carrying `version:
-  0.3.2`, and add `date-released`.
+  0.3.2`, and add `date-released`. Zenodo reads this file when it mints the
+  DOI, so a stale version there would misdescribe the archived record.
 
 ## 0.3.3
 

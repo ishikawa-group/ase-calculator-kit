@@ -53,8 +53,8 @@ def test_constraints_cover_every_published_requirement():
     assert required.issubset(_distribution_names(pinned))
 
 
-def test_release_version_is_0_3_3():
-    assert _project_metadata()["version"] == "0.3.3"
+def test_release_version_is_0_3_4():
+    assert _project_metadata()["version"] == "0.3.4"
 
 
 def test_requires_python_has_no_upper_bound():
