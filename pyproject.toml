@@ -4,10 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ase-calculator-kit"
-version = "0.3.1"
+version = "0.3.2"
 description = "Unified ASE calculator factory for MLIP and DFT calculators."
 readme = "README.md"
-requires-python = ">=3.12,<3.14"
+# No upper bound: an upper cap is baked into every uploaded file and makes the
+# package invisible to a newer interpreter even when it works there. Individual
+# backends that lag behind cap themselves — fairchem-core declares <3.14 — and
+# pip then names the backend in the error instead of hiding this package.
+requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "ishikawa-group" }]
@@ -17,6 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Intended Audience :: Science/Research",
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Chemistry",

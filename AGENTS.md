@@ -88,11 +88,20 @@ These are deliberate design decisions, not oversights.
    `pip install ase-calculator-kit` does *not* pull in torch. Every NNP stack
    lives behind its own extra. Promoting a backend to a base dependency reverses
    a deliberate release decision — do not do it without agreement.
+10. **`requires-python` carries no upper bound.** A cap is written into every
+    file uploaded to PyPI and cannot be edited afterwards, so it makes the
+    package invisible to a newer interpreter until a fresh release goes out —
+    even when the code runs there fine. Backends that lag a Python release cap
+    themselves (`fairchem-core` declares `<3.14`), and pip then names the
+    backend in the error. Do not paper over that with an environment marker on
+    the extra: a marker makes the install *succeed* while silently omitting the
+    backend. `tests/test_packaging.py` enforces the absence of a cap.
 
 ## Conventions
 
-- Python `>=3.12,<3.14`. `from __future__ import annotations` at the top of
-  every module; modern typing (`str | None`, `dict[str, Any]`).
+- Python `>=3.12`, with no upper bound — see invariant 10. `from __future__
+  import annotations` at the top of every module; modern typing
+  (`str | None`, `dict[str, Any]`).
 - All `create_calculator()` parameters are keyword-only (`*,`) with defaults,
   ending in `**kwargs` forwarded to the upstream calculator.
 - Docstrings are NumPy-style and carry the *chemistry* rationale (when to pick a
