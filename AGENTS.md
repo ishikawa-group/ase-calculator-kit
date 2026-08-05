@@ -137,20 +137,49 @@ python -m venv .venv
   README, so it fails both when an extra stops resolving and when one we
   document as unavailable starts working. In the latter case, update the README
   table and the expectation list together.
-- Releases are cut by publishing a GitHub Release for a `v*` tag.
-  `.github/workflows/release.yml` calls `ci.yml`, builds from the tag, and
-  uploads to PyPI via Trusted Publishing (OIDC, no stored token); the same event
-  drives the Zenodo webhook that mints the DOI. A tag alone ships nothing, and a
-  `workflow_dispatch` run always targets TestPyPI — use it to rehearse, because
-  PyPI filenames are immutable and a version can be yanked but never re-uploaded.
-- There is no version string in the tree: `setuptools-scm` derives it from the
-  tag. `CITATION.cff` is the exception, since Zenodo reads it, and a test holds
-  it to the newest `CHANGELOG.md` heading. See `docs/releasing.md`.
 - Backend tests inject fake modules into `sys.modules`
   (see `tests/test_sevennet_backend.py`) rather than importing real NNP
   packages. Follow that pattern for new backends — fast tests must not download
   anything.
 - Do not commit or push unless asked.
+
+## Releasing
+
+Never cut a release unless explicitly asked. `docs/releasing.md` has the full
+path, including the one-time PyPI and Zenodo setup; this is what an agent needs
+in order not to break it.
+
+**Publishing the GitHub Release is the entire release.** That one event runs
+`ci.yml`, builds from the tag, uploads to PyPI via Trusted Publishing (OIDC, no
+stored token), and — through Zenodo's webhook — mints the DOI. A pushed tag on
+its own ships nothing.
+
+```bash
+# 1. Land the notes first: a `## X.Y.Z` section in CHANGELOG.md, and the
+#    matching version + date-released in CITATION.cff.
+git tag -a vX.Y.Z -m "ase-calculator-kit X.Y.Z"
+git push origin vX.Y.Z
+gh release create vX.Y.Z --title "ase-calculator-kit vX.Y.Z" --notes "..."
+
+# Rehearsal: a manual run always targets TestPyPI, whatever the ref.
+gh workflow run release.yml --ref main
+```
+
+Three things make this go wrong, and all three have happened here:
+
+1. **Do not write a version number anywhere but `CITATION.cff`.**
+   `setuptools-scm` derives it from the tag. When the number lived in several
+   files, they drifted — 0.3.3 shipped a `CITATION.cff` still announcing 0.3.2.
+   `CITATION.cff` stays hand-written only because Zenodo reads it, and
+   `test_citation_version_matches_the_newest_changelog_entry` pins it to the
+   newest `CHANGELOG.md` heading.
+2. **Do not upload to PyPI by any other route.** Filenames there are immutable:
+   a version can be yanked but never re-uploaded, so a mistake costs a version
+   number. Rehearse on TestPyPI.
+3. **Zenodo only archives releases published after its webhook was installed**,
+   and never retroactively. 0.3.3 has no DOI for exactly that reason. The
+   concept DOI `10.5281/zenodo.21807793` always resolves to the newest version
+   and never changes, so it needs no per-release edit.
 
 ## Known upstream quirks
 
