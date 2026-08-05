@@ -2,9 +2,14 @@
 
 ## 0.3.3
 
-Turns two documented-but-unenforced invariants into tests. No runtime behavior
-changes.
+Turns two documented-but-unenforced invariants into tests, and makes the
+package citable. No runtime behavior changes.
 
+- **This release is archived on Zenodo and has a DOI.** `CITATION.cff` and
+  `.zenodo.json` carry the citation metadata, `docs/releasing.md` documents the
+  PyPI and Zenodo publication paths, and the package authors are now named
+  individually — 0.3.2 shipped with only the `ishikawa-group` organisation in
+  its `Author` field, which PyPI cannot retroactively correct.
 - **`dispersion.py` and `docs/models.md` are now checked for drift.** The two
   were required to stay in sync, but nothing verified it — and that table is
   where a reader learns *why* a model refuses `dispersion=True`.
