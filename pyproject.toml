@@ -14,7 +14,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "ishikawa-group" }]
+authors = [{ name = "Taishiro Wakamiya" }, { name = "Atsushi Ishikawa" }]
 keywords = ["ase", "calculator", "dft", "machine-learning", "interatomic-potential", "mlip", "chemistry", "materials"]
 classifiers = [
     "Development Status :: 4 - Beta",

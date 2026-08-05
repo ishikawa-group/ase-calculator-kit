@@ -1,0 +1,37 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "ase-calculator-kit: a unified ASE calculator factory for MLIP and DFT calculators"
+abstract: >-
+  A thin, unified ASE calculator factory for machine-learning interatomic
+  potentials (SevenNet, CHGNet, MatterSim, NequIP OAM, UMA/fairchem) and
+  external DFT calculators (VASP, Quantum ESPRESSO). Every call returns a
+  standard ase.Calculator, so the rest of an ASE workflow stays unchanged.
+type: software
+license: MIT
+version: 0.3.2
+repository-code: "https://github.com/ishikawa-group/ase-calculator-kit"
+url: "https://github.com/ishikawa-group/ase-calculator-kit"
+keywords:
+  - ase
+  - machine-learning interatomic potential
+  - density functional theory
+  - computational chemistry
+  - materials science
+
+authors:
+  - family-names: Wakamiya
+    given-names: Taishiro
+    affiliation: "Institute of Science Tokyo"
+    # orcid: "https://orcid.org/0000-0000-0000-0000"  # add before tagging, if any
+  - family-names: Ishikawa
+    given-names: Atsushi
+    orcid: "https://orcid.org/0000-0001-6908-831X"
+    affiliation: "Institute of Science Tokyo"
+
+# TODO(after the first Zenodo release): uncomment and fill in the *concept*
+# DOI (the one that always resolves to the newest version), then keep `version`
+# and `date-released` in step with each tag.
+# identifiers:
+#   - type: doi
+#     value: "10.5281/zenodo.XXXXXXX"
+#     description: "Concept DOI for all versions"

@@ -1,0 +1,39 @@
+{
+  "title": "ase-calculator-kit: a unified ASE calculator factory for MLIP and DFT calculators",
+  "description": "<p>A thin, unified <a href=\"https://wiki.fysik.dtu.dk/ase/\">ASE</a> calculator factory for machine-learning interatomic potentials (SevenNet, CHGNet, MatterSim, NequIP OAM, UMA/fairchem) and external DFT calculators (VASP, Quantum ESPRESSO). Every call returns a standard <code>ase.Calculator</code>, so the rest of an ASE workflow stays unchanged.</p>",
+  "upload_type": "software",
+  "license": "MIT",
+  "access_right": "open",
+  "language": "eng",
+  "keywords": [
+    "ASE",
+    "machine-learning interatomic potential",
+    "density functional theory",
+    "computational chemistry",
+    "materials science",
+    "Python"
+  ],
+  "creators": [
+    {
+      "name": "Wakamiya, Taishiro",
+      "affiliation": "Institute of Science Tokyo"
+    },
+    {
+      "name": "Ishikawa, Atsushi",
+      "affiliation": "Institute of Science Tokyo",
+      "orcid": "0000-0001-6908-831X"
+    }
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/ishikawa-group/ase-calculator-kit",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    },
+    {
+      "identifier": "https://pypi.org/project/ase-calculator-kit/",
+      "relation": "isIdenticalTo",
+      "scheme": "url"
+    }
+  ]
+}

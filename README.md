@@ -1,5 +1,12 @@
 # ase-calculator-kit
 
+[![PyPI](https://img.shields.io/pypi/v/ase-calculator-kit)](https://pypi.org/project/ase-calculator-kit/)
+[![Python](https://img.shields.io/pypi/pyversions/ase-calculator-kit)](https://pypi.org/project/ase-calculator-kit/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+<!-- TODO(after the first Zenodo release): paste the concept-DOI badge here.
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
+-->
+
 A thin, unified [ASE](https://wiki.fysik.dtu.dk/ase/) calculator factory for
 machine-learning interatomic potentials and external DFT calculators. Every call
 returns a standard `ase.Calculator`, so the rest of your ASE workflow stays
@@ -445,6 +452,29 @@ importable.
 - [`AGENTS.md`](AGENTS.md) — repository map, invariants, and conventions for
   AI coding agents (Claude, GPT, and others).
 - [`CHANGELOG.md`](CHANGELOG.md) — release history.
+- [`docs/releasing.md`](docs/releasing.md) — how a release reaches PyPI and
+  Zenodo.
+
+## Citation
+
+If this package contributed to published work, please cite the archived
+release. [`CITATION.cff`](CITATION.cff) holds the machine-readable metadata —
+GitHub renders it under "Cite this repository", and Zenodo reads it when
+minting the DOI.
+
+<!-- TODO(after the first Zenodo release): fill in the concept DOI (the one
+that always resolves to the newest version) and uncomment.
+
+```bibtex
+@software{ase_calculator_kit,
+  title  = {ase-calculator-kit: a unified ASE calculator factory for MLIP and DFT calculators},
+  author = {Wakamiya, Taishiro and Ishikawa, Atsushi},
+  year   = {2026},
+  doi    = {10.5281/zenodo.XXXXXXX},
+  url    = {https://github.com/ishikawa-group/ase-calculator-kit}
+}
+```
+-->
 
 ## License
 
