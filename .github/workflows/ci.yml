@@ -34,3 +34,57 @@ jobs:
 
       - name: Lint
         run: ruff check src tests examples
+
+  extras-resolve:
+    # Can every extra still be installed, on every Python we claim to support?
+    #
+    # The fast suite mocks the NNP backends, so nothing else here would notice
+    # an upstream cap or conflict until a user hit it. This resolves the
+    # dependency graph only — no wheels are downloaded and nothing is installed
+    # — so it costs seconds, and `uv pip compile --python-version` resolves for
+    # an interpreter that is not even present.
+    #
+    # The expectations below mirror the "Python versions" table in README.md.
+    # That makes the job fail in *both* directions: when an extra stops
+    # resolving, and when an extra we document as unavailable starts working
+    # (fairchem-core adding 3.14 support) and the docs need updating.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: python -m pip install --upgrade pip uv
+
+      - name: Resolve every extra on every supported Python
+        run: |
+          set -u
+          # "<python>:<extra>" pairs expected NOT to resolve.
+          # fairchem-core declares requires-python <3.14 and pins torch~=2.8.0,
+          # which has no cp314 wheels; `all` contains fairchem-core.
+          expected_failures="3.14:uma 3.14:all"
+          status=0
+          for py in 3.12 3.13 3.14; do
+            for extra in chgnet sevennet mattersim nequip uma dispersion all; do
+              if uv pip compile pyproject.toml --extra "$extra" \
+                   --python-version "$py" -q >/dev/null 2>&1; then
+                actual=resolves
+              else
+                actual=fails
+              fi
+              case " $expected_failures " in
+                *" $py:$extra "*) expected=fails ;;
+                *) expected=resolves ;;
+              esac
+              if [ "$actual" = "$expected" ]; then
+                echo "  py$py [$extra]: $actual"
+              else
+                echo "::error::py$py extra '$extra' $actual, but README.md says it $expected"
+                status=1
+              fi
+            done
+          done
+          exit $status

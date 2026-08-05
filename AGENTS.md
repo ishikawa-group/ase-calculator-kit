@@ -42,7 +42,8 @@ docs/code-guide_ja.md 実装ガイド（日本語）
 Adding a backend touches, in order: `backends/mlip/<name>.py`,
 `backends/__init__.py`, `registry.py`, `dispersion.py` (policy entry),
 `pyproject.toml` (extra + `all`), `constraints.txt` (exact tested version),
-`errors.py` (extra mapping), tests, README, `docs/models.md`.
+`errors.py` (extra mapping), tests, README, `docs/models.md`, and the
+`extras-resolve` expectations in `.github/workflows/ci.yml`.
 
 ## Invariants
 
@@ -65,7 +66,10 @@ These are deliberate design decisions, not oversights.
    `DispersionError` for models whose training functional already includes
    dispersion, and requires an explicit `dispersion_xc` for unverified
    functionals. The table in `dispersion.py` and `docs/models.md` must stay in
-   sync; changing one without the other is a bug.
+   sync; changing one without the other is a bug, and
+   `tests/test_models_doc_sync.py` now enforces it in both directions. Write
+   every policy key in backticks in the table's first column — that is what the
+   parser reads.
 5. **`dispersion=True` changes the return type** to
    `SumCalculator([backend_calc, d3_calc])`. Anything that assumes the backend
    class comes back is wrong.
@@ -125,8 +129,14 @@ python -m venv .venv
 - `addopts = "-m 'not slow'"` in `pyproject.toml` deselects the slow suite by
   default. Do not run `-m slow` casually: it downloads model weights (GBs) and
   needs `.[dev,all]`.
-- CI (`.github/workflows/ci.yml`) runs the fast suite on Python 3.12 and 3.13
-  plus `ruff check`. Assume no GPU and no Apple Silicon in CI.
+- CI (`.github/workflows/ci.yml`) runs the fast suite plus `ruff check` on
+  Python 3.12, 3.13, and 3.14. Assume no GPU and no Apple Silicon in CI.
+- A second job, `extras-resolve`, resolves every extra against every supported
+  Python with `uv pip compile` (resolution only — nothing is downloaded or
+  installed). Its expectation list mirrors the "Python versions" table in the
+  README, so it fails both when an extra stops resolving and when one we
+  document as unavailable starts working. In the latter case, update the README
+  table and the expectation list together.
 - Releases are cut by pushing a `v*` tag; `.github/workflows/release.yml`
   builds, checks that the tag matches `[project].version`, and uploads to PyPI
   via Trusted Publishing (OIDC, no stored token). PyPI filenames are immutable —
