@@ -2,6 +2,43 @@
 
 ## 0.3.1
 
+### Molecular systems
+
+- **Fix a wrong `modal` description.** SevenNet's `omol25_low` was documented as
+  "molecular / high-fidelity"; it is in fact the **low-spin** OMol25 task, the
+  counterpart of the high-spin `omol25_high`. Both are ωB97M-V — the split is by
+  spin state, not by accuracy.
+- Document the remaining `7net-omni` tasks that were missing entirely:
+  `mp_r2scan`, `oc20`, `oc22`, `odac23`, `spice`, `qcml`, and `pet_mad`.
+- Document that **SevenNet takes no total charge or spin multiplicity** (sevenn
+  has no such input), so its molecular modals cannot describe ions or a chosen
+  open-shell state. UMA's `omol` task is the option that can.
+- Document that **UMA does not fail when `charge`/`spin` are missing**: fairchem
+  logs a warning, writes `charge=0` / `spin=1` into the `atoms.info` you passed
+  in, and returns a neutral closed-shell result — so an ion or radical comes back
+  silently wrong. New README section "Molecular systems (charge and spin)" with
+  anion and radical examples.
+
+### Dispersion policy corrections
+
+Molecular reference data is nearly always dispersion-corrected, and four tasks
+were sitting on the overridable "unverified" tier where a stray `dispersion_xc=`
+could have double-counted it. They are now always refused:
+
+- SevenNet `spice` — SPICE is ωB97M-**D3(BJ)**/def2-TZVPPD.
+- SevenNet `qcml` — QCML applies the **MBD-NL** many-body dispersion correction.
+- SevenNet `odac23` and UMA `odac` — ODAC23 is **PBE-D3**.
+- UMA `omc` — OMC25 is **PBE+D3**.
+
+Newly allowed, with a verified functional: SevenNet `mp_r2scan` (D3 `xc=r2scan`)
+and `pet_mad` (D3 `xc=pbesol`). `omat24` and `oc22` are relabelled PBE(+U) to
+match SevenNet's own table; their D3 `xc` is unchanged.
+
+No model/task/modal is left on the "unverified" tier. The tier itself stays, for
+tasks a future upstream release adds.
+
+### Packaging and docs
+
 - Suppress the `cueq/False/flash/False` debug lines that sevenn 0.12.1 prints
   unconditionally when constructing `SevenNetCalculator`; any other stdout from
   the model load is still forwarded.
@@ -9,9 +46,11 @@
   pins (the tested combination moves to `constraints.txt`), declare the license
   as a PEP 639 SPDX expression, add `py.typed` so downstream type checkers see
   the annotations, add Changelog/Issues URLs and Python 3.12/3.13 classifiers,
-  and add a release workflow that builds on a `v*` tag.
+  and add a release workflow that builds and version-checks a `v*` tag. Uploading
+  stays a manual `workflow_dispatch` step until PyPI Trusted Publishing is set up.
 - Document the public API surface in the README and add `AGENTS.md`.
-
+- `examples/run_all_models.py` covers every documented SevenNet modal, plus an
+  OH⁻ anion and an OH radical through UMA `omol`.
 
 ## 0.3.0
 

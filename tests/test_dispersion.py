@@ -29,6 +29,8 @@ from ase_calculator_kit.dispersion import (
         ("sevennet", "oc20", "rpbe"),
         ("sevennet", "oc22", "pbe"),
         ("sevennet", "matpes_r2scan", "r2scan"),
+        ("sevennet", "mp_r2scan", "r2scan"),
+        ("sevennet", "pet_mad", "pbesol"),
         ("sevennet", "default", "pbe"),
         ("nequip", "S", "pbe"),
         ("nequip", "M", "pbe"),
@@ -48,8 +50,13 @@ def test_allowed_returns_default_xc(backend, key, expected_xc):
     [
         ("uma", "oc25"),
         ("uma", "omol"),
+        ("uma", "odac"),
+        ("uma", "omc"),
         ("sevennet", "omol25_low"),
         ("sevennet", "omol25_high"),
+        ("sevennet", "spice"),
+        ("sevennet", "qcml"),
+        ("sevennet", "odac23"),
     ],
 )
 def test_included_models_always_error(backend, key):
@@ -60,18 +67,14 @@ def test_included_models_always_error(backend, key):
         resolve_dispersion_xc(backend, key, dispersion_xc="pbe")
 
 
-@pytest.mark.parametrize(
-    "backend,key",
-    [
-        ("uma", "odac"),
-        ("uma", "omc"),
-    ],
-)
-def test_unverified_requires_explicit_xc(backend, key):
+def test_unlisted_modal_stays_unverified():
+    # The escape hatch still exists for tasks this table does not cover yet.
     with pytest.raises(DispersionError, match="not verified"):
-        resolve_dispersion_xc(backend, key, dispersion_xc=None)
-    # Explicit override unlocks it.
-    assert resolve_dispersion_xc(backend, key, dispersion_xc="pbe") == "pbe"
+        resolve_dispersion_xc("sevennet", "some_future_task", dispersion_xc=None)
+    assert (
+        resolve_dispersion_xc("sevennet", "some_future_task", dispersion_xc="pbe")
+        == "pbe"
+    )
 
 
 def test_precheck_returns_none_when_disabled():
@@ -92,6 +95,31 @@ def test_policy_exposes_training_reference_for_researchers():
     assert molecular is not None
     assert molecular.reference_level == "ωB97M-V"
     assert molecular.includes_dispersion is True
+
+
+@pytest.mark.parametrize(
+    "backend,key",
+    [
+        ("uma", "omol"),
+        ("uma", "omc"),
+        ("uma", "odac"),
+        ("sevennet", "omol25_low"),
+        ("sevennet", "omol25_high"),
+        ("sevennet", "spice"),
+        ("sevennet", "qcml"),
+    ],
+)
+def test_molecular_references_are_all_verified(backend, key):
+    """Every molecular task has a documented functional, not an unverified one.
+
+    Molecular reference data is the easiest place to double-count dispersion,
+    so leaving one of these on the overridable "unverified" tier would let
+    ``dispersion_xc=...`` silently add D3 on top of a dispersive functional.
+    """
+    policy = get_dispersion_policy(backend, key)
+    assert policy is not None
+    assert policy.includes_dispersion is True
+    assert policy.note
 
 
 def test_get_calculator_included_task_fails_fast(monkeypatch):

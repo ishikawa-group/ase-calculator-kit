@@ -240,14 +240,27 @@ falls back to `cpu`.
 
 ### SevenNet `modal`
 
-| `modal` | Use for |
-|---|---|
-| `mpa` (default) | General PBE(+U)-level materials |
-| `omat24` | Broad / high-force PBE(+U) configurations |
-| `matpes_pbe` | PBE without Hubbard U |
-| `matpes_r2scan` | r2SCAN-level materials |
-| `omol25_low` | Molecular / high-fidelity molecular systems |
-| `omol25_high` | High-spin molecular configurations only |
+| `modal` | Use for | Reference level |
+|---|---|---|
+| `mpa` (default) | General-purpose, including molecules | PBE(+U) |
+| `omat24` | Broad / high-force configurations | PBE(+U) |
+| `matpes_pbe` | PBE without Hubbard U | PBE |
+| `matpes_r2scan` | r2SCAN-level materials | r2SCAN |
+| `mp_r2scan` | r2SCAN-level Materials Project data | r2SCAN |
+| `oc20` | Catalyst surfaces and adsorption | RPBE |
+| `oc22` | Oxide catalysis | PBE(+U) |
+| `odac23` | MOFs / direct air capture | PBE-D3 |
+| `omol25_low` | **Low-spin** molecular systems | ωB97M-V |
+| `omol25_high` | **High-spin** molecular systems only | ωB97M-V |
+| `spice` | Drug-like molecules and peptides | ωB97M-D3(BJ) |
+| `qcml` | Small molecules, wide element coverage | PBE0 + MBD-NL |
+| `pet_mad` | PBEsol-level data | PBEsol |
+
+`omol25_low` and `omol25_high` split OMol25 by **spin state**, not by accuracy —
+pick the one matching your system. SevenNet's own guidance is that `mpa` stays
+the recommended default even for molecules, organic crystals, and molecular
+liquids; choose another task only when you need consistency with a specific
+functional or benchmark protocol.
 
 Single-fidelity models such as `7net-0` do not take `modal`; pass `modal=None`.
 
@@ -280,8 +293,72 @@ fixed across a campaign.
 | `odac` | MOFs and direct air capture |
 | `omc` | Molecular crystals |
 
-For molecular tasks (`omol`), set `atoms.info["charge"]` and
-`atoms.info["spin"]` before computing.
+For the molecular task (`omol`), set `atoms.info["charge"]` and
+`atoms.info["spin"]` before computing — see
+[Molecular systems](#molecular-systems-charge-and-spin) for why this matters.
+
+## Molecular systems (charge and spin)
+
+Molecular models need two inputs that no bulk model does: the **total charge**
+of the system and its **spin multiplicity** (`2S+1`). ASE has no standard place
+for either, so they are passed through `atoms.info`, and the backends differ in
+whether they read them at all.
+
+| Backend | Molecular option | Takes charge / spin? |
+|---|---|---|
+| `uma` | `task="omol"` | ✅ `atoms.info["charge"]`, `atoms.info["spin"]` |
+| `sevennet` | `modal="omol25_low"` / `"omol25_high"` / `"spice"` / `"qcml"` | ❌ not supported by sevenn |
+
+### UMA: set both keys explicitly
+
+```python
+from ase.build import molecule
+from ase_calculator_kit import get_calculator
+
+atoms = molecule("H2O")
+atoms.info["charge"] = 0   # total charge
+atoms.info["spin"] = 1     # spin multiplicity, 2S+1 (1 = closed shell)
+atoms.calc = get_calculator("uma", task="omol")
+print(atoms.get_potential_energy())
+```
+
+A hydroxide anion and a neutral radical are the cases that actually bite:
+
+```python
+oh_minus = molecule("OH")
+oh_minus.info["charge"] = -1   # anion
+oh_minus.info["spin"] = 1      # closed shell
+oh_minus.calc = get_calculator("uma", task="omol")
+
+oh_radical = molecule("OH")
+oh_radical.info["charge"] = 0
+oh_radical.info["spin"] = 2    # doublet — one unpaired electron
+oh_radical.calc = get_calculator("uma", task="omol")
+```
+
+> **Do not rely on the defaults.** fairchem does *not* raise when `charge` or
+> `spin` is missing. It logs a warning, writes `charge=0` / `spin=1` into the
+> `atoms.info` dict you passed in, and returns a neutral closed-shell result.
+> An ion or an open-shell species then comes back **silently wrong**. Set both
+> keys on every molecular structure, including the ones you think are obvious.
+
+Both keys are integers. `charge` may range from -100 to 100 and `spin` from 0 to
+100; they are read only by the `omol` head, and other UMA tasks ignore them.
+
+### SevenNet: no charge or spin input
+
+sevenn has no charge or spin argument, so the `modal` embedding is the only
+handle on the molecular reference data. Charged species and a chosen open-shell
+state **cannot be expressed** — `omol25_high` selects a model trained on
+high-spin configurations, but it is not a multiplicity you set per structure.
+Use `get_calculator("uma", task="omol")` when the charge and spin of the system
+matter.
+
+### Non-periodic cells
+
+`ase.build.molecule()` returns `pbc=False` with a zero cell, which UMA accepts.
+UMA rejects only two ambiguous cases: a fully periodic structure whose cell is
+all zeros, and a partially periodic one (`pbc=[True, True, False]`).
 
 ## Dispersion
 
@@ -291,7 +368,7 @@ Add a Grimme-D3(BJ) correction on top of MLIP models with `dispersion=True`:
 atoms.calc = get_calculator("uma", task="omat", dispersion=True)
 atoms.calc = get_calculator("uma", task="oc20", dispersion=True)
 atoms.calc = get_calculator("chgnet", dispersion=True)
-atoms.calc = get_calculator("uma", task="odac", dispersion=True, dispersion_xc="pbe")
+atoms.calc = get_calculator("sevennet", modal="pet_mad", dispersion=True)
 ```
 
 With `dispersion=True` the returned object is an ASE
@@ -300,8 +377,21 @@ itself — it satisfies the same `ase.Calculator` interface, but do not rely on
 backend-specific attributes or `isinstance` checks against the backend class.
 
 Some models already include dispersion in their training functional, so
-`dispersion=True` is refused for them with `DispersionError`. See
-[`docs/models.md`](docs/models.md) for the full per-model table.
+`dispersion=True` is refused for them with `DispersionError`:
+
+```python
+get_calculator("uma", task="omol", dispersion=True)      # DispersionError: ωB97M-V includes VV10
+get_calculator("sevennet", modal="spice", dispersion=True)  # DispersionError: SPICE is ωB97M-D3(BJ)
+```
+
+**Every molecular task falls in this category** — molecular reference data is
+almost always dispersion-corrected, each dataset in its own way (VV10, an
+explicit D3(BJ) term, or MBD-NL). That verdict cannot be overridden with
+`dispersion_xc=`; remove `dispersion=True` instead. A task this table does not
+cover yet is refused by default but *can* be unlocked with an explicit
+`dispersion_xc` once you have checked its functional yourself.
+
+See [`docs/models.md`](docs/models.md) for the full per-model table.
 
 ## Why no MACE?
 

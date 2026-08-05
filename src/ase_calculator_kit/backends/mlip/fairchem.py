@@ -54,13 +54,27 @@ class FairChemBackend(BaseBackend):
             ``omc``  Molecular crystals
             ======= ==================================================
 
-            For molecular tasks (``omol``), set ``atoms.info["charge"]`` and
-            ``atoms.info["spin"]`` before computing.
+            For the molecular task (``omol``), set ``atoms.info["charge"]`` (total
+            charge) and ``atoms.info["spin"]`` (spin multiplicity, ``2S+1``)
+            *before* computing::
+
+                atoms.info["charge"] = -1
+                atoms.info["spin"] = 2
+                atoms.calc = get_calculator("uma", task="omol")
+
+            This is not optional in practice, only in form: fairchem does **not**
+            raise when they are missing. It logs a warning, writes
+            ``charge=0`` / ``spin=1`` into ``atoms.info`` (mutating the object you
+            passed in), and returns a neutral closed-shell result. An anion or a
+            radical therefore comes back silently wrong unless both keys are set.
+            ``charge`` and ``spin`` are read only by the ``omol`` head; other
+            tasks ignore them.
         dispersion, dispersion_xc:
             Add a Grimme-D3(BJ) correction. The D3 ``xc`` depends on the task's
-            DFT level (e.g. ``omat``→pbe, ``oc20``→rpbe). Rejected for ``oc25``
-            (RPBE+D3 already included) and ``omol`` (wB97M-V nonlocal dispersion);
-            ``odac``/``omc`` need an explicit ``dispersion_xc``. See ``docs/models.md``.
+            DFT level (e.g. ``omat``→pbe, ``oc20``→rpbe). Rejected for the tasks
+            whose reference data already accounts for dispersion: ``oc25``
+            (RPBE+D3), ``omol`` (ωB97M-V nonlocal), ``odac`` (PBE-D3) and ``omc``
+            (PBE+D3). See ``docs/models.md``.
         """
         # Validate the dispersion policy before loading the model (fail fast).
         d3_xc = precheck_dispersion_xc(

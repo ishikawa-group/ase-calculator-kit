@@ -72,19 +72,33 @@ _POLICIES: dict[tuple[str, str], DispersionPolicy] = {
     ("nequip", "M"): _allowed("PBE(+U)", "pbe"),
     ("nequip", "L"): _allowed("PBE(+U)", "pbe"),
     ("nequip", "XL"): _allowed("PBE(+U)", "pbe"),
-    # SevenNet: the modal selects both dataset and reference functional.
+    # SevenNet: the modal selects both dataset and reference functional. The
+    # fidelity of every 7net-omni task is listed in SevenNet's "Pretrained
+    # models" documentation; the rows below follow it.
     ("sevennet", "mpa"): _allowed("PBE(+U)", "pbe"),
-    ("sevennet", "omat24"): _allowed("PBE", "pbe"),
+    ("sevennet", "omat24"): _allowed("PBE(+U)", "pbe"),
     ("sevennet", "matpes_pbe"): _allowed("PBE", "pbe"),
     ("sevennet", "matpes_r2scan"): _allowed("r2SCAN", "r2scan"),
+    ("sevennet", "mp_r2scan"): _allowed("r2SCAN", "r2scan"),
     ("sevennet", "oc20"): _allowed("RPBE", "rpbe"),
-    ("sevennet", "oc22"): _allowed("PBE", "pbe"),
+    ("sevennet", "oc22"): _allowed("PBE(+U)", "pbe"),
+    ("sevennet", "pet_mad"): _allowed("PBEsol", "pbesol"),
     ("sevennet", "default"): _allowed("PBE", "pbe"),
     ("sevennet", "omol25_low"): _included(
         "ωB97M-V", "the OMol25 modal already includes nonlocal VV10 dispersion"
     ),
     ("sevennet", "omol25_high"): _included(
         "ωB97M-V", "the OMol25 modal already includes nonlocal VV10 dispersion"
+    ),
+    ("sevennet", "spice"): _included(
+        "ωB97M-D3(BJ)", "SPICE is computed at ωB97M-D3(BJ)/def2-TZVPPD, so D3(BJ) "
+        "is already in the reference data"
+    ),
+    ("sevennet", "qcml"): _included(
+        "PBE0+MBD-NL", "QCML applies the MBD-NL many-body dispersion correction"
+    ),
+    ("sevennet", "odac23"): _included(
+        "PBE-D3", "ODAC23 is computed at the PBE-D3 level"
     ),
     # UMA: each task is a separate chemical domain and DFT reference level.
     ("uma", "omat"): _allowed("PBE+U", "pbe"),
@@ -95,6 +109,12 @@ _POLICIES: dict[tuple[str, str], DispersionPolicy] = {
     ),
     ("uma", "omol"): _included(
         "ωB97M-V", "the OMol task already includes nonlocal VV10 dispersion"
+    ),
+    ("uma", "odac"): _included(
+        "PBE-D3", "ODAC23 is computed at the PBE-D3 level"
+    ),
+    ("uma", "omc"): _included(
+        "PBE+D3", "OMC25 is computed at the PBE+D3 level"
     ),
 }
 

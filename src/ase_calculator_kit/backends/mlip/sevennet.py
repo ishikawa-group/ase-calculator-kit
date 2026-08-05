@@ -83,24 +83,46 @@ class SevenNetBackend(BaseBackend):
 
             Choosing ``modal`` for ``7net-omni``:
 
-            ============== ===============================================
-            ``modal``      Use for
-            ============== ===============================================
-            ``mpa``        General PBE(+U)-level materials (default)
-            ``omat24``     Broad / high-force PBE(+U) configurations
-            ``matpes_pbe`` PBE without Hubbard U
+            ================= ===============================================
+            ``modal``         Use for
+            ================= ===============================================
+            ``mpa``           General PBE(+U)-level materials (default)
+            ``omat24``        Broad / high-force PBE(+U) configurations
+            ``matpes_pbe``    PBE without Hubbard U
             ``matpes_r2scan`` r2SCAN-level materials
-            ``omol25_low`` Molecular / high-fidelity molecular systems
-            ``omol25_high`` High-spin molecular configurations only
-            ============== ===============================================
+            ``mp_r2scan``     r2SCAN-level Materials Project data
+            ``oc20``          Catalyst surfaces and adsorption (RPBE)
+            ``oc22``          Oxide catalysis (PBE(+U))
+            ``odac23``        MOFs / direct air capture (PBE-D3)
+            ``omol25_low``    Low-spin molecular systems (ωB97M-V)
+            ``omol25_high``   High-spin molecular systems only (ωB97M-V)
+            ``spice``         Drug-like molecules and peptides (ωB97M-D3(BJ))
+            ``qcml``          Small molecules, wide element coverage (PBE0)
+            ``pet_mad``       PBEsol-level data
+            ================= ===============================================
+
+            ``omol25_low`` and ``omol25_high`` split OMol25 by **spin state**,
+            not by accuracy: pick the one matching your system's spin
+            configuration. SevenNet's own guidance is that ``mpa`` stays the
+            recommended default even for molecules, organic crystals, and
+            molecular liquids; select another task only when consistency with a
+            specific functional or benchmark protocol is required.
+
+            **SevenNet accepts no total charge or spin multiplicity.** sevenn
+            has no such input, so the modal embedding is the only handle on the
+            molecular reference data, and ions or open-shell systems cannot be
+            specified. Use ``get_calculator("uma", task="omol")`` when the
+            charge and spin of the system must be set explicitly.
         enable_cueq, enable_flash:
             Acceleration flags; only enable when the local SevenNet/CUDA stack
             supports them.
         dispersion, dispersion_xc:
-            Add a Grimme-D3(BJ) correction. Allowed for the PBE-level modals
-            (``mpa``/``omat24``/``matpes_pbe``); rejected for ``omol25_*`` (already
-            includes nonlocal dispersion); ``matpes_r2scan`` needs an explicit
-            ``dispersion_xc``. See ``docs/models.md``.
+            Add a Grimme-D3(BJ) correction. Allowed for the modals whose
+            reference functional excludes dispersion (``mpa``, ``omat24``,
+            ``matpes_pbe``, ``matpes_r2scan``, ``mp_r2scan``, ``oc20``, ``oc22``,
+            ``pet_mad``); rejected for ``omol25_*``, ``spice``, ``qcml`` and
+            ``odac23``, whose reference data already accounts for dispersion.
+            See ``docs/models.md``.
         """
         # Validate the dispersion policy before loading the model (fail fast).
         d3_xc = precheck_dispersion_xc(

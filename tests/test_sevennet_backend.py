@@ -48,3 +48,29 @@ def test_sevennet_debug_prints_are_suppressed(monkeypatch, capsys):
     get_calculator("sevennet", device="cpu")
 
     assert capsys.readouterr().out == "Loading 7net-omni\n"
+
+
+def test_molecular_modal_is_forwarded_without_charge_or_spin(monkeypatch):
+    """sevenn has no charge/spin input: the modal is the only molecular handle.
+
+    Guards against "helpfully" inventing a charge=/spin= keyword here — it would
+    have to be dropped on the floor, which is worse than not offering it.
+    """
+    seen = {}
+
+    class FakeSevenNetCalculator:
+        def __init__(self, **kwargs):
+            seen["kwargs"] = kwargs
+
+    sevenn = types.ModuleType("sevenn")
+    calculator = types.ModuleType("sevenn.calculator")
+    calculator.SevenNetCalculator = FakeSevenNetCalculator
+
+    monkeypatch.setitem(sys.modules, "sevenn", sevenn)
+    monkeypatch.setitem(sys.modules, "sevenn.calculator", calculator)
+
+    get_calculator("sevennet", modal="omol25_high", device="cpu")
+
+    assert seen["kwargs"]["modal"] == "omol25_high"
+    assert "charge" not in seen["kwargs"]
+    assert "spin" not in seen["kwargs"]

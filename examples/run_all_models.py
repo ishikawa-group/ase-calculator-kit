@@ -35,6 +35,14 @@ def make_molecule(*, charge: int | None = None, spin: int | None = None) -> Atom
     return atoms
 
 
+def make_ion(*, charge: int, spin: int) -> Atoms:
+    """OH as an anion (charge=-1, spin=1) or a radical (charge=0, spin=2)."""
+    atoms = molecule("OH")
+    atoms.info["charge"] = charge
+    atoms.info["spin"] = spin
+    return atoms
+
+
 # (label, model name, kwargs for get_calculator, system factory)
 # NOTE: the tiny bulk("Cu") / H2O systems are API smoke-test structures to show
 # each calculator running on CPU — not domain-representative benchmark systems
@@ -45,8 +53,17 @@ VARIANTS = [
     ("sevennet 7net-omni/omat24", "sevennet", {"modal": "omat24"}, make_bulk),
     ("sevennet 7net-omni/matpes_pbe", "sevennet", {"modal": "matpes_pbe"}, make_bulk),
     ("sevennet 7net-omni/matpes_r2scan", "sevennet", {"modal": "matpes_r2scan"}, make_bulk),
+    ("sevennet 7net-omni/mp_r2scan", "sevennet", {"modal": "mp_r2scan"}, make_bulk),
+    ("sevennet 7net-omni/oc20", "sevennet", {"modal": "oc20"}, make_bulk),
+    ("sevennet 7net-omni/oc22", "sevennet", {"modal": "oc22"}, make_bulk),
+    ("sevennet 7net-omni/odac23", "sevennet", {"modal": "odac23"}, make_bulk),
+    ("sevennet 7net-omni/pet_mad", "sevennet", {"modal": "pet_mad"}, make_bulk),
+    # Molecular modals. SevenNet has no charge/spin input, so these structures
+    # carry none: the modal embedding is the only molecular handle available.
     ("sevennet 7net-omni/omol25_low", "sevennet", {"modal": "omol25_low"}, make_molecule),
     ("sevennet 7net-omni/omol25_high", "sevennet", {"modal": "omol25_high"}, make_molecule),
+    ("sevennet 7net-omni/spice", "sevennet", {"modal": "spice"}, make_molecule),
+    ("sevennet 7net-omni/qcml", "sevennet", {"modal": "qcml"}, make_molecule),
     ("mattersim 1M", "mattersim", {"model": "1M"}, make_bulk),
     ("mattersim 5M", "mattersim", {"model": "5M"}, make_bulk),
     ("nequip OAM-S", "nequip", {"model": "S"}, make_bulk),
@@ -58,7 +75,11 @@ VARIANTS = [
     ("uma-s-1p2/oc22", "uma", {"task": "oc22"}, make_bulk),
     ("uma-s-1p2/oc25", "uma", {"task": "oc25"}, make_bulk),
     ("uma-s-1p2/odac", "uma", {"task": "odac"}, make_bulk),
+    # The omol head is the only one that reads charge/spin, and fairchem falls
+    # back to a neutral singlet with just a warning, so set both explicitly.
     ("uma-s-1p2/omol", "uma", {"task": "omol"}, lambda: make_molecule(charge=0, spin=1)),
+    ("uma-s-1p2/omol OH-", "uma", {"task": "omol"}, lambda: make_ion(charge=-1, spin=1)),
+    ("uma-s-1p2/omol OH radical", "uma", {"task": "omol"}, lambda: make_ion(charge=0, spin=2)),
     ("uma-s-1p2/omc", "uma", {"task": "omc"}, lambda: make_molecule(charge=0, spin=1)),
 ]
 
