@@ -415,6 +415,31 @@ explicit D3(BJ) term, or MBD-NL). That verdict cannot be overridden with
 cover yet is refused by default but *can* be unlocked with an explicit
 `dispersion_xc` once you have checked its functional yourself.
 
+### Choosing the damping function
+
+`dispersion_damping=` selects between Becke-Johnson (`"bj"`, the default) and
+zero damping (`"zero"`):
+
+```python
+atoms.calc = get_calculator(
+    "uma", task="oc20", dispersion=True, dispersion_damping="zero"
+)
+```
+
+The two are separately fitted parameter sets, not a numerical detail. D3 does
+not screen a metal's C6 coefficients, so on molecule–metal systems the choice
+can move the correction by a factor of two — for RPBE, benzene on Pt(111) picks
+up −4.6 eV of dispersion with BJ damping against −2.4 eV with zero damping.
+
+Match the reference dataset when the model has one. OC20 and OC22 carry no
+dispersion at all, so either damping is a choice you are making rather than
+reproducing; OC25, in contrast, is RPBE + D3 with **zero** damping, which is
+why `task="oc25"` refuses an added correction outright.
+
+Note also that RPBE's D3 parameters — both dampings — are absent from Grimme's
+published fits and carry no citation in the reference parameter tables, unlike
+PBE's. Treat RPBE-D3 numbers on metals as indicative.
+
 See [`docs/models.md`](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/models.md) for the full per-model table.
 
 ## Why no MACE?

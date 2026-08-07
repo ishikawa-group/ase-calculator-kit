@@ -183,27 +183,15 @@ Three things make this go wrong, and all three have happened here:
 
 ## Known upstream quirks
 
-- **sevenn 0.12.1** unconditionally prints `cueq / <bool> / flash / <bool>` from
-  `SevenNetCalculator.__init__` (`sevenn/calculator.py:83-86`). `sevennet.py`
-  filters exactly those lines via `_without_sevennet_debug_prints()` and
-  forwards everything else. If sevenn removes the prints, the filter becomes a
-  no-op and can be deleted.
-- **NequIP OAM** models use float64 buffers; PyTorch MPS has no float64, so
-  `device="mps"` fails with `Cannot convert a MPS Tensor to float64`.
-- **fairchem-core** asserts `device in {"cpu", "cuda"}`, so UMA rejects MPS
-  before this package's own check would matter.
-- **CHGNet** uses `use_device=`, not `device=`, and needs
-  `CHGNet.load(model_name=...)` when a named model is requested.
-
-## Pitfalls seen in practice
-
-- Copying `.venv/bin/python` from docs into an environment that has no `.venv`.
-  Use the interpreter that is actually present.
-- Guessing keyword names (`model_name=`, `calculator=`, `xc=`). The accepted
-  keywords per backend are tabulated in the README "API Reference" section and
-  defined in each `create_calculator()` signature.
-- Widening a range in `pyproject.toml` to make a conflict go away. The upper
-  bounds mark "not tested above this"; report the conflict instead.
-- Adding an exact `==` pin to `pyproject.toml`, or editing `constraints.txt`
-  without also checking the range in `pyproject.toml` still contains it.
-- Editing `docs/models.md` or `dispersion.py` alone (see invariant 4).
+- **sevenn 0.12.1** printed `cueq / <bool> / flash / <bool>` from
+  `SevenNetCalculator.__init__`, and `sevennet.py` filtered exactly those lines.
+  0.13 removed the prints, so with `sevenn>=0.13` the filter was dead code and
+  is gone as of 0.4.0. It also prints `Converting model backend...` per
+  calculator; that one is informative and is left alone.
+- **RPBE's D3 parameters carry no citation.** In the reference parameter tables
+  (`dftd3/simple-dftd3`), `rpbe` is one of a handful of entries whose `d3.bj`
+  and `d3.zero` rows have no `doi=`, unlike `pbe` and `revpbe`. Its BJ `a1` is
+  0.182 against PBE's 0.4289, which makes the correction turn on at much shorter
+  range. Combined with D3's unscreened metal C6 that produces very large
+  molecule-metal corrections. Do not "fix" this by substituting another
+  functional's parameters — that silently renames the method.

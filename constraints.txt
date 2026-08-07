@@ -11,7 +11,7 @@
 
 ase==3.28.0
 pyyaml==6.0.3
-sevenn==0.12.1
+sevenn==0.13.0
 chgnet==0.4.2
 mattersim==1.2.5
 nequip==0.18.0

@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.4.0
+
+Adds control over the D3 damping function, corrects the OC25 dispersion entry,
+and moves to sevenn 0.13.
+
+- **`dispersion_damping=` selects Becke-Johnson or zero damping.**
+  `get_calculator(..., dispersion=True, dispersion_damping="zero")` now reaches
+  torch-dftd; the default stays `"bj"`, so existing calls are unchanged. Only
+  `"bj"` and `"zero"` are accepted — torch-dftd's `zerom`/`bjm`/`dftd2` have no
+  fitted parameters for the functionals in the policy table, and a typo that
+  silently picked one would be worse than an error. The choice is validated in
+  the precheck, before a multi-gigabyte checkpoint is loaded.
+
+  This is not a cosmetic knob. D3 does not screen a metal's C6 coefficients, so
+  on molecule-metal systems the two dampings can differ by a factor of two: for
+  RPBE, benzene on Pt(111) picks up -4.6 eV of dispersion with BJ against
+  -2.4 eV with zero damping.
+
+- **Corrected: UMA `oc25` is RPBE + D3 with *zero* damping, not D3(BJ).**
+  The dispersion policy table and `docs/models.md` both said BJ. The verdict was
+  right — `dispersion=True` on `oc25` double-counts and is still refused — but
+  the stated reference level was wrong, and it is the line a reader copies into
+  a methods section. Confirmed against the OC25 dataset metadata (VASP 6.3.2,
+  RPBE, D3 zero damping, 400 eV cutoff, non-spin-polarized).
+
+- **`sevenn>=0.13`** (was `>=0.12,<0.13`). Verified on GPU that 0.13.0 loads
+  `7net-omni` and reproduces 0.12.1 bit-for-bit across all six modals
+  (`mpa`, `omat24`, `oc20`, `oc22`, `matpes_pbe`, `matpes_r2scan`).
+
+- **Removed the sevenn debug-print filter.** 0.13 no longer prints the
+  `cueq`/`flash` pairs from `SevenNetCalculator.__init__`, so
+  `_without_sevennet_debug_prints()` had become a no-op.
+
 ## 0.3.5
 
 Reworks how a release is cut, following pymatgen's arrangement. No runtime

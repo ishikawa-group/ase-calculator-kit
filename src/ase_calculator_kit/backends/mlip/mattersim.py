@@ -30,6 +30,7 @@ class MatterSimBackend(BaseBackend):
         load_path: str | None = None,
         dispersion: bool = False,
         dispersion_xc: str | None = None,
+        dispersion_damping: str | None = None,
         **kwargs,
     ) -> Calculator:
         """Create a :class:`mattersim.forcefield.MatterSimCalculator`.
@@ -49,6 +50,13 @@ class MatterSimBackend(BaseBackend):
         dispersion, dispersion_xc:
             Add a Grimme-D3(BJ) correction (MatterSim is PBE, so ``xc="pbe"`` by
             default). See ``docs/models.md``.
+        dispersion_damping:
+            ``"bj"`` (Becke-Johnson, the default) or ``"zero"``. The two are
+            separately fitted parameter sets. On molecule-metal systems the
+            choice is not cosmetic: D3 does not screen a metal's C6
+            coefficients, so for RPBE the two dampings differ by roughly a
+            factor of two. Match the reference dataset when there is one --
+            OC25, for example, is RPBE + D3 with zero damping.
         """
         if model in {"1M", "MatterSim-v1.0.0-1M"}:
             key = "1M"
@@ -59,6 +67,7 @@ class MatterSimBackend(BaseBackend):
         # Validate the dispersion policy before loading the model (fail fast).
         d3_xc = precheck_dispersion_xc(
             self.name, key, dispersion=dispersion, dispersion_xc=dispersion_xc,
+            dispersion_damping=dispersion_damping,
         )
         resolved_device = resolve_device(device, allow_mps=True)
 
@@ -82,5 +91,8 @@ class MatterSimBackend(BaseBackend):
         bare = MatterSimCalculator(**params)
 
         if d3_xc is not None:
-            return wrap_with_d3(bare, xc=d3_xc, device=resolved_device)
+            return wrap_with_d3(
+                bare, xc=d3_xc, device=resolved_device,
+                damping=dispersion_damping,
+            )
         return bare

@@ -21,6 +21,7 @@ class CHGNetBackend(BaseBackend):
         checkpoint: str | None = None,
         dispersion: bool = False,
         dispersion_xc: str | None = None,
+        dispersion_damping: str | None = None,
         **kwargs,
     ) -> Calculator:
         """Create a :class:`chgnet.model.dynamics.CHGNetCalculator`.
@@ -43,11 +44,19 @@ class CHGNetBackend(BaseBackend):
         dispersion, dispersion_xc:
             Add a Grimme-D3(BJ) correction (CHGNet is PBE+U, so ``xc="pbe"`` by
             default). See ``docs/models.md`` for the per-model policy.
+        dispersion_damping:
+            ``"bj"`` (Becke-Johnson, the default) or ``"zero"``. The two are
+            separately fitted parameter sets. On molecule-metal systems the
+            choice is not cosmetic: D3 does not screen a metal's C6
+            coefficients, so for RPBE the two dampings differ by roughly a
+            factor of two. Match the reference dataset when there is one --
+            OC25, for example, is RPBE + D3 with zero damping.
         """
         # Validate the dispersion policy before loading the model (fail fast).
         d3_xc = precheck_dispersion_xc(
             self.name, model or "default",
             dispersion=dispersion, dispersion_xc=dispersion_xc,
+            dispersion_damping=dispersion_damping,
         )
         use_device = resolve_device(device, allow_mps=True)
 
@@ -69,5 +78,8 @@ class CHGNetBackend(BaseBackend):
             bare = CHGNetCalculator(use_device=use_device, **kwargs)
 
         if d3_xc is not None:
-            return wrap_with_d3(bare, xc=d3_xc, device=use_device)
+            return wrap_with_d3(
+                bare, xc=d3_xc, device=use_device,
+                damping=dispersion_damping,
+            )
         return bare

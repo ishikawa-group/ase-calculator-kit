@@ -37,7 +37,7 @@ interaction and give wrong energies. So such models reject `dispersion=True`.
 | **UMA** `omat` | OMat24 | PBE+U | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **UMA** `oc20` | OC20 | RPBE | ✗ none | ✅ allowed — D3 `xc=rpbe` |
 | **UMA** `oc22` | OC22 | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
-| **UMA** `oc25` | OC25 | RPBE+D3(BJ) | ✓ yes (D3 included) | ⛔ error (double-counting) |
+| **UMA** `oc25` | OC25 | RPBE+D3(zero) | ✓ yes (D3 included) | ⛔ error (double-counting) |
 | **UMA** `omol` | OMol25 | ωB97M-V | ✓ yes (VV10 nonlocal) | ⛔ error (double-counting) |
 | **UMA** `odac` | ODAC23 | PBE-D3 | ✓ yes (D3 included) | ⛔ error (double-counting) |
 | **UMA** `omc` | OMC25 | PBE+D3 | ✓ yes (D3 included) | ⛔ error (double-counting) |

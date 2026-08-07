@@ -2,51 +2,12 @@
 
 from __future__ import annotations
 
-import contextlib
-import io
-import sys
-
 from ase.calculators.calculator import Calculator
 
 from ...device import resolve_device
 from ...dispersion import precheck_dispersion_xc, wrap_with_d3
 from ...errors import MissingDependencyError
 from ..base import BaseBackend
-
-# sevenn 0.12.1 unconditionally prints "cueq\n<bool>\nflash\n<bool>" from
-# SevenNetCalculator.__init__ (calculator.py). Drop exactly those pairs and
-# forward anything else the model load writes to stdout.
-_DEBUG_FLAGS = ("cueq", "flash")
-
-
-def _drop_debug_prints(text: str) -> list[str]:
-    lines = text.splitlines()
-    kept: list[str] = []
-    index = 0
-    while index < len(lines):
-        is_debug_pair = (
-            lines[index].strip() in _DEBUG_FLAGS
-            and index + 1 < len(lines)
-            and lines[index + 1].strip() in ("True", "False")
-        )
-        if is_debug_pair:
-            index += 2
-            continue
-        kept.append(lines[index])
-        index += 1
-    return kept
-
-
-@contextlib.contextmanager
-def _without_sevennet_debug_prints():
-    buffer = io.StringIO()
-    try:
-        with contextlib.redirect_stdout(buffer):
-            yield
-    finally:
-        kept = _drop_debug_prints(buffer.getvalue())
-        if kept:
-            print("\n".join(kept), file=sys.stdout)
 
 
 class SevenNetBackend(BaseBackend):
@@ -62,6 +23,7 @@ class SevenNetBackend(BaseBackend):
         enable_flash: bool = False,
         dispersion: bool = False,
         dispersion_xc: str | None = None,
+        dispersion_damping: str | None = None,
         **kwargs,
     ) -> Calculator:
         """Create a :class:`sevenn.calculator.SevenNetCalculator`.
@@ -123,11 +85,19 @@ class SevenNetBackend(BaseBackend):
             ``pet_mad``); rejected for ``omol25_*``, ``spice``, ``qcml`` and
             ``odac23``, whose reference data already accounts for dispersion.
             See ``docs/models.md``.
+        dispersion_damping:
+            ``"bj"`` (Becke-Johnson, the default) or ``"zero"``. The two are
+            separately fitted parameter sets. On molecule-metal systems the
+            choice is not cosmetic: D3 does not screen a metal's C6
+            coefficients, so for RPBE the two dampings differ by roughly a
+            factor of two. Match the reference dataset when there is one --
+            OC25, for example, is RPBE + D3 with zero damping.
         """
         # Validate the dispersion policy before loading the model (fail fast).
         d3_xc = precheck_dispersion_xc(
             self.name, modal if modal is not None else "default",
             dispersion=dispersion, dispersion_xc=dispersion_xc,
+            dispersion_damping=dispersion_damping,
         )
         resolved_device = resolve_device(device, allow_mps=True)
 
@@ -145,9 +115,11 @@ class SevenNetBackend(BaseBackend):
         if modal is not None:
             params["modal"] = modal
         params.update(kwargs)
-        with _without_sevennet_debug_prints():
-            bare = SevenNetCalculator(**params)
+        bare = SevenNetCalculator(**params)
 
         if d3_xc is not None:
-            return wrap_with_d3(bare, xc=d3_xc, device=resolved_device)
+            return wrap_with_d3(
+                bare, xc=d3_xc, device=resolved_device,
+                damping=dispersion_damping,
+            )
         return bare

@@ -45,14 +45,14 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 chgnet = ["chgnet>=0.4,<0.5"]
-sevennet = ["sevenn>=0.12,<0.13"]
+sevennet = ["sevenn>=0.13"]
 mattersim = ["mattersim>=1.2,<2"]
 nequip = ["nequip>=0.18,<0.19"]
 uma = ["fairchem-core>=2.20,<3"]
 dispersion = ["torch-dftd>=0.5,<0.6"]
 all = [
     "chgnet>=0.4,<0.5",
-    "sevenn>=0.12,<0.13",
+    "sevenn>=0.13",
     "mattersim>=1.2,<2",
     "nequip>=0.18,<0.19",
     "fairchem-core>=2.20,<3",

@@ -21,6 +21,7 @@ class FairChemBackend(BaseBackend):
         task: str = "omat",
         dispersion: bool = False,
         dispersion_xc: str | None = None,
+        dispersion_damping: str | None = None,
         **kwargs,
     ) -> Calculator:
         """Create a :class:`fairchem.core.FAIRChemCalculator` for a UMA model.
@@ -73,12 +74,21 @@ class FairChemBackend(BaseBackend):
             Add a Grimme-D3(BJ) correction. The D3 ``xc`` depends on the task's
             DFT level (e.g. ``omat``→pbe, ``oc20``→rpbe). Rejected for the tasks
             whose reference data already accounts for dispersion: ``oc25``
-            (RPBE+D3), ``omol`` (ωB97M-V nonlocal), ``odac`` (PBE-D3) and ``omc``
+            (RPBE+D3 with zero damping), ``omol`` (ωB97M-V nonlocal),
+            ``odac`` (PBE-D3) and ``omc``
             (PBE+D3). See ``docs/models.md``.
+        dispersion_damping:
+            ``"bj"`` (Becke-Johnson, the default) or ``"zero"``. The two are
+            separately fitted parameter sets. On molecule-metal systems the
+            choice is not cosmetic: D3 does not screen a metal's C6
+            coefficients, so for RPBE the two dampings differ by roughly a
+            factor of two. Match the reference dataset when there is one --
+            OC25, for example, is RPBE + D3 with zero damping.
         """
         # Validate the dispersion policy before loading the model (fail fast).
         d3_xc = precheck_dispersion_xc(
             self.name, task, dispersion=dispersion, dispersion_xc=dispersion_xc,
+            dispersion_damping=dispersion_damping,
         )
         resolved_device = resolve_device(device)
 
@@ -91,5 +101,8 @@ class FairChemBackend(BaseBackend):
         bare = FAIRChemCalculator(predictor, task_name=task, **kwargs)
 
         if d3_xc is not None:
-            return wrap_with_d3(bare, xc=d3_xc, device=resolved_device)
+            return wrap_with_d3(
+                bare, xc=d3_xc, device=resolved_device,
+                damping=dispersion_damping,
+            )
         return bare

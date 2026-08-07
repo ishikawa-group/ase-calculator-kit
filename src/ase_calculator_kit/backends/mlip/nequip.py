@@ -48,6 +48,7 @@ class NequIPBackend(BaseBackend):
         allow_tf32: bool = False,
         dispersion: bool = False,
         dispersion_xc: str | None = None,
+        dispersion_damping: str | None = None,
         **kwargs,
     ) -> Calculator:
         """Create a NequIP ASE calculator for one of the OAM foundation models.
@@ -77,6 +78,13 @@ class NequIPBackend(BaseBackend):
             Optionally add Grimme-D3(BJ). OAM uses PBE-level reference data, so
             the default D3 parameters are PBE; an explicit ``dispersion_xc``
             overrides that verified default.
+        dispersion_damping:
+            ``"bj"`` (Becke-Johnson, the default) or ``"zero"``. The two are
+            separately fitted parameter sets. On molecule-metal systems the
+            choice is not cosmetic: D3 does not screen a metal's C6
+            coefficients, so for RPBE the two dampings differ by roughly a
+            factor of two. Match the reference dataset when there is one --
+            OC25, for example, is RPBE + D3 with zero damping.
         """
         normalized_model = _normalized_model_size(model)
 
@@ -86,6 +94,7 @@ class NequIPBackend(BaseBackend):
             normalized_model,
             dispersion=dispersion,
             dispersion_xc=dispersion_xc,
+            dispersion_damping=dispersion_damping,
         )
         resolved_device = resolve_device(device)
 
@@ -106,5 +115,8 @@ class NequIPBackend(BaseBackend):
         )
 
         if d3_xc is not None:
-            return wrap_with_d3(bare, xc=d3_xc, device=resolved_device)
+            return wrap_with_d3(
+                bare, xc=d3_xc, device=resolved_device,
+                damping=dispersion_damping,
+            )
         return bare

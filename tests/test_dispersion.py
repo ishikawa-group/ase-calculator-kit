@@ -134,3 +134,86 @@ def test_wrap_with_d3_missing_torch_dftd(monkeypatch):
     monkeypatch.setitem(sys.modules, "torch_dftd.torch_dftd3_calculator", None)
     with pytest.raises(DispersionError, match="torch-dftd"):
         wrap_with_d3(object(), xc="pbe", device="cpu")
+
+
+def test_damping_defaults_to_bj():
+    from ase_calculator_kit.dispersion import resolve_dispersion_damping
+
+    assert resolve_dispersion_damping(None) == "bj"
+
+
+def test_zero_damping_is_accepted():
+    from ase_calculator_kit.dispersion import resolve_dispersion_damping
+
+    assert resolve_dispersion_damping("zero") == "zero"
+
+
+def test_unknown_damping_is_refused():
+    """A typo must not silently fall back to a parameter set nobody fitted."""
+    from ase_calculator_kit.dispersion import resolve_dispersion_damping
+    from ase_calculator_kit.errors import DispersionError
+
+    with pytest.raises(DispersionError, match="dispersion_damping"):
+        resolve_dispersion_damping("bjm")
+
+
+def test_damping_is_validated_before_the_model_is_built():
+    """The check belongs in the precheck: loading a checkpoint costs GBs."""
+    from ase_calculator_kit.dispersion import precheck_dispersion_xc
+    from ase_calculator_kit.errors import DispersionError
+
+    with pytest.raises(DispersionError, match="dispersion_damping"):
+        precheck_dispersion_xc(
+            "sevennet", "mpa",
+            dispersion=True, dispersion_xc=None, dispersion_damping="nope",
+        )
+
+
+def test_damping_is_ignored_when_dispersion_is_off():
+    from ase_calculator_kit.dispersion import precheck_dispersion_xc
+
+    assert precheck_dispersion_xc(
+        "sevennet", "mpa",
+        dispersion=False, dispersion_xc=None, dispersion_damping="nope",
+    ) is None
+
+
+def test_damping_reaches_torch_dftd(monkeypatch):
+    """get_calculator(..., dispersion_damping="zero") must land on the D3 term."""
+    import sys
+    import types
+
+    seen = {}
+
+    class FakeD3:
+        # SumCalculator intersects implemented_properties across its members.
+        implemented_properties = ["energy"]
+
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+
+    class FakeSevenNetCalculator:
+        implemented_properties = ["energy"]
+
+        def __init__(self, **kwargs):
+            pass
+
+    sevenn = types.ModuleType("sevenn")
+    calculator = types.ModuleType("sevenn.calculator")
+    calculator.SevenNetCalculator = FakeSevenNetCalculator
+    torch_dftd = types.ModuleType("torch_dftd")
+    module = types.ModuleType("torch_dftd.torch_dftd3_calculator")
+    module.TorchDFTD3Calculator = FakeD3
+
+    monkeypatch.setitem(sys.modules, "sevenn", sevenn)
+    monkeypatch.setitem(sys.modules, "sevenn.calculator", calculator)
+    monkeypatch.setitem(sys.modules, "torch_dftd", torch_dftd)
+    monkeypatch.setitem(sys.modules, "torch_dftd.torch_dftd3_calculator", module)
+
+    get_calculator(
+        "sevennet", modal="oc20", device="cpu",
+        dispersion=True, dispersion_damping="zero",
+    )
+
+    assert seen["damping"] == "zero"
+    assert seen["xc"] == "rpbe"

@@ -105,7 +105,8 @@ _POLICIES: dict[tuple[str, str], DispersionPolicy] = {
     ("uma", "oc20"): _allowed("RPBE", "rpbe"),
     ("uma", "oc22"): _allowed("PBE(+U)", "pbe"),
     ("uma", "oc25"): _included(
-        "RPBE+D3(BJ)", "the OC25 task already includes D3(BJ) dispersion"
+        "RPBE+D3(zero)",
+        "the OC25 task already includes D3 dispersion with zero damping",
     ),
     ("uma", "omol"): _included(
         "ωB97M-V", "the OMol task already includes nonlocal VV10 dispersion"
@@ -160,8 +161,54 @@ def resolve_dispersion_xc(
     )
 
 
-def wrap_with_d3(base_calc: Calculator, *, xc: str, device: str) -> Calculator:
-    """Return ``base_calc`` summed with a torch-dftd D3(BJ) correction."""
+#: Damping functions this package will hand to torch-dftd.
+#:
+#: torch-dftd also accepts ``zerom``, ``bjm`` and ``dftd2``, but those have
+#: published parameters for only a handful of functionals, and none for the
+#: ones in the policy table above. Restricting the choice keeps a typo from
+#: silently selecting a parameter set that was never fitted for the model's
+#: reference functional.
+DAMPING_FUNCTIONS = ("bj", "zero")
+
+DEFAULT_DAMPING = "bj"
+
+
+def resolve_dispersion_damping(damping: str | None) -> str:
+    """Validate the damping choice, returning the name to pass to torch-dftd."""
+    if damping is None:
+        return DEFAULT_DAMPING
+    if damping not in DAMPING_FUNCTIONS:
+        valid = ", ".join(repr(name) for name in DAMPING_FUNCTIONS)
+        raise DispersionError(
+            f"Unknown dispersion_damping {damping!r}. Supported: {valid}."
+        )
+    return damping
+
+
+def wrap_with_d3(
+    base_calc: Calculator,
+    *,
+    xc: str,
+    device: str,
+    damping: str = DEFAULT_DAMPING,
+) -> Calculator:
+    """Return ``base_calc`` summed with a torch-dftd D3 correction.
+
+    Parameters
+    ----------
+    xc:
+        Exchange-correlation functional whose D3 parameters to use. Normally
+        comes from the policy table, i.e. the model's training functional.
+    device:
+        Where to run the D3 term. ``"mps"`` is redirected to CPU.
+    damping:
+        ``"bj"`` (Becke-Johnson, the default) or ``"zero"``. The two are
+        separately fitted parameter sets, not a numerical detail: for a given
+        functional they can differ by a factor of two on molecule-metal
+        systems, where D3 has no screening of the metal's C6 coefficients.
+        ``"zero"`` is the right choice when matching a reference dataset that
+        used it — OC25, for instance, is RPBE + D3 with zero damping.
+    """
     try:
         from ase.calculators.mixing import SumCalculator
         from torch_dftd.torch_dftd3_calculator import TorchDFTD3Calculator
@@ -173,12 +220,19 @@ def wrap_with_d3(base_calc: Calculator, *, xc: str, device: str) -> Calculator:
 
     # torch-dftd on MPS is unreliable; run the D3 part on CPU in that case.
     d3_device = "cpu" if device == "mps" else device
-    d3 = TorchDFTD3Calculator(damping="bj", xc=xc, device=d3_device)
+    d3 = TorchDFTD3Calculator(
+        damping=resolve_dispersion_damping(damping), xc=xc, device=d3_device
+    )
     return SumCalculator([base_calc, d3])
 
 
 def precheck_dispersion_xc(
-    backend: str, key: str, *, dispersion: bool, dispersion_xc: str | None
+    backend: str,
+    key: str,
+    *,
+    dispersion: bool,
+    dispersion_xc: str | None,
+    dispersion_damping: str | None = None,
 ) -> str | None:
     """Validate the dispersion policy up front and return the D3 ``xc`` to use.
 
@@ -187,7 +241,11 @@ def precheck_dispersion_xc(
     :class:`~ase_calculator_kit.errors.DispersionError` for models that already
     include dispersion or whose functional is unverified — *before* the (heavy)
     base calculator is built, so the error is fast and offline.
+
+    ``dispersion_damping`` is validated here for the same reason: a typo should
+    surface before a multi-gigabyte checkpoint is loaded, not after.
     """
     if not dispersion:
         return None
+    resolve_dispersion_damping(dispersion_damping)
     return resolve_dispersion_xc(backend, key, dispersion_xc=dispersion_xc)
