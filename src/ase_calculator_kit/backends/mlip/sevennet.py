@@ -35,13 +35,26 @@ class SevenNetBackend(BaseBackend):
             ``"cpu"``. SevenNet supports Apple Silicon ``"mps"`` (validated
             locally with the ``7net-omni`` model).
         model:
-            Pretrained keyword. Defaults to ``"7net-omni"``. Other options
-            include ``"7net-mf-ompa"``, ``"7net-omat"``, ``"7net-l3i5"`` and
-            ``"7net-0"``.
+            Pretrained keyword. Defaults to ``"7net-omni"``. The Omni family is
+            one training recipe at three capacities, so the ``modal`` table
+            below applies unchanged to all three:
+
+            ================= ===============================================
+            ``model``         Capacity
+            ================= ===============================================
+            ``7net-omni``     Recommended default
+            ``7net-omni-i8``  Larger; more accurate, slower
+            ``7net-omni-i12`` Largest of the family
+            ================= ===============================================
+
+            Other options include ``"7net-mf-ompa"``, ``"7net-omat"``,
+            ``"7net-l3i5"`` and ``"7net-0"``. Keep the model fixed across a
+            campaign: i8 and i12 are not drop-in refinements of an ``omni``
+            number, they are separate models.
         modal:
-            Inference task for the multi-fidelity models ``7net-omni`` and
-            ``7net-mf-ompa``. Set to ``None`` for single-fidelity models such as
-            ``7net-0`` (which reject ``modal``).
+            Inference task for the multi-fidelity models ``7net-omni`` (all
+            three capacities) and ``7net-mf-ompa``. Set to ``None`` for
+            single-fidelity models such as ``7net-0`` (which reject ``modal``).
 
             Choosing ``modal`` for ``7net-omni``:
 

@@ -50,6 +50,12 @@ mattersim = ["mattersim>=1.2,<2"]
 nequip = ["nequip>=0.18,<0.19"]
 uma = ["fairchem-core>=2.20,<3"]
 dispersion = ["torch-dftd>=0.5,<0.6"]
+# MACE is deliberately absent from `all` below. mace-torch pins e3nn==0.4.4,
+# while sevenn, fairchem-core, mattersim and nequip all require e3nn>=0.5:
+# no resolution satisfies both, so `pip install '...[all,mace]'` can only fail.
+# MACE belongs in a virtual environment of its own, and this extra is how you
+# install it there. tests/test_packaging.py keeps it out of `all`.
+mace = ["mace-torch>=0.3.16,<0.4"]
 all = [
     "chgnet>=0.4,<0.5",
     "sevenn>=0.13",

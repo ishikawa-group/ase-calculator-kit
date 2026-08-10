@@ -30,6 +30,7 @@ src/ase_calculator_kit/
   config.py          YAML load / deep_merge / resolve / write-resolved-config
   backends/base.py   BaseBackend: every backend implements create_calculator()
   backends/mlip/     chgnet.py sevennet.py mattersim.py nequip.py fairchem.py
+                     mace.py (separate environment — invariant 7)
   backends/dft/      vasp.py espresso.py
   py.typed           PEP 561 marker; keep it listed in [tool.setuptools.package-data]
 tests/               fast unit tests + test_singlepoint_cpu.py (marked slow)
@@ -77,8 +78,14 @@ These are deliberate design decisions, not oversights.
    is `True` only for CHGNet, SevenNet, and MatterSim, because those were
    validated with a real single point on Apple Silicon. Do not flip a flag
    without running the calculation; record the result in the README matrix.
-7. **MACE stays out.** `mace-torch` needs an `e3nn` version incompatible with
-   the one pinned by `sevenn` and `fairchem-core`. Do not add it.
+7. **MACE ships, but never in the same environment.** `mace-torch` pins
+   `e3nn==0.4.4`; `sevenn`, `fairchem-core` and `mattersim` require
+   `e3nn>=0.5.0` and `nequip` `>=0.6.0`. Since 0.5.0 the backend exists and the
+   answer to the conflict is a second virtual environment, not exclusion — so
+   the `mace` extra must stay **out of `all`** (`tests/test_packaging.py`
+   enforces it), `MissingDependencyError` must keep explaining *why* a second
+   environment is needed, and CI resolves `mace` on its own. Do not "fix" the
+   conflict by relaxing another backend's `e3nn` floor.
 8. **Published requirements are ranges; exact pins live in `constraints.txt`.**
    `pyproject.toml` uses compatible ranges (`ase>=3.28,<4`) so the package can be
    installed alongside whatever ASE/NNP versions a user already has — an
@@ -124,6 +131,13 @@ python -m venv .venv
 .venv/bin/ruff check src tests examples
 .venv/bin/pytest -m slow                # real single points, downloads weights
 .venv/bin/pytest -m slow -s             # with the tqdm progress bar
+
+# MACE (invariant 7) is verified from its own environment. The fast suite is
+# identical there; in the slow suite the MACE cases run and every other case
+# skips as "backend not installed", which is exactly the intended split.
+python -m venv .venv-mace
+.venv-mace/bin/pip install -e ".[mace,dispersion,dev]" -c constraints.txt
+.venv-mace/bin/pytest -m slow -k mace
 ```
 
 - `addopts = "-m 'not slow'"` in `pyproject.toml` deselects the slow suite by
@@ -182,6 +196,16 @@ Three things make this go wrong, and all three have happened here:
    and never changes, so it needs no per-release edit.
 
 ## Known upstream quirks
+
+- **MACE accepts an unknown `head` and computes anyway.** `MACECalculator` logs
+  `Head <x> not found in available heads [...], defaulting to the last head` and
+  returns energies from that head — a typo yields a plausible number at the
+  wrong level of theory, the same failure shape as fairchem's silent
+  `charge=0`/`spin=1`. `backends/mlip/mace.py` therefore validates the head
+  against `MH1_HEADS` before the download, and against the loaded checkpoint's
+  `available_heads` afterwards. `MH1_HEADS` was read out of the shipped
+  `mace-mh-1.model`; it deliberately differs from the model card, which lists an
+  `rgd1_b3lyp` head the checkpoint does not carry.
 
 - **sevenn 0.12.1** printed `cueq / <bool> / flash / <bool>` from
   `SevenNetCalculator.__init__`, and `sevennet.py` filtered exactly those lines.

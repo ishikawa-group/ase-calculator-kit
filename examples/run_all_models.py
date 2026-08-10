@@ -9,6 +9,11 @@ first use, so the first run is slow).
     python examples/run_all_models.py            # all variants on CPU
     python examples/run_all_models.py --device auto
     python examples/run_all_models.py --only chgnet sevennet
+
+A backend that is not installed reports SKIPPED instead of stopping the run,
+which is the only way this script can list MACE next to the others: mace-torch
+pins e3nn==0.4.4 against the other backends' e3nn>=0.5, so it lives in a
+separate environment. Run it there with ``--only mace``.
 """
 
 from __future__ import annotations
@@ -64,6 +69,17 @@ VARIANTS = [
     ("sevennet 7net-omni/omol25_high", "sevennet", {"modal": "omol25_high"}, make_molecule),
     ("sevennet 7net-omni/spice", "sevennet", {"modal": "spice"}, make_molecule),
     ("sevennet 7net-omni/qcml", "sevennet", {"modal": "qcml"}, make_molecule),
+    # Same recipe, larger capacity: the modal table is unchanged for i8 / i12.
+    ("sevennet 7net-omni-i8/mpa", "sevennet", {"model": "7net-omni-i8", "modal": "mpa"}, make_bulk),
+    ("sevennet 7net-omni-i12/mpa", "sevennet", {"model": "7net-omni-i12", "modal": "mpa"}, make_bulk),
+    # MACE runs only from its own environment (see the module docstring), where
+    # every other line here reports SKIPPED — and vice versa.
+    ("mace mh-1/omat_pbe", "mace", {"head": "omat_pbe"}, make_bulk),
+    ("mace mh-1/mp_pbe_refit_add", "mace", {"head": "mp_pbe_refit_add"}, make_bulk),
+    ("mace mh-1/oc20_usemppbe", "mace", {"head": "oc20_usemppbe"}, make_bulk),
+    ("mace mh-1/matpes_r2scan", "mace", {"head": "matpes_r2scan"}, make_bulk),
+    ("mace mh-1/omol", "mace", {"head": "omol"}, make_molecule),
+    ("mace mh-1/spice_wB97M", "mace", {"head": "spice_wB97M"}, make_molecule),
     ("mattersim 1M", "mattersim", {"model": "1M"}, make_bulk),
     ("mattersim 5M", "mattersim", {"model": "5M"}, make_bulk),
     ("nequip OAM-S", "nequip", {"model": "S"}, make_bulk),
@@ -89,7 +105,7 @@ def main() -> None:
     parser.add_argument("--device", default="cpu", help="cpu (default), cuda, mps, or auto")
     parser.add_argument(
         "--only", nargs="*", default=None,
-        help="restrict to these model names (chgnet sevennet mattersim nequip uma)",
+        help="restrict to these model names (chgnet sevennet mattersim nequip mace uma)",
     )
     args = parser.parse_args()
 

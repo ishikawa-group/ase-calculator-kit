@@ -62,6 +62,16 @@ CASES = [
     ("sevennet-matpes_r2scan", "sevennet", {"modal": "matpes_r2scan"}, _bulk),
     ("sevennet-omol25_low", "sevennet", {"modal": "omol25_low"}, _molecule),
     ("sevennet-omol25_high", "sevennet", {"modal": "omol25_high"}, _molecule),
+    ("sevennet-omni-i8", "sevennet", {"model": "7net-omni-i8", "modal": "mpa"}, _bulk),
+    ("sevennet-omni-i12", "sevennet", {"model": "7net-omni-i12", "modal": "mpa"}, _bulk),
+    # MACE only ever runs from its own environment (e3nn 0.4.4 vs >=0.5), where
+    # every other case here skips as "backend not installed" — and vice versa.
+    ("mace-mh-1-omat_pbe", "mace", {"head": "omat_pbe"}, _bulk),
+    ("mace-mh-1-mp_pbe_refit_add", "mace", {"head": "mp_pbe_refit_add"}, _bulk),
+    ("mace-mh-1-oc20_usemppbe", "mace", {"head": "oc20_usemppbe"}, _bulk),
+    ("mace-mh-1-matpes_r2scan", "mace", {"head": "matpes_r2scan"}, _bulk),
+    ("mace-mh-1-omol", "mace", {"head": "omol"}, _molecule),
+    ("mace-mh-1-spice_wB97M", "mace", {"head": "spice_wB97M"}, _molecule),
     ("mattersim-1M", "mattersim", {"model": "1M"}, _bulk),
     ("mattersim-5M", "mattersim", {"model": "5M"}, _bulk),
     ("nequip-OAM-S", "nequip", {"model": "S"}, _bulk),
@@ -101,8 +111,8 @@ def test_cpu_single_point(model, kwargs, make_system, singlepoint_progress):
 
 @pytest.mark.parametrize(
     "model,kwargs",
-    [("chgnet", {}), ("uma", {"task": "oc20"})],
-    ids=["chgnet", "uma-oc20"],
+    [("chgnet", {}), ("uma", {"task": "oc20"}), ("mace", {"head": "omat_pbe"})],
+    ids=["chgnet", "uma-oc20", "mace-omat_pbe"],
 )
 def test_dispersion_changes_energy(model, kwargs, singlepoint_progress):
     """dispersion=True must add a (negative) D3 contribution vs the bare model."""

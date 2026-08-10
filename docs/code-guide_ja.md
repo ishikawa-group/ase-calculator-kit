@@ -24,7 +24,7 @@ YAMLで明示します。最終的に使われた条件は`write_resolved_config
 
 - `factory.py`: 公開API。calculator名の検証とbackend呼び出しだけを行う。
 - `registry.py`: 名前とbackendの対応。新しいbackendを追加する際の索引。
-- `backends/mlip/`: MLIPごとのmodel/task/modalと上流APIの違いを明示する。
+- `backends/mlip/`: MLIPごとのmodel/task/modal/headと上流APIの違いを明示する。
 - `backends/dft/`: YAML条件をASEのVASP/QE Calculatorへ変換する。
 - `device.py`: `auto`をcpu/cuda/mpsのいずれかへ解決する。
 - `dispersion.py`: 学習参照汎関数とD3二重計上防止の唯一の実装。
@@ -35,10 +35,42 @@ YAMLで明示します。最終的に使われた条件は`write_resolved_config
 - ASEの標準単位をそのまま使う。energyはeV、forceはeV/Å、stressはeV/Å³。
 - D3のパラメータは、モデルの学習参照汎関数に合わせる。
 - 学習データがすでに分散相互作用を含むモデルへD3を重ねない。
-- task/modalは単なる速度設定ではなく、対象化学系とDFT参照レベルの選択である。
+- task/modal/headは単なる速度設定ではなく、対象化学系とDFT参照レベルの選択である。
   例えばSevenNetの`omol25_low`/`omol25_high`は精度の高低ではなく、低スピン系と
-  高スピン系という**スピン状態での分割**である。
+  高スピン系という**スピン状態での分割**である。MACE-MH-1のheadも同様に、
+  PBE / r2SCAN / ωB97Mという参照レベルそのものを選んでいる。
+- 逆にSevenNetの`7net-omni` / `-i8` / `-i12`は同じ学習レシピの容量違いであり、
+  参照レベルは変わらない(`modal`の表はそのまま使える)。ただし別modelなので、
+  1つの計算キャンペーン内で混ぜるとエネルギーの比較ができない。
 - 重いMLIP packageはbackend内で遅延importし、未使用backendのimport失敗を避ける。
+
+## MACEは専用の仮想環境が必要
+
+MACEは0.5.0から利用できるが、**他のMLIP backendと同じ環境には入らない**。
+`mace-torch`は`e3nn==0.4.4`を固定し、`sevenn`・`fairchem-core`・`mattersim`は
+`e3nn>=0.5.0`、`nequip`は`>=0.6.0`を要求するため、両立する解が存在しない。
+したがって`mace` extraは`all`に含めず、専用のvenvへ入れる。
+
+```bash
+python -m venv .venv-mace
+.venv-mace/bin/pip install "ase-calculator-kit[mace]"
+```
+
+この環境でもfactoryやD3方針の扱いは全く同じで、単に他のMLIPが
+`MissingDependencyError`になるだけである。逆に通常の環境で`mace`を要求した場合も、
+同じ例外がこの制約を説明する。
+
+### headの検証をこちら側で行う理由
+
+MACE-MH-1は1つのcheckpointに6つのheadを持ち、**headの選択がそのままDFT参照レベルの
+選択**になる(`omat_pbe`=PBE(+U)、`matpes_r2scan`=r2SCAN、`omol`=ωB97M-VV10など)。
+ここで問題なのは、上流の`MACECalculator`が**未知のheadを渡してもエラーにしない**点である。
+警告をlogに出したうえでcheckpointの最後のheadへ勝手に切り替えて計算を続けるため、
+綴り間違いは「もっともらしいが別汎関数の値」として返る。UMAのcharge/spin未設定と同じ
+失敗の形なので、`backends/mlip/mace.py`がdownloadの前にheadを検証して`ValueError`にする。
+
+なおhead名は配布されている`mace-mh-1.model`から読み出した実際の一覧であり、
+model cardが載せている`rgd1_b3lyp`はこのcheckpointには存在しない。
 
 ## 分子系のcharge / spin
 
@@ -79,6 +111,8 @@ SevenNetにはcharge/spinの入力が無いため、イオンや任意の開殻�
    policy keyを必ずbacktickで書く。
 5. `pyproject.toml`へextraを追加し、`.github/workflows/ci.yml`の
    `extras-resolve`が対象Python全てで解決できることを確認する。
+   他のbackendと依存が衝突する場合はMACEと同様に`all`へ入れず、
+   `tests/test_packaging.py`で「`all`に含まれないこと」を固定する。
 6. modelをdownloadしないmock testと、必要に応じて`slow` single-point testを追加する。
 
 backend間の共通化より、各上流packageへ実際に渡す引数が一目で分かることを優先します。

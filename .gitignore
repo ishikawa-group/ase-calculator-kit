@@ -1,5 +1,6 @@
-# Virtual environments
+# Virtual environments (.venv-mace/ is the separate MACE one)
 .venv/
+.venv-*/
 venv/
 env/
 

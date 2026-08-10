@@ -7,6 +7,7 @@ from .dft import EspressoBackend, VaspBackend
 from .mlip import (
     CHGNetBackend,
     FairChemBackend,
+    MACEBackend,
     MatterSimBackend,
     NequIPBackend,
     SevenNetBackend,
@@ -17,6 +18,7 @@ __all__ = [
     "CHGNetBackend",
     "EspressoBackend",
     "FairChemBackend",
+    "MACEBackend",
     "MatterSimBackend",
     "NequIPBackend",
     "SevenNetBackend",

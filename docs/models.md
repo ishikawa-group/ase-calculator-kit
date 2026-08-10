@@ -19,6 +19,12 @@ interaction and give wrong energies. So such models reject `dispersion=True`.
 |---|---|---|---|---|
 | **CHGNet** `default` / `0.3.0` / `0.2.0` | MPtrj | PBE+U | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **CHGNet** `r2scan` | MatPES r2SCAN transfer-learning | r2SCAN | ✗ none | ✅ allowed — D3 `xc=r2scan` |
+| **MACE** `omat_pbe` (MH-1 default) | OMat24 replay (10% of the pre-training set) | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **MACE** `mp_pbe_refit_add` | MPtrj | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **MACE** `oc20_usemppbe` | OC20 (2M subsample) | PBE, as stated by the MACE-MH-1 paper — see the note below | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **MACE** `matpes_r2scan` | MatPES | r2SCAN (no Hubbard U) | ✗ none | ✅ allowed — D3 `xc=r2scan` |
+| **MACE** `omol` | OMol25 (1% subsample) | ωB97M-VV10 | ✓ yes (VV10 nonlocal) | ⛔ error (double-counting) |
+| **MACE** `spice_wB97M` | SPICE-1 | ωB97M-D3(BJ) | ✓ yes (D3(BJ) included) | ⛔ error (double-counting) |
 | **MatterSim** `default` / `1M` / `5M` | MatterSim set (MPtrj + T/P-sampled structures) | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **NequIP OAM** `S` / `M` / `L` / `XL` | OMat24 pre-training + sAlex / MPTrj fine-tuning | PBE(+U)-level materials data | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `mpa` | MPtrj + sAlex | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
@@ -62,6 +68,26 @@ future upstream release, for instance — lands there and is refused by default.
   checked the functional yourself and unlocks the correction. The
   *already-includes-dispersion* rows cannot be overridden — remove
   `dispersion=True` instead.
+- **MACE-MH-1 heads.** MH-1 is one checkpoint with six readout heads, and the
+  head *is* the level of theory — the same structure returns PBE, r2SCAN or
+  ωB97M energies depending on which one is selected. The names above are read
+  back from the shipped `mace-mh-1.model` file (`available_heads`), not from the
+  model card: the card advertises an `rgd1_b3lyp` head, and the published
+  checkpoint carries `mp_pbe_refit_add` in its place. This matters because MACE
+  does **not** reject an unknown head — it logs a warning and quietly computes
+  with the last head in the file — so `get_calculator("mace", head=...)`
+  validates the name itself and raises instead.
+- **MACE and D3.** The MH-1 authors evaluate their PBE-trained heads with
+  torch-dftd D3(BJ) using the PBE parametrisation and run the OMol head with no
+  added dispersion ([arXiv:2510.25380](https://arxiv.org/abs/2510.25380),
+  "Dispersion corrections (D3)"), which is exactly the policy above.
+- **MACE `oc20_usemppbe` is the one row that follows the model paper rather than
+  the dataset.** The MH-1 paper describes this head as OC20 "computed at the PBE
+  level", while OC20 as published is RPBE — which is what the **SevenNet**
+  `oc20` and **UMA** `oc20` rows use. The head name also says it is referenced
+  to MP's PBE data. We follow the model's own paper here, because the D3 term
+  should match what the head reproduces; pass `dispersion_xc="rpbe"` to follow
+  the dataset convention instead.
 - **NequIP OAM.** OAM (S/M/L/XL) is trained on PBE(+U)-level materials data
   (OMat24 pre-training + sAlex / MPtrj fine-tuning) and does not include
   dispersion, so D3 with `xc=pbe` is applied.

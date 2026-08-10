@@ -17,6 +17,8 @@ Supported MLIP backends:
 - [MatterSim](https://github.com/microsoft/mattersim)
 - [NequIP OAM](https://www.nequip.net/)
 - [UMA / fairchem](https://github.com/facebookresearch/fairchem)
+- [MACE](https://github.com/ACEsuit/mace) — **must be installed in a separate
+  virtual environment**, see [MACE needs its own environment](#mace-needs-its-own-environment)
 
 Supported DFT backends:
 
@@ -44,12 +46,25 @@ pip install "ase-calculator-kit[uma]"
 # Several selected backends
 pip install "ase-calculator-kit[chgnet,mattersim]"
 
-# Every supported NNP backend and the optional D3 correction
+# Every co-installable NNP backend and the optional D3 correction
 pip install "ase-calculator-kit[all]"
 
 # D3 correction without installing every NNP backend
 pip install "ase-calculator-kit[dispersion]"
 ```
+
+> ⚠️ **MACE is the one exception: it needs a virtual environment of its own.**
+> `mace-torch` pins `e3nn==0.4.4`, while `sevenn`, `fairchem-core`, `mattersim`
+> and `nequip` all require `e3nn>=0.5`. There is no resolution that satisfies
+> both, so `mace` is **not** part of `[all]`, and
+> `pip install "ase-calculator-kit[all,mace]"` cannot succeed.
+>
+> ```bash
+> python -m venv .venv-mace
+> .venv-mace/bin/pip install "ase-calculator-kit[mace]"
+> ```
+>
+> See [MACE needs its own environment](#mace-needs-its-own-environment).
 
 Missing backend packages are reported only when that calculator is requested,
 with the matching extra to install.
@@ -61,7 +76,7 @@ currently does:
 
 | | 3.12 | 3.13 | 3.14 |
 |---|:--:|:--:|:--:|
-| Core, `chgnet`, `sevennet`, `mattersim`, `nequip`, `dispersion` | ✅ | ✅ | ✅ |
+| Core, `chgnet`, `sevennet`, `mattersim`, `nequip`, `mace`, `dispersion` | ✅ | ✅ | ✅ |
 | `uma` (and therefore `all`) | ✅ | ✅ | ❌ |
 
 `fairchem-core` declares `requires-python = ">=3.11,<3.14"` and pins
@@ -101,6 +116,13 @@ atoms.calc = get_calculator("nequip", model="L")
 print(atoms.get_potential_energy())
 
 atoms.calc = get_calculator("uma", model="uma-s-1p2", task="omat")
+print(atoms.get_potential_energy())
+```
+
+In the separate MACE environment, the same call shape applies:
+
+```python
+atoms.calc = get_calculator("mace", model="mh-1", head="omat_pbe")
 print(atoms.get_potential_energy())
 ```
 
@@ -158,6 +180,7 @@ atoms.calc = get_calculator(
 | `chgnet` | MLIP | — |
 | `mattersim` | MLIP | — |
 | `nequip` | MLIP | — |
+| `mace` | MLIP (separate environment) | — |
 | `uma` | MLIP | `fairchem` |
 | `vasp` | DFT | — |
 | `qe` | DFT | `espresso`, `quantum-espresso` |
@@ -177,6 +200,7 @@ calculator.
 | `chgnet` | `model=None` (bundled default), `checkpoint=None` (path to a `.pth`) |
 | `mattersim` | `model="1M"` (or `"5M"`), `load_path=None` |
 | `nequip` | `model="L"` (`S`/`M`/`L`/`XL`), `model_path=None`, `compile_mode="eager"`, `neighborlist_backend="matscipy"`, `allow_tf32=False` |
+| `mace` | `model="mh-1"`, `head="omat_pbe"`, `default_dtype="float64"` |
 | `uma` | `model="uma-s-1p2"`, `task="omat"` |
 
 ### DFT keyword arguments
@@ -203,7 +227,7 @@ from ase_calculator_kit import (
     resolve_calculator_config,
 )
 
-available_mlip_models()     # ['chgnet', 'fairchem', 'mattersim', 'nequip', 'sevennet', 'uma']
+available_mlip_models()     # ['chgnet', 'fairchem', 'mace', 'mattersim', 'nequip', 'sevennet', 'uma']
 available_dft_calculators() # ['espresso', 'qe', 'quantum-espresso', 'vasp']
 available_calculators()     # both of the above; available_models() is an alias
 attach_calculator(atoms, "uma", task="omat")  # sets atoms.calc, returns atoms
@@ -253,14 +277,34 @@ on an Apple Silicon Mac (arm64, PyTorch 2.8, MPS available). Results:
 | CHGNet | ✅ supported | validated locally |
 | MatterSim | ✅ supported | validated locally |
 | NequIP OAM | ❌ not supported | PyTorch MPS lacks float64; the packaged OAM models use float64 buffers |
+| MACE | ❌ not supported | same float64 problem: loading `mace-mh-1.model` with `map_location="mps"` raises `Cannot convert a MPS Tensor to float64`, with `default_dtype="float32"` as well |
 | UMA / fairchem | ❌ not supported | `fairchem-core` asserts `device in {"cpu", "cuda"}` |
 
 For the MPS-supported backends, `device="auto"` resolves to `mps` on Apple
-Silicon when no CUDA device is present. NequIP and UMA accept only `"cpu"` /
-`"cuda"`; passing `device="mps"` raises a clear `ValueError`, and `device="auto"`
-falls back to `cpu`.
+Silicon when no CUDA device is present. NequIP, MACE and UMA accept only
+`"cpu"` / `"cuda"`; passing `device="mps"` raises a clear `ValueError`, and
+`device="auto"` falls back to `cpu`.
 
 ## Choosing an MLIP Variant
+
+### SevenNet `model`
+
+The Omni family is one training recipe at three capacities, so everything in the
+`modal` table below applies unchanged to all three:
+
+| `model` | Use for |
+|---|---|
+| `7net-omni` (default) | Recommended general model |
+| `7net-omni-i8` | Larger capacity: more accurate, slower |
+| `7net-omni-i12` | Largest of the family |
+
+```python
+atoms.calc = get_calculator("sevennet", model="7net-omni-i12", modal="mpa")
+```
+
+Keep the model fixed across a campaign — i8 and i12 are separate models, not
+refinements of an `7net-omni` number, so energies are not comparable between
+them.
 
 ### SevenNet `modal`
 
@@ -305,6 +349,37 @@ NequIP. To avoid a download, pass `model_path="path/to/model.nequip.zip"`.
 `1M` (default) is for fast screening, `5M` is more accurate. Keep the checkpoint
 fixed across a campaign.
 
+### MACE `head`
+
+MACE-MH-1 (`model="mh-1"`, the default) is a single checkpoint with six readout
+heads. The head *is* the level of theory, not an accuracy setting: the same
+structure returns PBE, r2SCAN or ωB97M energies depending on which one you pick.
+
+| `head` | Use for | Reference level |
+|---|---|---|
+| `omat_pbe` (default) | Inorganic materials; best cross-domain behaviour | PBE(+U) |
+| `mp_pbe_refit_add` | Materials Project trajectories | PBE(+U) |
+| `oc20_usemppbe` | Catalyst surfaces and adsorption | PBE (see below) |
+| `matpes_r2scan` | r2SCAN-level materials | r2SCAN |
+| `omol` | Molecules and organometallics | ωB97M-VV10 |
+| `spice_wB97M` | Small to medium organic molecules | ωB97M-D3(BJ) |
+
+```python
+atoms.calc = get_calculator("mace", head="matpes_r2scan")
+```
+
+Two things worth knowing before trusting a number from this model:
+
+- **An unknown head does not raise upstream.** MACE logs a warning and computes
+  with the last head in the file, so a typo returns a plausible energy from the
+  wrong level of theory. This package rejects unknown heads with a `ValueError`
+  instead, before the checkpoint is downloaded. The head names above are read
+  back from the shipped `mace-mh-1.model`; the model card advertises an
+  `rgd1_b3lyp` head that the published checkpoint does not carry.
+- **`default_dtype` defaults to `"float64"`**, following the MH-1 model card —
+  the right choice for geometry optimisation and phonons. Pass
+  `default_dtype="float32"` for faster MD.
+
 ### UMA `task`
 
 | `task` | Use for |
@@ -332,6 +407,7 @@ whether they read them at all.
 |---|---|---|
 | `uma` | `task="omol"` | ✅ `atoms.info["charge"]`, `atoms.info["spin"]` |
 | `sevennet` | `modal="omol25_low"` / `"omol25_high"` / `"spice"` / `"qcml"` | ❌ not supported by sevenn |
+| `mace` | `head="omol"` / `"spice_wB97M"` | ❌ the MH-1 molecular heads are fitted to neutral closed-shell data |
 
 ### UMA: set both keys explicitly
 
@@ -378,6 +454,14 @@ high-spin configurations, but it is not a multiplicity you set per structure.
 Use `get_calculator("uma", task="omol")` when the charge and spin of the system
 matter.
 
+### MACE: molecular heads, no charge or spin
+
+MACE-MH-1's `omol` head was fine-tuned on a subsample of OMol25 that is
+explicitly **neutral and closed-shell**, and `spice_wB97M` on SPICE-1, which is
+likewise neutral. There is no charge or spin input to set, and no head that
+covers ions or a chosen open-shell state. Use `get_calculator("uma",
+task="omol")` when the charge and spin of the system matter.
+
 ### Non-periodic cells
 
 `ase.build.molecule()` returns `pbc=False` with a zero cell, which UMA accepts.
@@ -393,6 +477,7 @@ atoms.calc = get_calculator("uma", task="omat", dispersion=True)
 atoms.calc = get_calculator("uma", task="oc20", dispersion=True)
 atoms.calc = get_calculator("chgnet", dispersion=True)
 atoms.calc = get_calculator("sevennet", modal="pet_mad", dispersion=True)
+atoms.calc = get_calculator("mace", head="omat_pbe", dispersion=True)
 ```
 
 With `dispersion=True` the returned object is an ASE
@@ -406,6 +491,7 @@ Some models already include dispersion in their training functional, so
 ```python
 get_calculator("uma", task="omol", dispersion=True)      # DispersionError: ωB97M-V includes VV10
 get_calculator("sevennet", modal="spice", dispersion=True)  # DispersionError: SPICE is ωB97M-D3(BJ)
+get_calculator("mace", head="omol", dispersion=True)     # DispersionError: ωB97M-VV10
 ```
 
 **Every molecular task falls in this category** — molecular reference data is
@@ -442,12 +528,49 @@ PBE's. Treat RPBE-D3 numbers on metals as indicative.
 
 See [`docs/models.md`](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/models.md) for the full per-model table.
 
-## Why no MACE?
+## MACE needs its own environment
 
-MACE is intentionally excluded. `mace-torch` requires an `e3nn` version that
-conflicts with the `e3nn` pinned by SevenNet (`sevenn`) and UMA
-(`fairchem-core`). If you need MACE, use dedicated MACE tooling in a separate
-environment.
+MACE is supported since 0.5.0, but it **cannot share an environment with the
+other MLIP backends**, and no amount of pip flags will change that:
+
+| Package | `e3nn` requirement |
+|---|---|
+| `mace-torch` | `==0.4.4` |
+| `sevenn` | `>=0.5.0` |
+| `fairchem-core` | `>=0.5` |
+| `mattersim` | `>=0.5.0` |
+| `nequip` | `>=0.6.0,<0.7.0` |
+
+An exact pin against four lower bounds has no solution, so `mace` is deliberately
+excluded from the `all` extra. Give it a second virtual environment:
+
+```bash
+python -m venv .venv-mace
+.venv-mace/bin/pip install "ase-calculator-kit[mace]"
+
+# with the D3 correction as well
+.venv-mace/bin/pip install "ase-calculator-kit[mace,dispersion]"
+```
+
+Everything else in this package behaves identically there — the factory, the
+dispersion policy, the DFT backends. Only the other MLIP backends are missing,
+and asking for one reports the usual `MissingDependencyError`. Conversely, in
+your main environment `get_calculator("mace")` raises a `MissingDependencyError`
+that names this constraint rather than suggesting an install that cannot work.
+
+```python
+from ase.build import bulk
+from ase_calculator_kit import get_calculator
+
+atoms = bulk("Cu", "fcc", a=3.6)
+atoms.calc = get_calculator("mace", head="omat_pbe")   # model="mh-1" by default
+print(atoms.get_potential_energy())
+```
+
+The MH-1 checkpoint (~57 MB) is downloaded on first use and cached in
+`~/.cache/mace`. Its model card states an **ASL** license, which is not the MIT
+license of this package — check the model's own terms before using it in
+commercial work.
 
 ## Development
 
@@ -455,6 +578,11 @@ environment.
 python -m venv .venv
 .venv/bin/pip install -e ".[dev]" -c constraints.txt
 .venv/bin/pytest
+
+# MACE has its own environment; the same suite runs there too
+python -m venv .venv-mace
+.venv-mace/bin/pip install -e ".[mace,dispersion,dev]" -c constraints.txt
+.venv-mace/bin/pytest
 ```
 
 `pyproject.toml` declares compatible version ranges so the package installs

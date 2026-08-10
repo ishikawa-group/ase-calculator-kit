@@ -9,7 +9,7 @@ two MUST be kept in sync.
 
 Three tiers (keyed by ``(backend, key)`` where ``key`` is the model's functional
 discriminator — CHGNet model, MatterSim model, NequIP model, SevenNet modal,
-or UMA task):
+MACE head, or UMA task):
 
 1. Allowed   -> a default D3 ``xc`` is known; ``dispersion=True`` wraps the model.
 2. Included  -> dispersion is already in the training functional; always an error.
@@ -64,6 +64,30 @@ _POLICIES: dict[tuple[str, str], DispersionPolicy] = {
     ("chgnet", "0.3.0"): _allowed("PBE+U", "pbe"),
     ("chgnet", "0.2.0"): _allowed("PBE+U", "pbe"),
     ("chgnet", "r2scan"): _allowed("r2SCAN", "r2scan"),
+    # MACE-MH-1: the head *is* the level of theory. The model's own authors
+    # evaluate the PBE-trained heads with torch-dftd D3(BJ) using the PBE
+    # parametrisation, and run the OMol head with no added dispersion
+    # (arXiv:2510.25380, "Dispersion corrections (D3)").
+    ("mace", "omat_pbe"): _allowed("PBE(+U)", "pbe"),
+    ("mace", "mp_pbe_refit_add"): _allowed("PBE(+U)", "pbe"),
+    ("mace", "oc20_usemppbe"): DispersionPolicy(
+        reference_level="PBE",
+        d3_xc="pbe",
+        note=(
+            "MACE-MH-1 describes this head as OC20 'computed at the PBE level' "
+            "and applies its PBE D3(BJ) parameters to it; the OC20 dataset "
+            "itself is published as RPBE, which is what the sevennet and uma "
+            "oc20 rows use. Pass dispersion_xc='rpbe' to follow the dataset."
+        ),
+    ),
+    ("mace", "matpes_r2scan"): _allowed("r2SCAN", "r2scan"),
+    ("mace", "omol"): _included(
+        "ωB97M-VV10", "the OMol head already includes nonlocal VV10 dispersion"
+    ),
+    ("mace", "spice_wB97M"): _included(
+        "ωB97M-D3(BJ)", "SPICE-1 is computed at ωB97M-D3(BJ), so D3(BJ) is "
+        "already in the reference data"
+    ),
     # MatterSim and NequIP OAM use PBE-level materials reference data.
     ("mattersim", "1M"): _allowed("PBE", "pbe"),
     ("mattersim", "5M"): _allowed("PBE", "pbe"),

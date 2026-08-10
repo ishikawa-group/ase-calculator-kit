@@ -13,6 +13,7 @@ def test_available_models():
         "chgnet",
         "espresso",
         "fairchem",
+        "mace",
         "mattersim",
         "nequip",
         "qe",
@@ -26,6 +27,7 @@ def test_available_models():
     assert kit.available_mlip_models() == [
         "chgnet",
         "fairchem",
+        "mace",
         "mattersim",
         "nequip",
         "sevennet",
@@ -45,7 +47,7 @@ def test_unknown_model_raises_valueerror():
     msg = str(exc.value)
     assert "Unknown calculator" in msg
     # Error lists the valid names.
-    for name in ("chgnet", "sevennet", "mattersim", "nequip", "uma"):
+    for name in ("chgnet", "sevennet", "mattersim", "nequip", "mace", "uma"):
         assert name in msg
 
 

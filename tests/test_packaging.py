@@ -10,8 +10,13 @@ import yaml
 
 _ROOT = Path(__file__).resolve().parents[1]
 
-#: Individual backend extras, in the order they appear in pyproject.toml.
+#: Individual backend extras that can share one environment, in pyproject order.
 _BACKEND_EXTRAS = ("chgnet", "sevennet", "mattersim", "nequip", "uma", "dispersion")
+
+#: Extras that cannot be installed next to the ones above and are therefore
+#: excluded from `all`. mace-torch pins e3nn==0.4.4 against everyone else's
+#: e3nn>=0.5, so `pip install '...[all,mace]'` has no solution.
+_SEPARATE_ENVIRONMENT_EXTRAS = ("mace",)
 
 
 def _project_metadata() -> dict:
@@ -35,12 +40,26 @@ def test_individual_and_all_extras_are_consistent():
     assert set(extras["all"]) == expected_all
 
 
+def test_mace_is_installable_but_never_part_of_all():
+    """MACE has to stay out of `all`, or `all` stops resolving at all.
+
+    Before 0.5.0 the answer to the e3nn conflict was to leave MACE out of the
+    package entirely. It is supported now, in its own environment — the extra
+    exists, and `all` must keep not containing it.
+    """
+    extras = _project_metadata()["optional-dependencies"]
+    for name in _SEPARATE_ENVIRONMENT_EXTRAS:
+        assert name in extras, f"the '{name}' extra is how it gets installed"
+        conflicting = _distribution_names(extras[name])
+        assert conflicting.isdisjoint(_distribution_names(extras["all"]))
+
+
 def test_published_requirements_are_ranges_not_exact_pins():
     """Exact pins belong in constraints.txt, not in the published metadata."""
     project = _project_metadata()
     extras = project["optional-dependencies"]
     published = list(project["dependencies"])
-    for name in (*_BACKEND_EXTRAS, "all"):
+    for name in (*_BACKEND_EXTRAS, *_SEPARATE_ENVIRONMENT_EXTRAS, "all"):
         published.extend(extras[name])
     assert [req for req in published if "==" in req] == []
 
@@ -53,6 +72,8 @@ def test_constraints_cover_every_published_requirement():
     project = _project_metadata()
     extras = project["optional-dependencies"]
     required = _distribution_names(project["dependencies"]) | _distribution_names(extras["all"])
+    for name in _SEPARATE_ENVIRONMENT_EXTRAS:
+        required |= _distribution_names(extras[name])
     assert required.issubset(_distribution_names(pinned))
 
 

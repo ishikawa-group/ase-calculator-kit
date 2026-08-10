@@ -76,7 +76,10 @@ jobs:
           expected_failures="3.14:uma 3.14:all"
           status=0
           for py in 3.12 3.13 3.14; do
-            for extra in chgnet sevennet mattersim nequip uma dispersion all; do
+            # `mace` is resolved on its own, which is also the only way it can
+            # be installed: mace-torch pins e3nn==0.4.4 against the others'
+            # e3nn>=0.5, so it is absent from `all` by design.
+            for extra in chgnet sevennet mattersim nequip mace uma dispersion all; do
               if uv pip compile pyproject.toml --extra "$extra" \
                    --python-version "$py" -q >/dev/null 2>&1; then
                 actual=resolves

@@ -17,3 +17,12 @@ mattersim==1.2.5
 nequip==0.18.0
 fairchem-core==2.20.0
 torch-dftd==0.5.3
+
+# MACE lives in a separate virtual environment (it pins e3nn==0.4.4 against the
+# others' e3nn>=0.5), so this pin never applies to the main one — a constraint
+# on a package that is not being installed does nothing. It records the version
+# the MACE backend was tested against:
+#
+#     python -m venv .venv-mace
+#     .venv-mace/bin/pip install -e ".[mace,dev]" -c constraints.txt
+mace-torch==0.3.16

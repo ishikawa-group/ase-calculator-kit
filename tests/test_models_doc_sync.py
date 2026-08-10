@@ -24,6 +24,7 @@ _MODELS_MD = Path(__file__).resolve().parents[1] / "docs" / "models.md"
 #: Bold display name in the table -> backend key used in ``_POLICIES``.
 _DISPLAY_TO_BACKEND = {
     "CHGNet": "chgnet",
+    "MACE": "mace",
     "MatterSim": "mattersim",
     "NequIP OAM": "nequip",
     "SevenNet": "sevennet",

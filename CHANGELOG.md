@@ -1,5 +1,76 @@
 # Changelog
 
+## 0.5.0
+
+Adds MACE — in a virtual environment of its own — and makes the larger SevenNet
+Omni capacities selectable.
+
+- **`get_calculator("mace", ...)` builds a MACE foundation model.** The default
+  is MACE-MH-1 with its `omat_pbe` head at `default_dtype="float64"`, i.e.
+  `get_calculator("mace")` == `get_calculator("mace", model="mh-1",
+  head="omat_pbe", default_dtype="float64")`. float64 is what the MH-1 model
+  card recommends and what geometry optimisation and phonons need; pass
+  `"float32"` for faster MD. Verified against the real checkpoint: a CPU single
+  point runs on all six heads, and `dispersion=True` on `omat_pbe` moves
+  bulk Cu from -3.740350 eV to -4.330954 eV.
+
+- **MACE must be installed in a separate virtual environment, and this release
+  says so everywhere it can.** `mace-torch` pins `e3nn==0.4.4` while `sevenn`,
+  `fairchem-core` and `mattersim` require `e3nn>=0.5.0` and `nequip`
+  `e3nn>=0.6.0`, so no resolution installs MACE next to them:
+
+  ```bash
+  python -m venv .venv-mace
+  .venv-mace/bin/pip install "ase-calculator-kit[mace]"
+  ```
+
+  The `mace` extra is therefore **not** part of `all`, which
+  `tests/test_packaging.py` now enforces — `pip install "...[all,mace]"` can
+  only fail. Requesting MACE from an environment that lacks it raises the usual
+  `MissingDependencyError`, extended to explain the e3nn conflict and the second
+  environment instead of suggesting an install that cannot succeed. This
+  reverses the previous decision to exclude MACE from the package (AGENTS.md
+  invariant 7), which is now "MACE ships, but never in the same environment".
+
+- **An unknown MACE `head` is refused instead of silently answered.** MACE does
+  not raise on a head the checkpoint does not have: it logs
+  `Head <x> not found ... defaulting to the last head` and returns energies from
+  that head, so a typo yields a plausible number at a different level of theory
+  — the same failure shape as fairchem's silent `charge=0`/`spin=1`. The head is
+  validated before the download, and again against the loaded checkpoint's
+  `available_heads`.
+
+  The head names come from the shipped `mace-mh-1.model`, not from the model
+  card: the card advertises `rgd1_b3lyp`, the checkpoint carries
+  `mp_pbe_refit_add`. The six real heads are `omat_pbe`, `mp_pbe_refit_add`,
+  `oc20_usemppbe`, `matpes_r2scan`, `omol` and `spice_wB97M`.
+
+- **Dispersion policy for every MACE head.** The head *is* the level of theory,
+  so each one gets its own row: D3 `xc=pbe` for `omat_pbe`,
+  `mp_pbe_refit_add` and `oc20_usemppbe`, `xc=r2scan` for `matpes_r2scan`, and a
+  refusal for `omol` (ωB97M-VV10 already carries nonlocal dispersion) and
+  `spice_wB97M` (ωB97M-D3(BJ) already includes D3). This follows the MH-1
+  authors, who evaluate their PBE-trained heads with torch-dftd D3(BJ) and the
+  PBE parametrisation and add nothing to the OMol head.
+
+  One row deliberately follows the model paper rather than the dataset:
+  `oc20_usemppbe` is described in the MH-1 paper as OC20 "computed at the PBE
+  level" and is referenced to MP's PBE data, while OC20 as published is RPBE —
+  which is what the SevenNet and UMA `oc20` rows use. Pass
+  `dispersion_xc="rpbe"` to follow the dataset convention instead.
+
+- **MACE on Apple Silicon: measured, and not supported.** Loading
+  `mace-mh-1.model` with `map_location="mps"` fails with `Cannot convert a MPS
+  Tensor to float64` — with `default_dtype="float32"` too, because the failure
+  is in the checkpoint's stored tensors, not the compute dtype. Same cause as
+  NequIP OAM. `device="mps"` raises, `device="auto"` resolves to CPU.
+
+- **`7net-omni-i8` and `7net-omni-i12` are selectable.**
+  `get_calculator("sevennet", model="7net-omni-i12", modal="mpa")`. They are the
+  Omni recipe at larger capacity, so the whole `modal` table applies unchanged
+  and the dispersion policy is shared. They are separate models, though, not
+  refinements of a `7net-omni` number: do not mix them inside one campaign.
+
 ## 0.4.0
 
 Adds control over the D3 damping function, corrects the OC25 dispersion entry,
