@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.5.1
+
+Gives the MACE backend a GPU accelerator setting, defaulting to `"auto"`.
+
+- **`get_calculator("mace", accelerator=...)`** selects cuequivariance /
+  openequivariance acceleration on CUDA: `"auto"` (default), `"cueq"`, `"oeq"`,
+  `"none"`. Until now the flags were only reachable by passing `enable_cueq=`
+  through `**kwargs`, undocumented, and with nothing to say when they went
+  wrong. `enable_cueq=` / `enable_oeq=` still work and are treated as a
+  deliberate choice.
+
+- **`"auto"` measures rather than asking whether the package imports**, because
+  the cheap question has been observed giving the wrong answer twice:
+
+  - On a Tesla V100 (sm_70) with cuequivariance 0.11.1, the import succeeds,
+    the calculator builds, and the *first energy evaluation* dies with
+    `cudaErrorNoKernelImageForDevice` — the wheels ship kernels for newer
+    architectures only. An import check would hand back a calculator that
+    explodes later, mid-run.
+  - [ACEsuit/mace#1298](https://github.com/ACEsuit/mace/issues/1298) reports
+    cuequivariance returning +5500 eV where the plain model returns -200 eV on
+    a multi-head checkpoint, raising nothing at all.
+
+  So `"auto"` builds both models, compares them on a two-atom cell built from
+  an element the checkpoint actually knows, and keeps the accelerated one only
+  when the energies agree to 1e-3 eV — generous next to float32 noise (~1e-6
+  eV), tight next to a 5700 eV error. Anything else falls back to the plain
+  model with a `RuntimeWarning` naming the cause. The cost is one extra model
+  build and two two-atom single points, and only when cuequivariance is
+  installed at all; otherwise `"auto"` does nothing.
+
+  Verified on a V100: `accelerator="auto"` warns, falls back, and returns
+  -3.74034995 eV for `bulk("Cu")` — matching CPU float64 to 1e-13 eV — while
+  `accelerator="cueq"` raises. The failed attempt does not poison the CUDA
+  context: the fallback calculator keeps returning correct energies, checked on
+  an 8-atom rattled supercell.
+
+- **Behaviour change on GPUs where cuequivariance works.** 0.5.0 never enabled
+  it; 0.5.1 does, when the probe agrees. Pass `accelerator="none"` to keep the
+  old behaviour exactly.
+
 ## 0.5.0
 
 Adds MACE — in a virtual environment of its own — and makes the larger SevenNet

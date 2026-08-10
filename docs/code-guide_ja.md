@@ -72,6 +72,24 @@ MACE-MH-1は1つのcheckpointに6つのheadを持ち、**headの選択がその�
 なおhead名は配布されている`mace-mh-1.model`から読み出した実際の一覧であり、
 model cardが載せている`rgd1_b3lyp`はこのcheckpointには存在しない。
 
+### GPUアクセラレータを`auto`が"測ってから"決める理由
+
+`accelerator="auto"`(既定)はCUDA上でcuequivarianceを使うが、
+**「importできるか」では判断しない**。実測で2回とも裏切られたためである。
+
+- Tesla V100(sm_70)ではimportもcalculatorの生成も成功し、**最初のenergy評価**で
+  `cudaErrorNoKernelImageForDevice`で落ちる。配布kernelが新しいarchのみのため。
+  import判定だと「走り始めてから壊れるcalculator」を返してしまう。
+- ACEsuit/mace#1298では、multi-head checkpointでcuequivarianceが
+  **例外を出さずに** -200 eVのところを+5500 eVで返す報告がある。
+
+そこでautoは両方のmodelを作り、2原子のcellで energy を突き合わせ、一致した場合だけ
+加速版を採用する。追加コストはmodel生成1回と2原子の1点計算2回で、
+cuequivarianceが入っていない環境では probe 自体を行わない。
+V100で実測したところ、autoは警告を出してfallbackし、`bulk("Cu")`で
+CPU float64と1e-13 eV以内で一致した。失敗後もCUDA contextは壊れず、
+fallbackしたcalculatorはそのまま正しい値を返すことも確認している。
+
 ## 分子系のcharge / spin
 
 分子系だけに必要な入力が2つある。系全体の**総電荷**と**スピン多重度**(`2S+1`)である。

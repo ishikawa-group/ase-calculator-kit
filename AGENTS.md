@@ -197,6 +197,17 @@ Three things make this go wrong, and all three have happened here:
 
 ## Known upstream quirks
 
+- **cuequivariance is not safe to enable on the strength of an import.**
+  Measured on a Tesla V100 (sm_70, cuequivariance 0.11.1, mace-torch 0.3.16):
+  the import succeeds, `MACECalculator` builds, and the *first energy
+  evaluation* raises `cudaErrorNoKernelImageForDevice` — the wheels ship
+  kernels for newer architectures only. Separately, ACEsuit/mace#1298 reports
+  cuequivariance returning +5500 eV against the plain model's -200 eV on a
+  multi-head checkpoint without raising at all. `accelerator="auto"` therefore
+  builds both models and compares them on a two-atom cell instead of trusting
+  either signal; do not "simplify" it back into an import check. The failed
+  attempt does not poison the CUDA context — the fallback calculator was
+  verified to keep returning correct energies afterwards.
 - **MACE accepts an unknown `head` and computes anyway.** `MACECalculator` logs
   `Head <x> not found in available heads [...], defaulting to the last head` and
   returns energies from that head — a typo yields a plausible number at the

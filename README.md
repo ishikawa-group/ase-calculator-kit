@@ -200,7 +200,7 @@ calculator.
 | `chgnet` | `model=None` (bundled default), `checkpoint=None` (path to a `.pth`) |
 | `mattersim` | `model="1M"` (or `"5M"`), `load_path=None` |
 | `nequip` | `model="L"` (`S`/`M`/`L`/`XL`), `model_path=None`, `compile_mode="eager"`, `neighborlist_backend="matscipy"`, `allow_tf32=False` |
-| `mace` | `model="mh-1"`, `head="omat_pbe"`, `default_dtype="float64"` |
+| `mace` | `model="mh-1"`, `head="omat_pbe"`, `default_dtype="float64"`, `accelerator="auto"` |
 | `uma` | `model="uma-s-1p2"`, `task="omat"` |
 
 ### DFT keyword arguments
@@ -571,6 +571,52 @@ The MH-1 checkpoint (~57 MB) is downloaded on first use and cached in
 `~/.cache/mace`. Its model card states an **ASL** license, which is not the MIT
 license of this package — check the model's own terms before using it in
 commercial work.
+
+### GPU acceleration (`accelerator=`)
+
+MACE can replace its equivariant tensor products with
+[cuequivariance](https://github.com/NVIDIA/cuEquivariance) or
+[openequivariance](https://github.com/PASSIONLab/OpenEquivariance) kernels on
+CUDA. `accelerator=` selects that, and defaults to `"auto"`:
+
+| `accelerator` | Behaviour |
+|---|---|
+| `"auto"` (default) | Use cuequivariance when it is installed **and** demonstrably correct on this GPU; otherwise fall back to the plain model with a `RuntimeWarning` |
+| `"cueq"` | Force cuequivariance. Errors are yours to see — no probe, no fallback |
+| `"oeq"` | Force openequivariance |
+| `"none"` | Plain model, probe included in what is skipped |
+
+```bash
+.venv-mace/bin/pip install "mace-torch[cueq,cueq-cuda-12]"
+```
+
+```python
+atoms.calc = get_calculator("mace")                       # auto
+atoms.calc = get_calculator("mace", accelerator="cueq")   # force it
+atoms.calc = get_calculator("mace", accelerator="none")   # never
+```
+
+**Why `"auto"` measures instead of asking "is it importable".** Both cheaper
+questions have been observed to give the wrong answer:
+
+- On a Tesla V100 (sm_70), cuequivariance 0.11 imports, the calculator builds,
+  and then the **first energy evaluation** dies with
+  `cudaErrorNoKernelImageForDevice` — the shipped kernels do not cover that
+  architecture. An import check would hand back a calculator that explodes
+  later, in the middle of a run.
+- [ACEsuit/mace#1298](https://github.com/ACEsuit/mace/issues/1298) reports
+  cuequivariance returning +5500 eV where the plain model returns −200 eV on a
+  multi-head checkpoint — **without raising at all**.
+
+So `"auto"` builds both models, compares them on a two-atom cell, and keeps the
+accelerated one only if the energies agree. The extra cost is one model build
+and two tiny single points, paid only when cuequivariance is installed; if it
+is not, `"auto"` is free. `enable_cueq=` / `enable_oeq=` can still be passed
+directly, and an explicit flag skips the probe.
+
+Measured on a V100 with cuequivariance 0.11.1 installed: `accelerator="auto"`
+warns, falls back, and returns −3.74034995 eV for `bulk("Cu")` — identical to
+CPU float64 to 1e-13 eV — while `accelerator="cueq"` raises.
 
 ## Development
 
