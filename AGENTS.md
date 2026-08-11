@@ -197,6 +197,28 @@ Three things make this go wrong, and all three have happened here:
 
 ## Known upstream quirks
 
+- **eSEN-30M-OMat cannot be added to the `uma` backend** (checked 2026-08-11, so
+  it does not get re-investigated). `esen_30m_omat.pt` lives in the gated repo
+  `facebook/OMAT24` and is a fairchem-core **1.x** checkpoint used through
+  `OCPCalculator`. fairchem-core 2.21 has no eSEN architecture
+  (`fairchem/core/models/` = allscaip, base, escaip, uma, utils) and
+  `pretrained_mlip.available_models` lists only UMA plus OMol25/OC25/ODAC eSEN
+  checkpoints. fairchem-core 1.10 pins `torch~=2.4`, `numpy<2` and
+  `requires-python <3.13`, so it needs its own environment exactly like MACE —
+  a deliberate decision, not a small addition. The OMat24 reference level is
+  already reachable through MACE `medium-omat-0` and SevenNet `7net-omat`.
+
+- **A variant selector that upstream ignores must never key the D3 table.**
+  sevenn accepts `modal=` on a single-fidelity model, warns
+  (`modal=... is ignored as model has no modal_map`), and drops it — so until
+  0.5.2 `model="7net-0", modal="matpes_r2scan"` computed a PBE model and then
+  added r2SCAN dispersion parameters. MACE has the mirror image: a head name a
+  single-head checkpoint does not have. Both now resolve through `"auto"`
+  (`_resolve_modal`, `_resolve_head`), the *resolved* value keys
+  `dispersion.py`, and an explicit selector the model cannot use is an error.
+  When adding a backend, ask what its variant selector does when the checkpoint
+  has no variants — silently ignored is the dangerous answer.
+
 - **cuequivariance is not safe to enable on the strength of an import.**
   Measured on a Tesla V100 (sm_70, cuequivariance 0.11.1, mace-torch 0.3.16):
   the import succeeds, `MACECalculator` builds, and the *first energy

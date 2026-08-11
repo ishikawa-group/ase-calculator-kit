@@ -204,6 +204,91 @@ def test_missing_mace_names_the_separate_environment(monkeypatch):
     assert "virtual environment" in message
 
 
+def test_single_head_model_needs_no_head_argument(monkeypatch):
+    """MACE-OMAT-0 is the point of head="auto": it carries only "Default"."""
+    seen: dict = {}
+    _install_fake_mace(monkeypatch, seen, available_heads=["Default"])
+
+    calc = get_calculator("mace", device="cpu", model="medium-omat-0")
+
+    assert "head" not in seen["kwargs"]
+    assert seen["kwargs"]["model"] == "medium-omat-0"
+    assert calc.kwargs["default_dtype"] == "float64"
+
+
+def test_multi_head_model_still_defaults_to_omat_pbe(monkeypatch):
+    seen: dict = {}
+    _install_fake_mace(monkeypatch, seen)
+
+    get_calculator("mace", device="cpu", model="mh-1")
+
+    assert seen["kwargs"]["head"] == "omat_pbe"
+
+
+def test_unlisted_model_sends_no_head(monkeypatch):
+    """MACE's own error lists the checkpoint's heads; do not pre-empt it."""
+    seen: dict = {}
+    _install_fake_mace(monkeypatch, seen, available_heads=["Default"])
+
+    get_calculator("mace", device="cpu", model="/some/local/model.model")
+
+    assert "head" not in seen["kwargs"]
+
+
+def test_explicit_head_still_wins_over_auto(monkeypatch):
+    seen: dict = {}
+    _install_fake_mace(monkeypatch, seen)
+
+    get_calculator("mace", device="cpu", model="mh-1", head="matpes_r2scan")
+
+    assert seen["kwargs"]["head"] == "matpes_r2scan"
+
+
+@pytest.mark.parametrize(
+    "model,expected_xc",
+    [
+        ("medium-omat-0", "pbe"),
+        ("small-omat-0", "pbe"),
+        ("medium-mpa-0", "pbe"),
+        ("mace-matpes-pbe-0", "pbe"),
+        ("mace-matpes-r2scan-0", "r2scan"),
+    ],
+)
+def test_single_head_models_key_the_dispersion_policy_by_model(
+    monkeypatch, model, expected_xc
+):
+    """With no head to key on, the checkpoint's own functional has to decide."""
+    seen: dict = {}
+    d3_kwargs: dict = {}
+    _install_fake_mace(monkeypatch, seen, available_heads=["Default"])
+
+    class FakeD3:
+        implemented_properties = ["energy"]
+
+        def __init__(self, **kwargs):
+            d3_kwargs.update(kwargs)
+
+    torch_dftd = types.ModuleType("torch_dftd")
+    module = types.ModuleType("torch_dftd.torch_dftd3_calculator")
+    module.TorchDFTD3Calculator = FakeD3
+    monkeypatch.setitem(sys.modules, "torch_dftd", torch_dftd)
+    monkeypatch.setitem(sys.modules, "torch_dftd.torch_dftd3_calculator", module)
+
+    get_calculator("mace", device="cpu", model=model, dispersion=True)
+
+    assert d3_kwargs["xc"] == expected_xc
+
+
+def test_unknown_model_keeps_dispersion_unverified(monkeypatch):
+    seen: dict = {}
+    _install_fake_mace(monkeypatch, seen, available_heads=["Default"])
+
+    with pytest.raises(DispersionError, match="not verified"):
+        get_calculator(
+            "mace", device="cpu", model="/some/local/model.model", dispersion=True
+        )
+
+
 def test_accelerator_auto_does_nothing_without_cuda(monkeypatch):
     seen: dict = {}
     _install_fake_mace(monkeypatch, seen, cuequivariance_installed=True)

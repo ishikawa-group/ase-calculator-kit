@@ -45,6 +45,32 @@ MH1_HEADS = (
 #: Multi-head checkpoints whose head names are known without downloading them.
 _KNOWN_HEADS: dict[str, tuple[str, ...]] = {"mh-1": MH1_HEADS}
 
+#: Which head ``head="auto"`` picks per checkpoint.
+#:
+#: A single-head checkpoint answers to one head named ``"Default"``, and passing
+#: it a head name from another model is not a no-op: MACE warns and computes
+#: with whatever head it does have. So the entry for those is ``None``, meaning
+#: "do not pass a head at all". Anything absent from this table — a local file,
+#: a URL, a checkpoint released after this version — also resolves to ``None``,
+#: which lets MACE raise its own error listing the heads it actually has.
+_DEFAULT_HEAD: dict[str, str | None] = {
+    "mh-1": "omat_pbe",
+    "small-omat-0": None,
+    "medium-omat-0": None,
+    "medium-mpa-0": None,
+    "mace-matpes-pbe-0": None,
+    "mace-matpes-r2scan-0": None,
+    "small": None,
+    "medium": None,
+    "large": None,
+    "small-0b": None,
+    "medium-0b": None,
+    "small-0b2": None,
+    "medium-0b2": None,
+    "large-0b2": None,
+    "medium-0b3": None,
+}
+
 _HEAD_FALLBACK_WARNING = (
     "MACE does not raise on an unknown head: it logs a warning and silently "
     "computes with the last head in the checkpoint, so the energy comes back "
@@ -66,6 +92,13 @@ _PROBE_ATOL_EV = 1e-3
 _PROBE_RTOL = 1e-5
 
 
+def _resolve_head(model: str | Path, head: str | None) -> str | None:
+    """Turn ``head="auto"`` into the head this checkpoint actually carries."""
+    if head != "auto":
+        return head
+    return _DEFAULT_HEAD.get(str(model))
+
+
 def _validate_known_head(model: str | Path, head: str | None) -> None:
     """Reject a head the selected checkpoint does not carry, before loading it."""
     known = _KNOWN_HEADS.get(str(model))
@@ -75,6 +108,18 @@ def _validate_known_head(model: str | Path, head: str | None) -> None:
         f"Unknown MACE head '{head}' for model '{model}'. "
         f"Use one of: {', '.join(known)}. {_HEAD_FALLBACK_WARNING}"
     )
+
+
+def _policy_key(model: str | Path, head: str | None) -> str:
+    """The dispersion-policy key: the head when there is one, else the model.
+
+    A head *is* a level of theory, so it keys the table whenever the checkpoint
+    has several. A single-head checkpoint has no such handle, and its functional
+    is a property of the model — MACE-OMAT-0 is PBE(+U), MACE-matpes-r2scan-0 is
+    r2SCAN — so the model name keys it instead. Neither known: no row, and D3 is
+    refused as unverified unless the caller passes an explicit ``dispersion_xc``.
+    """
+    return head if head is not None else str(model)
 
 
 def _resolve_accelerator(accelerator: str, kwargs: dict) -> str:
@@ -205,7 +250,7 @@ class MACEBackend(BaseBackend):
         *,
         device: str = "auto",
         model: str | Path = "mh-1",
-        head: str | None = "omat_pbe",
+        head: str | None = "auto",
         default_dtype: str = "float64",
         accelerator: str = "auto",
         dispersion: bool = False,
@@ -225,15 +270,34 @@ class MACEBackend(BaseBackend):
             ``default_dtype`` is ever applied — measured locally with both
             ``float32`` and ``float64``, so lowering the precision does not help.
         model:
-            MACE foundation model name or a local checkpoint path. Defaults to
-            ``"mh-1"`` (MACE-MH-1), the multi-head cross-learning model, which
-            is downloaded once and cached under ``~/.cache/mace``. Other names
-            accepted by ``mace_mp`` include ``"medium-mpa-0"``,
-            ``"medium-omat-0"``, ``"mace-matpes-pbe-0"`` and
-            ``"mace-matpes-r2scan-0"``.
+            MACE foundation model name or a local checkpoint path, downloaded
+            once and cached under ``~/.cache/mace``. Defaults to ``"mh-1"``
+            (MACE-MH-1), the multi-head cross-learning model.
+
+            ========================= =====================================
+            ``model``                 Trained on
+            ========================= =====================================
+            ``mh-1``                  Multi-head; see ``head`` (default)
+            ``medium-omat-0``         OMat24, PBE(+U) — MACE-OMAT-0
+            ``small-omat-0``          OMat24, smaller
+            ``medium-mpa-0``          MPtrj + sAlex, PBE(+U)
+            ``mace-matpes-pbe-0``     MatPES, PBE
+            ``mace-matpes-r2scan-0``  MatPES, r2SCAN
+            ========================= =====================================
+
+            These are upstream's own spellings and this package adds no
+            synonyms, so one model has exactly one name. Everything else
+            ``mace_mp`` accepts (``"small"``, ``"medium-0b3"``, a path, a URL)
+            works too; only the models above carry a dispersion policy.
+
+            MACE prints an Academic Software License (ASL) notice for the
+            omat-0 and matpes checkpoints — they are not MIT.
         head:
-            Which readout head of a multi-head checkpoint to evaluate. Each head
-            is a different *level of theory*, not a different accuracy setting:
+            Which readout head of a multi-head checkpoint to evaluate.
+            ``"auto"`` (default) picks ``omat_pbe`` for ``mh-1`` and passes no
+            head at all for the single-head checkpoints above, so selecting one
+            of them needs nothing else. Each head is a different *level of
+            theory*, not a different accuracy setting:
 
             ==================== ================================================
             ``head``             Trained on
@@ -247,11 +311,11 @@ class MACEBackend(BaseBackend):
             ``spice_wB97M``      SPICE-1; small to medium organic molecules
             ==================== ================================================
 
-            Pass ``head=None`` for a single-head checkpoint (MACE then picks its
-            own ``"Default"`` head). An unknown head is rejected here because
-            MACE itself does not reject it — it warns and falls back to the last
-            head in the file, which returns a plausible number from the wrong
-            level of theory.
+            ``head=None`` forces "no head", which is what ``"auto"`` resolves to
+            for a single-head checkpoint and what an unlisted one needs. An
+            unknown head is rejected here because MACE itself does not reject it
+            — it warns and falls back to the last head in the file, which
+            returns a plausible number from the wrong level of theory.
         default_dtype:
             ``"float64"`` (default, and what the MH-1 model card recommends —
             geometry optimisation and phonons need it) or ``"float32"`` for
@@ -294,12 +358,13 @@ class MACEBackend(BaseBackend):
             factor of two. Match the reference dataset when there is one --
             OC25, for example, is RPBE + D3 with zero damping.
         """
-        _validate_known_head(model, head)
+        resolved_head = _resolve_head(model, head)
+        _validate_known_head(model, resolved_head)
         resolved_accelerator = _resolve_accelerator(accelerator, kwargs)
 
         # Validate the dispersion policy before loading the model (fail fast).
         d3_xc = precheck_dispersion_xc(
-            self.name, head if head is not None else "default",
+            self.name, _policy_key(model, resolved_head),
             dispersion=dispersion, dispersion_xc=dispersion_xc,
             dispersion_damping=dispersion_damping,
         )
@@ -315,8 +380,8 @@ class MACEBackend(BaseBackend):
             "device": resolved_device,
             "default_dtype": default_dtype,
         }
-        if head is not None:
-            params["head"] = head
+        if resolved_head is not None:
+            params["head"] = resolved_head
         if resolved_accelerator in _ACCELERATOR_FLAG:
             params[_ACCELERATOR_FLAG[resolved_accelerator]] = True
         params.update(kwargs)
@@ -325,7 +390,7 @@ class MACEBackend(BaseBackend):
         bare = mace_mp(**params)
         if resolved_accelerator == "auto":
             bare = _autoselect_accelerator(mace_mp, params, bare)
-        _reject_silent_head_fallback(bare, head)
+        _reject_silent_head_fallback(bare, resolved_head)
 
         if d3_xc is not None:
             return wrap_with_d3(

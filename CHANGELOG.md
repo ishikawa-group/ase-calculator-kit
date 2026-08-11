@@ -1,5 +1,64 @@
 # Changelog
 
+## 0.5.2
+
+Makes the OMat24-trained variant of each backend selectable in one argument, and
+stops a variant selector the model ignores from choosing its D3 parameters.
+
+- **`get_calculator("mace", model="medium-omat-0")` (MACE-OMAT-0) now works.**
+  It is a single-head checkpoint, and `head=` defaulted to `"omat_pbe"`, so the
+  head guard added in 0.5.0 rejected it outright: the model was reachable only
+  by knowing to pass `head=None`. `head` now defaults to `"auto"`, which resolves
+  to `omat_pbe` for `mh-1` and to no head at all for the single-head checkpoints
+  (`medium-omat-0`, `small-omat-0`, `medium-mpa-0`, `mace-matpes-pbe-0`,
+  `mace-matpes-r2scan-0`, `small`/`medium`/`large`, …). An unlisted model or a
+  local path also sends no head, so MACE's own error — which lists the heads the
+  file actually has — is what a mismatch produces.
+
+- **`get_calculator("sevennet", model="7net-omat")` (SevenNet-omat) now works,**
+  likewise without a second argument: `modal` defaults to `"auto"`, sending
+  `mpa` to the multi-fidelity models (`7net-omni`, `-i8`, `-i12`,
+  `7net-mf-ompa`) and nothing to a single-fidelity one.
+
+- **Fixed: a modal the model ignores no longer picks the D3 functional.** sevenn
+  accepts `modal=` on a single-fidelity checkpoint, warns
+  (`modal=... is ignored as model has no modal_map`), and drops it — but this
+  package went on using it as the dispersion policy key. `model="7net-0",
+  modal="matpes_r2scan"` therefore computed a PBE model and added **r2SCAN** D3
+  parameters to it. The key is now the *resolved* modal, and an explicit modal a
+  single-fidelity model cannot use raises instead of being silently dropped.
+  MACE had the mirror image of the same defect (a head name the checkpoint does
+  not carry); both now resolve through `"auto"`.
+
+- **Dispersion policy rows for the single-variant checkpoints.** With no head or
+  modal to key on, the model name does it: MACE `medium-omat-0` / `small-omat-0`
+  and SevenNet `7net-omat` are OMat24 PBE(+U) → D3 `xc=pbe`; MACE
+  `medium-mpa-0` → `pbe`, `mace-matpes-pbe-0` → `pbe`,
+  `mace-matpes-r2scan-0` → `r2scan`. Models without a row keep falling back to
+  the previous behaviour (SevenNet's single-fidelity `default` row) or to the
+  unverified tier (MACE), so nothing that worked before changes verdict.
+
+  Verified on real weights, `bulk("Cu", "fcc", a=3.6)`: MACE `medium-omat-0`
+  −3.73953300 eV, SevenNet `7net-omat` −3.74727941 eV, against MACE
+  `mh-1`/`omat_pbe` −3.74034995 eV — three architectures at the same reference
+  level, within 8 meV, which is the cross-check that the right head/modal is
+  active. `dispersion=True` adds −0.590604 eV in each case, the same D3(BJ)/PBE
+  term.
+
+- **Compatibility.** `head="omat_pbe"` and `modal="mpa"` written out explicitly
+  keep working, and the defaults resolve to exactly what they were for
+  `mh-1` and `7net-omni`. The one behaviour change is the error above, which
+  replaces a silently wrong dispersion correction.
+
+- **Documented: eSEN-30M-OMat cannot join the `uma` backend.** It was
+  investigated for this release. `esen_30m_omat.pt` is a fairchem-core **1.x**
+  checkpoint (`OCPCalculator`) in the gated repo `facebook/OMAT24`; fairchem-core
+  2.x ships no eSEN architecture, and 1.10 pins `torch~=2.4`, `numpy<2` and
+  Python `<3.13`, so it would need a third isolated environment the way MACE
+  does. The finding is written down in the README and `AGENTS.md` rather than
+  left to be rediscovered. The same OMat24/PBE(+U) reference level is available
+  through MACE `medium-omat-0` and SevenNet `7net-omat`.
+
 ## 0.5.1
 
 Gives the MACE backend a GPU accelerator setting, defaulting to `"auto"`.

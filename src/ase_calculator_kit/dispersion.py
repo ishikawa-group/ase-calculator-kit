@@ -88,6 +88,13 @@ _POLICIES: dict[tuple[str, str], DispersionPolicy] = {
         "ωB97M-D3(BJ)", "SPICE-1 is computed at ωB97M-D3(BJ), so D3(BJ) is "
         "already in the reference data"
     ),
+    # Single-head MACE checkpoints have no head to key on, so the model name
+    # does it: for these the functional is a property of the whole model.
+    ("mace", "medium-omat-0"): _allowed("PBE(+U)", "pbe"),
+    ("mace", "small-omat-0"): _allowed("PBE(+U)", "pbe"),
+    ("mace", "medium-mpa-0"): _allowed("PBE(+U)", "pbe"),
+    ("mace", "mace-matpes-pbe-0"): _allowed("PBE", "pbe"),
+    ("mace", "mace-matpes-r2scan-0"): _allowed("r2SCAN", "r2scan"),
     # MatterSim and NequIP OAM use PBE-level materials reference data.
     ("mattersim", "1M"): _allowed("PBE", "pbe"),
     ("mattersim", "5M"): _allowed("PBE", "pbe"),
@@ -108,6 +115,9 @@ _POLICIES: dict[tuple[str, str], DispersionPolicy] = {
     ("sevennet", "oc22"): _allowed("PBE(+U)", "pbe"),
     ("sevennet", "pet_mad"): _allowed("PBEsol", "pbesol"),
     ("sevennet", "default"): _allowed("PBE", "pbe"),
+    # Single-fidelity checkpoints take no modal, so the model name keys them.
+    ("sevennet", "7net-omat"): _allowed("PBE(+U)", "pbe"),
+    ("sevennet", "sevennet-omat"): _allowed("PBE(+U)", "pbe"),
     ("sevennet", "omol25_low"): _included(
         "ωB97M-V", "the OMol25 modal already includes nonlocal VV10 dispersion"
     ),

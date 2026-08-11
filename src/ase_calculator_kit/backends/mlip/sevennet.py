@@ -5,9 +5,71 @@ from __future__ import annotations
 from ase.calculators.calculator import Calculator
 
 from ...device import resolve_device
-from ...dispersion import precheck_dispersion_xc, wrap_with_d3
+from ...dispersion import get_dispersion_policy, precheck_dispersion_xc, wrap_with_d3
 from ...errors import MissingDependencyError
 from ..base import BaseBackend
+
+#: Pretrained keywords that carry a modal map, and the modal to use by default.
+#:
+#: sevenn accepts both the ``7net-`` and ``sevennet-`` spellings for each of
+#: these (``sevenn.util.pretrained_name_to_path``), so both are listed.
+_MULTI_FIDELITY_DEFAULT_MODAL = "mpa"
+#: ``7net-mf-0`` is deliberately absent: it is multi-fidelity, but its modal
+#: names are not verified here, and guessing ``mpa`` for it would be exactly the
+#: kind of unchecked assumption this table exists to avoid. Left unlisted, it
+#: gets no modal and sevenn answers with its own list of the real ones.
+_MULTI_FIDELITY_MODELS = frozenset(
+    f"{prefix}-{name}"
+    for prefix in ("7net", "sevennet")
+    for name in ("omni", "omni-i8", "omni-i12", "mf-ompa")
+)
+
+#: Pretrained keywords with no modal map. sevenn does not reject a ``modal`` for
+#: these — it warns and drops it (``calculator.py``: "modal=... is ignored as
+#: model has no modal_map") — which is exactly why this package has to know:
+#: a dropped modal must not go on to choose the model's D3 parameters.
+_SINGLE_FIDELITY_MODELS = frozenset(
+    f"{prefix}-{name}"
+    for prefix in ("7net", "sevennet")
+    for name in (
+        "omat", "0", "0_11Jul2024", "0_22May2024", "l3i5",
+        "nano-4.5", "nano-5.0", "nano-5.5", "nano-6.0",
+    )
+)
+
+
+def _resolve_modal(model: str, modal: str | None) -> str | None:
+    """Turn ``modal="auto"`` into the modal this checkpoint can actually use."""
+    if modal != "auto":
+        if modal is not None and model in _SINGLE_FIDELITY_MODELS:
+            raise ValueError(
+                f"SevenNet model '{model}' is single-fidelity and takes no "
+                f"modal, but modal={modal!r} was given. sevenn would drop it "
+                "with a warning and this package would still have used it to "
+                "pick the D3 functional. Pass modal=None (or leave the default "
+                "modal='auto')."
+            )
+        return modal
+    if model in _MULTI_FIDELITY_MODELS:
+        return _MULTI_FIDELITY_DEFAULT_MODAL
+    # Unknown keyword: send no modal, so a multi-fidelity model released after
+    # this version answers with sevenn's own "modal argument missing (avail:
+    # [...])" instead of being handed a guess.
+    return None
+
+
+def _policy_key(model: str, modal: str | None) -> str:
+    """The dispersion-policy key: the effective modal, else the model itself.
+
+    With no modal there is nothing but the checkpoint to go on, so a model with
+    its own row uses it (``7net-omat`` is OMat24, not MPtrj) and everything else
+    falls back to the single-fidelity ``"default"`` row as before.
+    """
+    if modal is not None:
+        return modal
+    if get_dispersion_policy("sevennet", model) is not None:
+        return model
+    return "default"
 
 
 class SevenNetBackend(BaseBackend):
@@ -18,7 +80,7 @@ class SevenNetBackend(BaseBackend):
         *,
         device: str = "auto",
         model: str = "7net-omni",
-        modal: str | None = "mpa",
+        modal: str | None = "auto",
         enable_cueq: bool = False,
         enable_flash: bool = False,
         dispersion: bool = False,
@@ -47,14 +109,25 @@ class SevenNetBackend(BaseBackend):
             ``7net-omni-i12`` Largest of the family
             ================= ===============================================
 
-            Other options include ``"7net-mf-ompa"``, ``"7net-omat"``,
-            ``"7net-l3i5"`` and ``"7net-0"``. Keep the model fixed across a
-            campaign: i8 and i12 are not drop-in refinements of an ``omni``
-            number, they are separate models.
+            Beyond the Omni family, ``"7net-mf-ompa"`` is the other
+            multi-fidelity model, while ``"7net-omat"`` (OMat24-only, PBE(+U)),
+            ``"7net-l3i5"``, ``"7net-0"`` and the ``"7net-nano-*"`` models are
+            single-fidelity and take no ``modal`` — ``modal="auto"`` handles
+            that for you. Keep the model fixed across a campaign: i8 and i12 are
+            not drop-in refinements of an ``omni`` number, they are separate
+            models. sevenn's ``sevennet-`` spellings work too.
         modal:
-            Inference task for the multi-fidelity models ``7net-omni`` (all
-            three capacities) and ``7net-mf-ompa``. Set to ``None`` for
-            single-fidelity models such as ``7net-0`` (which reject ``modal``).
+            Inference task for the multi-fidelity models. ``"auto"`` (the
+            default) sends ``"mpa"`` to the Omni family and ``7net-mf-ompa``,
+            and nothing at all to a single-fidelity model, so
+            ``model="7net-omat"`` needs no second argument.
+
+            Passing an explicit ``modal`` to a single-fidelity model raises.
+            That is deliberate: sevenn only *warns* and drops it, and this
+            package would otherwise have gone on to pick the D3 functional from
+            a modal the model never saw — ``model="7net-0",
+            modal="matpes_r2scan"`` would have applied r2SCAN parameters to a
+            PBE model.
 
             Choosing ``modal`` for ``7net-omni``:
 
@@ -106,9 +179,11 @@ class SevenNetBackend(BaseBackend):
             factor of two. Match the reference dataset when there is one --
             OC25, for example, is RPBE + D3 with zero damping.
         """
+        resolved_modal = _resolve_modal(model, modal)
+
         # Validate the dispersion policy before loading the model (fail fast).
         d3_xc = precheck_dispersion_xc(
-            self.name, modal if modal is not None else "default",
+            self.name, _policy_key(model, resolved_modal),
             dispersion=dispersion, dispersion_xc=dispersion_xc,
             dispersion_damping=dispersion_damping,
         )
@@ -125,8 +200,8 @@ class SevenNetBackend(BaseBackend):
             "enable_cueq": enable_cueq,
             "enable_flash": enable_flash,
         }
-        if modal is not None:
-            params["modal"] = modal
+        if resolved_modal is not None:
+            params["modal"] = resolved_modal
         params.update(kwargs)
         bare = SevenNetCalculator(**params)
 

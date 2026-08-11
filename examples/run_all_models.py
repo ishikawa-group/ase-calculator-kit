@@ -72,6 +72,8 @@ VARIANTS = [
     # Same recipe, larger capacity: the modal table is unchanged for i8 / i12.
     ("sevennet 7net-omni-i8/mpa", "sevennet", {"model": "7net-omni-i8", "modal": "mpa"}, make_bulk),
     ("sevennet 7net-omni-i12/mpa", "sevennet", {"model": "7net-omni-i12", "modal": "mpa"}, make_bulk),
+    # Single-fidelity: no modal, resolved by modal="auto".
+    ("sevennet 7net-omat", "sevennet", {"model": "7net-omat"}, make_bulk),
     # MACE runs only from its own environment (see the module docstring), where
     # every other line here reports SKIPPED — and vice versa.
     ("mace mh-1/omat_pbe", "mace", {"head": "omat_pbe"}, make_bulk),
@@ -80,6 +82,8 @@ VARIANTS = [
     ("mace mh-1/matpes_r2scan", "mace", {"head": "matpes_r2scan"}, make_bulk),
     ("mace mh-1/omol", "mace", {"head": "omol"}, make_molecule),
     ("mace mh-1/spice_wB97M", "mace", {"head": "spice_wB97M"}, make_molecule),
+    # Single-head: no head, resolved by head="auto".
+    ("mace medium-omat-0", "mace", {"model": "medium-omat-0"}, make_bulk),
     ("mattersim 1M", "mattersim", {"model": "1M"}, make_bulk),
     ("mattersim 5M", "mattersim", {"model": "5M"}, make_bulk),
     ("nequip OAM-S", "nequip", {"model": "S"}, make_bulk),

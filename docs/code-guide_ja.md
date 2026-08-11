@@ -39,6 +39,13 @@ YAMLで明示します。最終的に使われた条件は`write_resolved_config
   例えばSevenNetの`omol25_low`/`omol25_high`は精度の高低ではなく、低スピン系と
   高スピン系という**スピン状態での分割**である。MACE-MH-1のheadも同様に、
   PBE / r2SCAN / ωB97Mという参照レベルそのものを選んでいる。
+- **上流が黙って無視する引数を、D3の汎関数選択に使ってはいけない。** sevennは
+  単一fidelityのmodelに`modal`を渡しても警告だけ出して捨てるため、0.5.2以前は
+  `model="7net-0", modal="matpes_r2scan"`がPBEのmodelにr2SCANのD3を足していた。
+  MACEのheadも同じ形の罠である。現在はどちらも`"auto"`で解決し、
+  **解決後の値**をpolicy keyに使い、その checkpoint が使えない選択肢を明示的に
+  渡した場合はエラーにしている。単一head/単一fidelityのmodel
+  (`medium-omat-0`, `7net-omat`など)はmodel名そのものがkeyになる。
 - 逆にSevenNetの`7net-omni` / `-i8` / `-i12`は同じ学習レシピの容量違いであり、
   参照レベルは変わらない(`modal`の表はそのまま使える)。ただし別modelなので、
   1つの計算キャンペーン内で混ぜるとエネルギーの比較ができない。

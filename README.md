@@ -196,11 +196,11 @@ calculator.
 
 | `name` | Backend-specific keywords (defaults) |
 |---|---|
-| `sevennet` | `model="7net-omni"`, `modal="mpa"`, `enable_cueq=False`, `enable_flash=False` |
+| `sevennet` | `model="7net-omni"`, `modal="auto"`, `enable_cueq=False`, `enable_flash=False` |
 | `chgnet` | `model=None` (bundled default), `checkpoint=None` (path to a `.pth`) |
 | `mattersim` | `model="1M"` (or `"5M"`), `load_path=None` |
 | `nequip` | `model="L"` (`S`/`M`/`L`/`XL`), `model_path=None`, `compile_mode="eager"`, `neighborlist_backend="matscipy"`, `allow_tf32=False` |
-| `mace` | `model="mh-1"`, `head="omat_pbe"`, `default_dtype="float64"`, `accelerator="auto"` |
+| `mace` | `model="mh-1"`, `head="auto"`, `default_dtype="float64"`, `accelerator="auto"` |
 | `uma` | `model="uma-s-1p2"`, `task="omat"` |
 
 ### DFT keyword arguments
@@ -289,22 +289,32 @@ Silicon when no CUDA device is present. NequIP, MACE and UMA accept only
 
 ### SevenNet `model`
 
-The Omni family is one training recipe at three capacities, so everything in the
-`modal` table below applies unchanged to all three:
-
-| `model` | Use for |
-|---|---|
-| `7net-omni` (default) | Recommended general model |
-| `7net-omni-i8` | Larger capacity: more accurate, slower |
-| `7net-omni-i12` | Largest of the family |
+| `model` | Fidelity | Use for |
+|---|---|---|
+| `7net-omni` (default) | multi | Recommended general model |
+| `7net-omni-i8` | multi | Larger capacity: more accurate, slower |
+| `7net-omni-i12` | multi | Largest of the family |
+| `7net-mf-ompa` | multi | MPtrj + sAlex + OMat24 multi-fidelity |
+| `7net-omat` | single | **OMat24 only, PBE(+U)** — SevenNet-omat |
+| `7net-l3i5`, `7net-0` | single | Earlier models |
 
 ```python
-atoms.calc = get_calculator("sevennet", model="7net-omni-i12", modal="mpa")
+atoms.calc = get_calculator("sevennet", model="7net-omni-i12")  # modal="mpa"
+atoms.calc = get_calculator("sevennet", model="7net-omat")      # no modal
 ```
 
-Keep the model fixed across a campaign — i8 and i12 are separate models, not
-refinements of an `7net-omni` number, so energies are not comparable between
-them.
+The Omni family is one training recipe at three capacities, so the `modal` table
+below applies unchanged to all three. Keep the model fixed across a campaign —
+i8 and i12 are separate models, not refinements of an `7net-omni` number, so
+energies are not comparable between them.
+
+**Multi- vs single-fidelity is handled for you.** `modal` defaults to `"auto"`,
+which sends `mpa` to a multi-fidelity model and nothing at all to a
+single-fidelity one, so `model="7net-omat"` needs no second argument. Passing an
+explicit `modal` to a single-fidelity model now raises: sevenn only *warns* and
+drops it, and the dropped modal was still being used to pick the D3 functional —
+`model="7net-0", modal="matpes_r2scan"` used to apply r2SCAN dispersion
+parameters to a PBE model.
 
 ### SevenNet `modal`
 
@@ -349,11 +359,31 @@ NequIP. To avoid a download, pass `model_path="path/to/model.nequip.zip"`.
 `1M` (default) is for fast screening, `5M` is more accurate. Keep the checkpoint
 fixed across a campaign.
 
-### MACE `head`
+### MACE `model` and `head`
 
-MACE-MH-1 (`model="mh-1"`, the default) is a single checkpoint with six readout
-heads. The head *is* the level of theory, not an accuracy setting: the same
-structure returns PBE, r2SCAN or ωB97M energies depending on which one you pick.
+| `model` | Heads | Trained on |
+|---|---|---|
+| `mh-1` (default) | 6, see below | Multi-head cross-learning |
+| `medium-omat-0` | single | **OMat24, PBE(+U)** — MACE-OMAT-0 |
+| `small-omat-0` | single | OMat24, smaller |
+| `medium-mpa-0` | single | MPtrj + sAlex, PBE(+U) |
+| `mace-matpes-pbe-0` | single | MatPES, PBE |
+| `mace-matpes-r2scan-0` | single | MatPES, r2SCAN |
+
+```python
+atoms.calc = get_calculator("mace")                            # mh-1 / omat_pbe
+atoms.calc = get_calculator("mace", model="medium-omat-0")     # no head needed
+```
+
+`head` defaults to `"auto"`: `omat_pbe` for `mh-1`, and no head at all for the
+single-head checkpoints above (they carry one head named `Default`, and handing
+them a head name from another model makes MACE quietly compute with the head it
+does have). The omat-0 and matpes checkpoints are released under the **ASL**
+license, not MIT — MACE prints a notice when it downloads one.
+
+MACE-MH-1 is a single checkpoint with six readout heads. The head *is* the level
+of theory, not an accuracy setting: the same structure returns PBE, r2SCAN or
+ωB97M energies depending on which one you pick.
 
 | `head` | Use for | Reference level |
 |---|---|---|
@@ -395,6 +425,28 @@ Two things worth knowing before trusting a number from this model:
 For the molecular task (`omol`), set `atoms.info["charge"]` and
 `atoms.info["spin"]` before computing — see
 [Molecular systems](#molecular-systems-charge-and-spin) for why this matters.
+
+### eSEN-30M-OMat is not available through this package
+
+`eSEN-30M-OMat` is an OMat24-trained fairchem model, so it looks like it should
+sit next to UMA here. It does not, and the reason is structural rather than an
+oversight:
+
+- the checkpoint (`esen_30m_omat.pt`, in the gated repo
+  [`facebook/OMAT24`](https://huggingface.co/facebook/OMAT24)) is a
+  **fairchem-core 1.x** artefact, loaded with `OCPCalculator(checkpoint_path=…)`;
+- fairchem-core 2.x — what the `uma` extra installs — ships no eSEN
+  architecture, and `pretrained_mlip.available_models` lists only UMA plus the
+  OMol25 / OC25 / ODAC eSEN checkpoints, none of them OMat24;
+- fairchem-core 1.10 requires `torch~=2.4`, `numpy<2` and Python `<3.13`, so it
+  cannot share an environment with the 2.x line, with MACE, or with much else.
+
+Supporting it would mean a third isolated environment, as MACE has. If you need
+it today, install `fairchem-core<2` separately and use its own `OCPCalculator`.
+For an OMat24-level model inside this package, use
+`get_calculator("mace", model="medium-omat-0")` or
+`get_calculator("sevennet", model="7net-omat")` — same dataset, same PBE(+U)
+reference level.
 
 ## Molecular systems (charge and spin)
 

@@ -25,6 +25,10 @@ interaction and give wrong energies. So such models reject `dispersion=True`.
 | **MACE** `matpes_r2scan` | MatPES | r2SCAN (no Hubbard U) | ✗ none | ✅ allowed — D3 `xc=r2scan` |
 | **MACE** `omol` | OMol25 (1% subsample) | ωB97M-VV10 | ✓ yes (VV10 nonlocal) | ⛔ error (double-counting) |
 | **MACE** `spice_wB97M` | SPICE-1 | ωB97M-D3(BJ) | ✓ yes (D3(BJ) included) | ⛔ error (double-counting) |
+| **MACE** `medium-omat-0` / `small-omat-0` (MACE-OMAT-0) | OMat24 | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **MACE** `medium-mpa-0` | MPtrj + sAlex | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **MACE** `mace-matpes-pbe-0` | MatPES | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **MACE** `mace-matpes-r2scan-0` | MatPES | r2SCAN | ✗ none | ✅ allowed — D3 `xc=r2scan` |
 | **MatterSim** `default` / `1M` / `5M` | MatterSim set (MPtrj + T/P-sampled structures) | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **NequIP OAM** `S` / `M` / `L` / `XL` | OMat24 pre-training + sAlex / MPTrj fine-tuning | PBE(+U)-level materials data | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `mpa` | MPtrj + sAlex | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
@@ -33,6 +37,7 @@ interaction and give wrong energies. So such models reject `dispersion=True`.
 | **SevenNet** `oc20` | OC20 | RPBE | ✗ none | ✅ allowed — D3 `xc=rpbe` |
 | **SevenNet** `oc22` | OC22 | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `default` (single-fidelity, e.g. 7net-0) | MPtrj etc. | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **SevenNet** `7net-omat` / `sevennet-omat` (single-fidelity) | OMat24 | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `matpes_r2scan` | MatPES | r2SCAN | ✗ none | ✅ allowed — D3 `xc=r2scan` |
 | **SevenNet** `mp_r2scan` | Materials Project r2SCAN | r2SCAN | ✗ none | ✅ allowed — D3 `xc=r2scan` |
 | **SevenNet** `pet_mad` | MAD | PBEsol | ✗ none | ✅ allowed — D3 `xc=pbesol` |
@@ -77,6 +82,12 @@ future upstream release, for instance — lands there and is refused by default.
   does **not** reject an unknown head — it logs a warning and quietly computes
   with the last head in the file — so `get_calculator("mace", head=...)`
   validates the name itself and raises instead.
+- **Single-head MACE checkpoints are keyed by model, not head.** MACE-OMAT-0 and
+  friends carry one head called `Default`, so there is nothing to select and the
+  functional is a property of the whole checkpoint. `head="auto"` (the default)
+  passes no head for those, and the model name keys the rows above. The same
+  applies to **SevenNet** single-fidelity models such as `7net-omat`, which take
+  no `modal`.
 - **MACE and D3.** The MH-1 authors evaluate their PBE-trained heads with
   torch-dftd D3(BJ) using the PBE parametrisation and run the OMol head with no
   added dispersion ([arXiv:2510.25380](https://arxiv.org/abs/2510.25380),

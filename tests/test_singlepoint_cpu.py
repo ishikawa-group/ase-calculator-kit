@@ -64,6 +64,8 @@ CASES = [
     ("sevennet-omol25_high", "sevennet", {"modal": "omol25_high"}, _molecule),
     ("sevennet-omni-i8", "sevennet", {"model": "7net-omni-i8", "modal": "mpa"}, _bulk),
     ("sevennet-omni-i12", "sevennet", {"model": "7net-omni-i12", "modal": "mpa"}, _bulk),
+    # Single-fidelity: modal="auto" has to send no modal at all for this to run.
+    ("sevennet-omat", "sevennet", {"model": "7net-omat"}, _bulk),
     # MACE only ever runs from its own environment (e3nn 0.4.4 vs >=0.5), where
     # every other case here skips as "backend not installed" — and vice versa.
     ("mace-mh-1-omat_pbe", "mace", {"head": "omat_pbe"}, _bulk),
@@ -72,6 +74,8 @@ CASES = [
     ("mace-mh-1-matpes_r2scan", "mace", {"head": "matpes_r2scan"}, _bulk),
     ("mace-mh-1-omol", "mace", {"head": "omol"}, _molecule),
     ("mace-mh-1-spice_wB97M", "mace", {"head": "spice_wB97M"}, _molecule),
+    # Single-head: head="auto" has to send no head at all for this to run.
+    ("mace-omat-0", "mace", {"model": "medium-omat-0"}, _bulk),
     ("mattersim-1M", "mattersim", {"model": "1M"}, _bulk),
     ("mattersim-5M", "mattersim", {"model": "5M"}, _bulk),
     ("nequip-OAM-S", "nequip", {"model": "S"}, _bulk),
