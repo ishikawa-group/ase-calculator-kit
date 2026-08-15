@@ -217,3 +217,112 @@ def test_damping_reaches_torch_dftd(monkeypatch):
 
     assert seen["damping"] == "zero"
     assert seen["xc"] == "rpbe"
+
+
+def _fake_d3_kwargs(monkeypatch, **call_kwargs):
+    """Build a SevenNet calculator against fakes and return the D3 kwargs."""
+    import sys
+    import types
+
+    seen = {}
+
+    class FakeD3:
+        implemented_properties = ["energy"]
+
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+
+    class FakeSevenNetCalculator:
+        implemented_properties = ["energy"]
+
+        def __init__(self, **kwargs):
+            pass
+
+    sevenn = types.ModuleType("sevenn")
+    calculator = types.ModuleType("sevenn.calculator")
+    calculator.SevenNetCalculator = FakeSevenNetCalculator
+    torch_dftd = types.ModuleType("torch_dftd")
+    module = types.ModuleType("torch_dftd.torch_dftd3_calculator")
+    module.TorchDFTD3Calculator = FakeD3
+
+    monkeypatch.setitem(sys.modules, "sevenn", sevenn)
+    monkeypatch.setitem(sys.modules, "sevenn.calculator", calculator)
+    monkeypatch.setitem(sys.modules, "torch_dftd", torch_dftd)
+    monkeypatch.setitem(sys.modules, "torch_dftd.torch_dftd3_calculator", module)
+
+    get_calculator("sevennet", device="cpu", dispersion=True, **call_kwargs)
+    return seen
+
+
+def test_d3_numerics_default_to_pfp_not_torch_dftd(monkeypatch):
+    """The whole point of 0.5.3: an unqualified dispersion=True must be PFP's.
+
+    torch-dftd's own defaults are 95 Bohr (50.3 A) and no smoothing. Comparing
+    an NNP+D3 against PFP+D3 with those in place compares two different
+    dispersion terms on top of the model difference we mean to measure.
+    """
+    seen = _fake_d3_kwargs(monkeypatch)
+
+    assert seen["cutoff"] == 14.0
+    assert seen["cutoff_smoothing"] == "poly"
+
+
+def test_torch_dftd_defaults_can_be_restored(monkeypatch):
+    """Reproducing a dataset built on torch-dftd's defaults stays possible."""
+    seen = _fake_d3_kwargs(
+        monkeypatch, dispersion_cutoff=50.3, dispersion_cutoff_smoothing="none",
+    )
+
+    assert seen["cutoff"] == 50.3
+    assert seen["cutoff_smoothing"] == "none"
+
+
+def test_cutoff_defaults_to_pfps_14_angstrom():
+    from ase_calculator_kit.dispersion import resolve_dispersion_cutoff
+
+    assert resolve_dispersion_cutoff(None) == 14.0
+
+
+def test_cutoff_smoothing_defaults_to_poly():
+    from ase_calculator_kit.dispersion import resolve_dispersion_cutoff_smoothing
+
+    assert resolve_dispersion_cutoff_smoothing(None) == "poly"
+
+
+def test_cutoff_smoothing_none_is_accepted():
+    """PFP v6.0.0 and earlier, and torch-dftd's own default."""
+    from ase_calculator_kit.dispersion import resolve_dispersion_cutoff_smoothing
+
+    assert resolve_dispersion_cutoff_smoothing("none") == "none"
+
+
+def test_unknown_cutoff_smoothing_is_refused():
+    from ase_calculator_kit.dispersion import resolve_dispersion_cutoff_smoothing
+
+    with pytest.raises(DispersionError, match="dispersion_cutoff_smoothing"):
+        resolve_dispersion_cutoff_smoothing("polynomial")
+
+
+@pytest.mark.parametrize("bad", [0, -1.0, "far"])
+def test_a_cutoff_that_is_not_a_positive_distance_is_refused(bad):
+    from ase_calculator_kit.dispersion import resolve_dispersion_cutoff
+
+    with pytest.raises(DispersionError, match="dispersion_cutoff"):
+        resolve_dispersion_cutoff(bad)
+
+
+def test_cutoff_is_validated_before_the_model_is_built():
+    with pytest.raises(DispersionError, match="dispersion_cutoff"):
+        precheck_dispersion_xc(
+            "sevennet", "mpa",
+            dispersion=True, dispersion_xc=None, dispersion_cutoff=-1,
+        )
+
+
+def test_cutoff_smoothing_is_validated_before_the_model_is_built():
+    with pytest.raises(DispersionError, match="dispersion_cutoff_smoothing"):
+        precheck_dispersion_xc(
+            "sevennet", "mpa",
+            dispersion=True, dispersion_xc=None,
+            dispersion_cutoff_smoothing="polynomial",
+        )

@@ -49,6 +49,8 @@ class NequIPBackend(BaseBackend):
         dispersion: bool = False,
         dispersion_xc: str | None = None,
         dispersion_damping: str | None = None,
+        dispersion_cutoff: float | None = None,
+        dispersion_cutoff_smoothing: str | None = None,
         **kwargs,
     ) -> Calculator:
         """Create a NequIP ASE calculator for one of the OAM foundation models.
@@ -85,6 +87,11 @@ class NequIPBackend(BaseBackend):
             coefficients, so for RPBE the two dampings differ by roughly a
             factor of two. Match the reference dataset when there is one --
             OC25, for example, is RPBE + D3 with zero damping.
+        dispersion_cutoff, dispersion_cutoff_smoothing:
+            The D3 term's numerical settings. They default to PFP's 14 Å
+            and ``"poly"``, not torch-dftd's own 50.3 Å and ``"none"``,
+            so that the correction added here is the same quantity PFP
+            adds. See ``ase_calculator_kit.dispersion.DEFAULT_CUTOFF``.
         """
         normalized_model = _normalized_model_size(model)
 
@@ -95,6 +102,8 @@ class NequIPBackend(BaseBackend):
             dispersion=dispersion,
             dispersion_xc=dispersion_xc,
             dispersion_damping=dispersion_damping,
+            dispersion_cutoff=dispersion_cutoff,
+            dispersion_cutoff_smoothing=dispersion_cutoff_smoothing,
         )
         resolved_device = resolve_device(device)
 
@@ -118,5 +127,7 @@ class NequIPBackend(BaseBackend):
             return wrap_with_d3(
                 bare, xc=d3_xc, device=resolved_device,
                 damping=dispersion_damping,
+                cutoff=dispersion_cutoff,
+                cutoff_smoothing=dispersion_cutoff_smoothing,
             )
         return bare

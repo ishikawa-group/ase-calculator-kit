@@ -8,8 +8,8 @@ abstract: >-
   standard ase.Calculator, so the rest of an ASE workflow stays unchanged.
 type: software
 license: MIT
-version: 0.5.2
-date-released: "2026-08-11"
+version: 0.5.3
+date-released: "2026-08-15"
 repository-code: "https://github.com/ishikawa-group/ase-calculator-kit"
 url: "https://github.com/ishikawa-group/ase-calculator-kit"
 keywords:

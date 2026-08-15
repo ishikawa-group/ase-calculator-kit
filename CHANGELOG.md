@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.5.3
+
+Aligns the D3 correction's numerical settings with PFP's, so that the dispersion
+term added to an NNP energy here is the same quantity PFP adds to its own.
+
+- **`dispersion=True` now runs torch-dftd at `cutoff=14.0` Å with
+  `cutoff_smoothing="poly"`,** rather than torch-dftd's defaults of 95 Bohr
+  (50.3 Å) and no smoothing. **This changes energies** — recompute anything you
+  intend to compare against results from 0.5.2 or earlier.
+
+  The point is comparability. This package exists to put models side by side,
+  and PFP is one of the models being compared; with torch-dftd's defaults in
+  place, "SevenNet + D3" and "PFP + D3" carried *different dispersion terms*, so
+  the difference between them was not only the difference between the models.
+
+  The settings are PFP v7.0.0+'s, and Matlantis published the validation behind
+  them: over the Wellendorff adsorption benchmark the shorter cutoff moves
+  adsorption energies by an MAE of 0.0024 eV — negligible against the 0.01 eV
+  scale those numbers are discussed at — and leaves the 90th percentile of the
+  COD unit-cell-volume error unchanged, while raising the reachable system size
+  from about 5000 atoms to roughly three times that. `cutoff_smoothing="none"`
+  was a bug on PFP's side, fixed in v7.0.0; it leaves the force discontinuous at
+  the cutoff radius, which is where a relaxation or an MD run meets it.
+
+- **`dispersion_cutoff=` and `dispersion_cutoff_smoothing=` are new keywords**
+  on every MLIP backend, so the previous behaviour — and any dataset built on
+  it — stays reproducible with
+  `dispersion_cutoff=50.3, dispersion_cutoff_smoothing="none"`. Like
+  `dispersion_damping`, both are validated in `precheck_dispersion_xc()` before
+  the checkpoint is downloaded.
+
+- `cnthr`, the coordination-number cutoff, is deliberately left at torch-dftd's
+  own default of 40 Bohr. torch-dftd clamps it to `cutoff` when it is larger and
+  warns that it did, so at 14 Å the effective value is 14 Å — the same clamp
+  PFP's stack goes through. Pinning it here would silently change what a caller
+  who *raises* `cutoff` gets.
+
 ## 0.5.2
 
 Makes the OMat24-trained variant of each backend selectable in one argument, and

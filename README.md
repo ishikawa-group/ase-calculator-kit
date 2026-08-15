@@ -191,8 +191,9 @@ An unknown name raises `ValueError` listing the valid names.
 
 All MLIP backends accept `device=` (`"auto"` by default; see
 [Apple Silicon (MPS) support](#apple-silicon-mps-support)), `dispersion=False`,
-`dispersion_xc=None`, and forward any extra keywords to the underlying
-calculator.
+`dispersion_xc=None`, `dispersion_damping=None`, `dispersion_cutoff=None`,
+`dispersion_cutoff_smoothing=None` (see [Dispersion](#dispersion)), and forward
+any extra keywords to the underlying calculator.
 
 | `name` | Backend-specific keywords (defaults) |
 |---|---|
@@ -577,6 +578,38 @@ why `task="oc25"` refuses an added correction outright.
 Note also that RPBE's D3 parameters — both dampings — are absent from Grimme's
 published fits and carry no citation in the reference parameter tables, unlike
 PBE's. Treat RPBE-D3 numbers on metals as indicative.
+
+### Cutoff and smoothing follow PFP
+
+The D3 term runs at **`cutoff=14.0` Å with `cutoff_smoothing="poly"`** — PFP
+v7.0.0+'s settings, not torch-dftd's own defaults of 95 Bohr (50.3 Å) and no
+smoothing.
+
+This package exists to compare models against each other, and PFP is one of the
+models being compared. Left at torch-dftd's defaults, the dispersion term added
+to a SevenNet or MACE energy would be a *different quantity* from the one inside
+a PFP energy, on top of the model difference you are trying to measure.
+[Matlantis published the validation](https://docs.matlantis.com/atomistic-simulation-tutorial/ja/) for the shorter cutoff: an MAE of
+0.0024 eV over the Wellendorff adsorption benchmark — negligible against the
+0.01 eV scale those numbers live on — and no change in the 90th percentile of
+COD unit-cell-volume error, in exchange for roughly three times the reachable
+system size. `"none"` smoothing was a PFP bug fixed in v7.0.0; it leaves the
+force discontinuous at the cutoff radius, which is exactly what a relaxation or
+MD run walks into.
+
+Both are overridable, so a dataset built on torch-dftd's defaults stays
+reproducible:
+
+```python
+atoms.calc = get_calculator(
+    "chgnet", dispersion=True,
+    dispersion_cutoff=50.3, dispersion_cutoff_smoothing="none",
+)
+```
+
+`cnthr`, the coordination-number cutoff, is left at torch-dftd's own default;
+torch-dftd clamps it to `cutoff` when it is larger, which is the same path PFP
+goes through.
 
 See [`docs/models.md`](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/models.md) for the full per-model table.
 

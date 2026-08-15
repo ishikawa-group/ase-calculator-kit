@@ -206,6 +206,41 @@ DAMPING_FUNCTIONS = ("bj", "zero")
 
 DEFAULT_DAMPING = "bj"
 
+#: Distance cutoff of the D3 sum, in angstrom.
+#:
+#: This is **PFP's setting, not torch-dftd's**. torch-dftd defaults to 95 Bohr
+#: (50.3 Å); PFP v7.0.0 and later run the same torch-dftd code at 14 Å, and
+#: Matlantis published the validation behind that number: on the Wellendorff
+#: adsorption benchmark the change moves adsorption energies by an MAE of
+#: 0.0024 eV — negligible against the 0.01 eV scale those numbers are discussed
+#: at — while the 90th percentile of the COD unit-cell-volume error is
+#: unchanged. What it buys is size: the D3 term, not the network, was the limit,
+#: and 14 Å raises the reachable system from ~5000 atoms to about three times
+#: that, faster as well.
+#:
+#: Matching PFP matters here because this package's whole point is comparing
+#: NNPs against each other. Leaving torch-dftd's 50 Å in place would have made
+#: every non-PFP model's dispersion term a different quantity from PFP's, on top
+#: of the model difference we mean to measure.
+#:
+#: Source: "DFT-D3補正に関するアップデート", Matlantis documentation
+#: (matlantis/matlantis-agent-skills, references/theory/d3-validation).
+DEFAULT_CUTOFF = 14.0
+
+#: Smoothing applied to the D3 term near ``cutoff``.
+#:
+#: torch-dftd defaults to ``"none"``, which leaves a step in the energy — and a
+#: discontinuity in the force — at the cutoff radius. PFP shipped ``"none"``
+#: too, but as an acknowledged bug: v7.0.0 fixed it to ``"poly"`` and kept
+#: ``"none"`` only on v6.0.0 and earlier for backward compatibility. A relaxation
+#: or MD run is exactly where the missing smoothing shows up, so ``"poly"`` is
+#: the default here.
+DEFAULT_CUTOFF_SMOOTHING = "poly"
+
+#: Smoothings torch-dftd implements. ``"none"`` reproduces PFP v6.0.0 and
+#: earlier, and torch-dftd's own default.
+CUTOFF_SMOOTHINGS = ("none", "poly")
+
 
 def resolve_dispersion_damping(damping: str | None) -> str:
     """Validate the damping choice, returning the name to pass to torch-dftd."""
@@ -219,14 +254,49 @@ def resolve_dispersion_damping(damping: str | None) -> str:
     return damping
 
 
+def resolve_dispersion_cutoff(cutoff: float | None) -> float:
+    """Validate the D3 cutoff, returning the value to pass to torch-dftd."""
+    if cutoff is None:
+        return DEFAULT_CUTOFF
+    try:
+        value = float(cutoff)
+    except (TypeError, ValueError) as exc:
+        raise DispersionError(
+            f"dispersion_cutoff must be a distance in angstrom, got {cutoff!r}."
+        ) from exc
+    if not value > 0:
+        raise DispersionError(
+            f"dispersion_cutoff must be positive, got {value!r}."
+        )
+    return value
+
+
+def resolve_dispersion_cutoff_smoothing(smoothing: str | None) -> str:
+    """Validate the cutoff smoothing, returning the name for torch-dftd."""
+    if smoothing is None:
+        return DEFAULT_CUTOFF_SMOOTHING
+    if smoothing not in CUTOFF_SMOOTHINGS:
+        valid = ", ".join(repr(name) for name in CUTOFF_SMOOTHINGS)
+        raise DispersionError(
+            f"Unknown dispersion_cutoff_smoothing {smoothing!r}. "
+            f"Supported: {valid}."
+        )
+    return smoothing
+
+
 def wrap_with_d3(
     base_calc: Calculator,
     *,
     xc: str,
     device: str,
-    damping: str = DEFAULT_DAMPING,
+    damping: str | None = None,
+    cutoff: float | None = None,
+    cutoff_smoothing: str | None = None,
 ) -> Calculator:
     """Return ``base_calc`` summed with a torch-dftd D3 correction.
+
+    The numerical settings default to PFP's (14 Å, ``"poly"``) rather than
+    torch-dftd's (50.3 Å, ``"none"``) — see :data:`DEFAULT_CUTOFF`.
 
     Parameters
     ----------
@@ -242,6 +312,19 @@ def wrap_with_d3(
         systems, where D3 has no screening of the metal's C6 coefficients.
         ``"zero"`` is the right choice when matching a reference dataset that
         used it — OC25, for instance, is RPBE + D3 with zero damping.
+    cutoff:
+        Distance cutoff in angstrom; defaults to PFP's 14 Å. Pass ``50.3`` to
+        get torch-dftd's own default back.
+    cutoff_smoothing:
+        ``"poly"`` (the default, and PFP v7.0.0+) or ``"none"``.
+
+    Notes
+    -----
+    ``cnthr``, the coordination-number cutoff, is left at torch-dftd's default
+    of 40 Bohr (21.2 Å). torch-dftd itself clamps it to ``cutoff`` when it is
+    larger and says so, so at 14 Å the effective ``cnthr`` is 14 Å — the same
+    clamp PFP's stack goes through. Setting it here instead would silently
+    change what a caller who *raises* ``cutoff`` gets.
     """
     try:
         from ase.calculators.mixing import SumCalculator
@@ -255,7 +338,11 @@ def wrap_with_d3(
     # torch-dftd on MPS is unreliable; run the D3 part on CPU in that case.
     d3_device = "cpu" if device == "mps" else device
     d3 = TorchDFTD3Calculator(
-        damping=resolve_dispersion_damping(damping), xc=xc, device=d3_device
+        damping=resolve_dispersion_damping(damping),
+        xc=xc,
+        device=d3_device,
+        cutoff=resolve_dispersion_cutoff(cutoff),
+        cutoff_smoothing=resolve_dispersion_cutoff_smoothing(cutoff_smoothing),
     )
     return SumCalculator([base_calc, d3])
 
@@ -267,6 +354,8 @@ def precheck_dispersion_xc(
     dispersion: bool,
     dispersion_xc: str | None,
     dispersion_damping: str | None = None,
+    dispersion_cutoff: float | None = None,
+    dispersion_cutoff_smoothing: str | None = None,
 ) -> str | None:
     """Validate the dispersion policy up front and return the D3 ``xc`` to use.
 
@@ -276,10 +365,13 @@ def precheck_dispersion_xc(
     include dispersion or whose functional is unverified — *before* the (heavy)
     base calculator is built, so the error is fast and offline.
 
-    ``dispersion_damping`` is validated here for the same reason: a typo should
-    surface before a multi-gigabyte checkpoint is loaded, not after.
+    ``dispersion_damping``, ``dispersion_cutoff`` and
+    ``dispersion_cutoff_smoothing`` are validated here for the same reason: a
+    typo should surface before a multi-gigabyte checkpoint is loaded, not after.
     """
     if not dispersion:
         return None
     resolve_dispersion_damping(dispersion_damping)
+    resolve_dispersion_cutoff(dispersion_cutoff)
+    resolve_dispersion_cutoff_smoothing(dispersion_cutoff_smoothing)
     return resolve_dispersion_xc(backend, key, dispersion_xc=dispersion_xc)

@@ -63,9 +63,22 @@ future upstream release, for instance — lands there and is refused by default.
 ## Notes
 
 - **Mechanism.** When allowed, the D3 correction is applied as
-  `SumCalculator([base_model, TorchDFTD3Calculator(damping="bj", xc=<above>)])`
+  `SumCalculator([base_model, TorchDFTD3Calculator(damping="bj", xc=<above>,
+  cutoff=14.0, cutoff_smoothing="poly")])`
   via [`torch-dftd`](https://github.com/pfnet-research/torch-dftd). Energies,
   forces, and stress are summed.
+- **Numerics follow PFP, not torch-dftd.** `cutoff=14.0` Å and
+  `cutoff_smoothing="poly"` are the settings PFP v7.0.0+ uses; torch-dftd's own
+  defaults are 95 Bohr (50.3 Å) and no smoothing. Matlantis published the
+  validation for the shorter cutoff: an MAE of 0.0024 eV on the Wellendorff
+  adsorption benchmark — negligible next to the 0.01 eV scale — with the 90th
+  percentile of COD unit-cell-volume error unchanged, in exchange for roughly
+  three times the reachable system size. `"none"` smoothing was a PFP bug fixed
+  in v7.0.0, and leaves a discontinuous force at the cutoff radius. Since this
+  package exists to compare models, its D3 term should be the *same* quantity
+  PFP adds. Override with `dispersion_cutoff=` / `dispersion_cutoff_smoothing=`
+  — pass `50.3` and `"none"` to reproduce a dataset built on torch-dftd's
+  defaults. `cnthr` is left alone; torch-dftd clamps it to `cutoff`.
 - **`xc` choice.** D3 parameters depend on the functional, so the default `xc`
   matches the model's training functional. Override with `dispersion_xc="..."`.
 - **Override / escape hatch.** For a model/task *not listed above*, passing an
