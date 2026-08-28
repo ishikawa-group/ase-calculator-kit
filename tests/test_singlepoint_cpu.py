@@ -76,6 +76,14 @@ CASES = [
     ("mace-mh-1-spice_wB97M", "mace", {"head": "spice_wB97M"}, _molecule),
     # Single-head: head="auto" has to send no head at all for this to run.
     ("mace-omat-0", "mace", {"model": "medium-omat-0"}, _bulk),
+    # MACE-Polar: the model name alone has to route to mace_polar, and these
+    # read charge/spin like UMA's omol head, so both are set explicitly.
+    ("mace-polar-1-s", "mace", {"model": "polar-1-s"},
+     lambda: _molecule(charge=0, spin=1)),
+    ("mace-polar-1-m", "mace", {"model": "polar-1-m"},
+     lambda: _molecule(charge=0, spin=1)),
+    ("mace-polar-1-l", "mace", {"model": "polar-1-l"},
+     lambda: _molecule(charge=0, spin=1)),
     ("mattersim-1M", "mattersim", {"model": "1M"}, _bulk),
     ("mattersim-5M", "mattersim", {"model": "5M"}, _bulk),
     ("nequip-OAM-S", "nequip", {"model": "S"}, _bulk),

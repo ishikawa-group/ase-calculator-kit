@@ -95,6 +95,17 @@ _POLICIES: dict[tuple[str, str], DispersionPolicy] = {
     ("mace", "medium-mpa-0"): _allowed("PBE(+U)", "pbe"),
     ("mace", "mace-matpes-pbe-0"): _allowed("PBE", "pbe"),
     ("mace", "mace-matpes-r2scan-0"): _allowed("r2SCAN", "r2scan"),
+    # MACE-Polar: electrostatics models trained on OMol25, so the same
+    # dispersion-inclusive reference as the MH-1 omol head.
+    ("mace", "polar-1-s"): _included(
+        "ωB97M-V", "OMol25 already includes nonlocal VV10 dispersion"
+    ),
+    ("mace", "polar-1-m"): _included(
+        "ωB97M-V", "OMol25 already includes nonlocal VV10 dispersion"
+    ),
+    ("mace", "polar-1-l"): _included(
+        "ωB97M-V", "OMol25 already includes nonlocal VV10 dispersion"
+    ),
     # MatterSim and NequIP OAM use PBE-level materials reference data.
     ("mattersim", "1M"): _allowed("PBE", "pbe"),
     ("mattersim", "5M"): _allowed("PBE", "pbe"),

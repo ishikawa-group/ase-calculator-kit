@@ -1,5 +1,73 @@
 # Changelog
 
+## 0.5.4
+
+Moves the UMA default to the newest checkpoint, and adds MACE's electrostatics
+foundation models.
+
+- **`get_calculator("uma")` now loads `uma-s-1p2p1` instead of `uma-s-1p2`.**
+  **This changes energies** — on a bulk Cu cell the two checkpoints differ by
+  about 1.4 meV/atom (`-3.747989` against `-3.749434` eV, measured on both CPU
+  and a V100) — so recompute anything you mean to compare against results from
+  0.5.3 or earlier. The previous checkpoints stay selectable by name:
+  `model="uma-s-1p2"`, `"uma-s-1p1"`, `"uma-m-1p1"`.
+
+- **The `uma` extra now requires `fairchem-core>=2.22`** (was `>=2.20`).
+  `uma-s-1p2p1` entered fairchem-core's model registry in 2.22.0; an older
+  install answers the name with `KeyError`, listing the checkpoints it does
+  have. Raising the floor is what makes the new default work out of the box.
+
+- **Every extra now installs on Python 3.14.** `uma` — and therefore `all` —
+  used to fail there, because fairchem-core declared `requires-python <3.14` and
+  pinned `torch~=2.8.0`, which has no cp314 wheels. 2.22.0 lifted the cap and
+  moved to `torch~=2.13.0`. The README's "Python versions" table and the CI
+  `extras-resolve` expectations move with it; the mechanism that catches this in
+  both directions stays.
+
+  Note for GPU users on older cards: torch 2.13.0's default PyPI wheel is a
+  CUDA 13 build, whose kernels start at `sm_75`. On a V100 (`sm_70`) it raises
+  `cudaErrorNoKernelImageForDevice` at the first evaluation. That is a torch
+  packaging matter rather than anything this project pins — install the CUDA 12.6
+  build (`pip install torch==2.13.0+cu126 --index-url
+  https://download.pytorch.org/whl/cu126`), which ships `sm_50` through `sm_90`.
+
+- **MACE-Polar is selectable: `model="polar-1-s"` / `"polar-1-m"` /
+  `"polar-1-l"`.** These are MACE's electrostatics foundation models, trained on
+  OMol25, and they are the one group of checkpoints that upstream loads through
+  `mace_polar` rather than `mace_mp`. Neither function accepts the other's
+  names, so the model name switches the loader and nothing changes at the call
+  site. Beyond energy, forces and stress, `calc.results` carries `dipole`,
+  `charges`, `spins` and an electrostatic energy breakdown; MACE leaves those
+  out of `implemented_properties`, so read them from `calc.results` —
+  `atoms.get_dipole_moment()` raises `PropertyNotImplementedError` even when
+  `calc.results["dipole"]` holds a value. They also read
+  `atoms.info["external_field"]` (V/Å) alongside `atoms.info["charge"]` and
+  `atoms.info["spin"]`, and, exactly like fairchem's `omol` task, substitute a
+  neutral closed-shell system with no field when those keys are missing —
+  without warning.
+
+- **`dispersion=True` is refused for the three polar checkpoints.** OMol25 is
+  computed at ωB97M-V, whose nonlocal VV10 term already carries the dispersion,
+  so a D3 correction would double-count it. Same row as the MH-1 `omol` head.
+
+- **A polar checkpoint you cannot load now says so before the download.** The
+  published polar models unpickle classes from `graph_longrange`, which
+  `mace-torch` does not depend on and which is not on PyPI — it is built from
+  WillBaldwin0's `graph_electrostatics` repository. PyPI rejects direct
+  references in uploaded metadata, so no extra here can install it; instead
+  `get_calculator` raises `MissingDependencyError` naming the command:
+
+  ```bash
+  pip install git+https://github.com/WillBaldwin0/graph_electrostatics.git@v0.4.0
+  ```
+
+  Without that check the failure is `ModuleNotFoundError: No module named
+  'graph_longrange'` from inside `torch.load`, after the download, naming
+  neither MACE nor this package (ACEsuit/mace#1408). Note the name mismatch: the
+  repository is `graph_electrostatics`, the distribution it builds is
+  `graph_longrange`, and pip refuses the `graph_electrostatics @ git+…` spelling
+  as an inconsistent name — so the bare URL above is the form that works.
+
 ## 0.5.3
 
 Aligns the D3 correction's numerical settings with PFP's, so that the dispersion

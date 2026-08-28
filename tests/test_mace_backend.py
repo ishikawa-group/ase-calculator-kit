@@ -14,7 +14,7 @@ import types
 import pytest
 
 from ase_calculator_kit import DispersionError, get_calculator
-from ase_calculator_kit.backends.mlip.mace import MH1_HEADS
+from ase_calculator_kit.backends.mlip.mace import MH1_HEADS, POLAR_MODELS
 from ase_calculator_kit.dispersion import _POLICIES
 from ase_calculator_kit.errors import MissingDependencyError
 
@@ -49,32 +49,47 @@ def _install_fake_mace(
     cueq_energy=None,
     cueq_fails=False,
     cuequivariance_installed=False,
+    graph_longrange_installed=True,
 ):
     calls = seen.setdefault("calls", [])
+    loaders = seen.setdefault("loaders", [])
 
-    def fake_mace_mp(**kwargs):
-        calls.append(kwargs)
-        seen["kwargs"] = kwargs
-        accelerated = kwargs.get("enable_cueq", False)
-        energy = plain_energy
-        if accelerated and cueq_energy is not None:
-            energy = cueq_energy
-        calc = FakeMACECalculator(
-            energy=energy, fails=accelerated and cueq_fails, **kwargs
-        )
-        if available_heads is not None:
-            calc.available_heads = list(available_heads)
-        return calc
+    def _fake_loader(name):
+        def loader(**kwargs):
+            calls.append(kwargs)
+            loaders.append(name)
+            seen["kwargs"] = kwargs
+            seen["loader"] = name
+            accelerated = kwargs.get("enable_cueq", False)
+            energy = plain_energy
+            if accelerated and cueq_energy is not None:
+                energy = cueq_energy
+            calc = FakeMACECalculator(
+                energy=energy, fails=accelerated and cueq_fails, **kwargs
+            )
+            if available_heads is not None:
+                calc.available_heads = list(available_heads)
+            return calc
+
+        return loader
 
     mace = types.ModuleType("mace")
     calculators = types.ModuleType("mace.calculators")
-    calculators.mace_mp = fake_mace_mp
+    calculators.mace_mp = _fake_loader("mace_mp")
+    calculators.mace_polar = _fake_loader("mace_polar")
     monkeypatch.setitem(sys.modules, "mace", mace)
     monkeypatch.setitem(sys.modules, "mace.calculators", calculators)
     monkeypatch.setitem(
         sys.modules,
         "cuequivariance_torch",
         types.ModuleType("cuequivariance_torch") if cuequivariance_installed else None,
+    )
+    # MACE-Polar checkpoints unpickle classes from graph_longrange, which is not
+    # a mace-torch dependency; `None` here is how Python spells "not installed".
+    monkeypatch.setitem(
+        sys.modules,
+        "graph_longrange",
+        types.ModuleType("graph_longrange") if graph_longrange_installed else None,
     )
 
 
@@ -430,3 +445,80 @@ def test_accelerator_and_enable_flag_together_are_refused(monkeypatch):
 def test_every_mh1_head_has_a_dispersion_policy(head):
     """A head with no policy row would be refused as "unverified" at runtime."""
     assert ("mace", head) in _POLICIES
+
+
+@pytest.mark.parametrize("model", POLAR_MODELS)
+def test_polar_checkpoints_load_through_mace_polar(monkeypatch, model):
+    """The name is the only selector, so it has to reach the right loader.
+
+    `mace_mp` does not know the polar checkpoints and `mace_polar` does not know
+    MACE-MP's, so routing to the wrong one is not a subtle difference — it is a
+    download failure, or worse a different model under the requested name.
+    """
+    seen: dict = {}
+    _install_fake_mace(monkeypatch, seen, available_heads=["Default"])
+
+    calc = get_calculator("mace", device="cpu", model=model)
+
+    assert seen["loader"] == "mace_polar"
+    assert seen["kwargs"]["model"] == model
+    assert "head" not in seen["kwargs"], "PolarMACE carries one head"
+    assert calc.kwargs["default_dtype"] == "float64"
+
+
+def test_non_polar_checkpoints_still_load_through_mace_mp(monkeypatch):
+    seen: dict = {}
+    _install_fake_mace(monkeypatch, seen)
+
+    get_calculator("mace", device="cpu", model="mh-1")
+
+    assert seen["loader"] == "mace_mp"
+
+
+@pytest.mark.parametrize("model", POLAR_MODELS)
+def test_dispersion_is_refused_for_the_polar_checkpoints(monkeypatch, model):
+    """OMol25 is ωB97M-V, so the VV10 term is already in the reference data."""
+    seen: dict = {}
+    _install_fake_mace(monkeypatch, seen, available_heads=["Default"])
+
+    with pytest.raises(DispersionError, match="double-counting"):
+        get_calculator("mace", device="cpu", model=model, dispersion=True)
+    assert seen["calls"] == [], "the policy is checked before the model is loaded"
+
+
+@pytest.mark.parametrize("model", POLAR_MODELS)
+def test_every_polar_checkpoint_has_a_dispersion_policy(model):
+    """Without a row a polar model would be merely "unverified", i.e. overridable."""
+    assert ("mace", model) in _POLICIES
+
+
+def test_polar_without_graph_longrange_names_the_git_install(monkeypatch):
+    """The checkpoint is unloadable without it, and the raw error names nothing.
+
+    Left alone, this surfaces as `ModuleNotFoundError: No module named
+    'graph_longrange'` from inside torch.load, after the download and with no
+    mention of MACE, of this package, or of where the module comes from.
+    """
+    seen: dict = {}
+    _install_fake_mace(
+        monkeypatch, seen,
+        available_heads=["Default"], graph_longrange_installed=False,
+    )
+
+    with pytest.raises(MissingDependencyError) as exc:
+        get_calculator("mace", device="cpu", model="polar-1-s")
+
+    message = str(exc.value)
+    assert "graph_longrange" in message
+    assert "graph_electrostatics.git@v0.4.0" in message
+    assert seen["calls"] == [], "nothing may be downloaded to report this"
+
+
+def test_graph_longrange_is_only_required_by_the_polar_path(monkeypatch):
+    """MACE-MP must not start demanding a package it has never needed."""
+    seen: dict = {}
+    _install_fake_mace(monkeypatch, seen, graph_longrange_installed=False)
+
+    get_calculator("mace", device="cpu", model="mh-1")
+
+    assert seen["loader"] == "mace_mp"

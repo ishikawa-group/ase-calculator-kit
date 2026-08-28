@@ -45,6 +45,19 @@ MH1_HEADS = (
 #: Multi-head checkpoints whose head names are known without downloading them.
 _KNOWN_HEADS: dict[str, tuple[str, ...]] = {"mh-1": MH1_HEADS}
 
+#: MACE-Polar checkpoints, which are loaded by ``mace_polar``, not ``mace_mp``.
+#:
+#: These are the electrostatics foundation models: trained on OMol25, they add
+#: a dipole moment (non-periodic cells only), partial charges and an
+#: electrostatic energy breakdown to the usual energy/forces/stress, and they
+#: respond to an applied electric field. ``mace_mp`` does not recognise these
+#: names and ``mace_polar`` does not recognise ``mace_mp``'s, so the *model
+#: name* is what picks the loader — there is nothing else to pass.
+#:
+#: ``polar-1-s`` / ``polar-1-m`` / ``polar-1-l`` are small / medium / large, the
+#: medium and large models carrying 12 Å and 18 Å receptive fields.
+POLAR_MODELS = ("polar-1-s", "polar-1-m", "polar-1-l")
+
 #: Which head ``head="auto"`` picks per checkpoint.
 #:
 #: A single-head checkpoint answers to one head named ``"Default"``, and passing
@@ -55,6 +68,9 @@ _KNOWN_HEADS: dict[str, tuple[str, ...]] = {"mh-1": MH1_HEADS}
 #: which lets MACE raise its own error listing the heads it actually has.
 _DEFAULT_HEAD: dict[str, str | None] = {
     "mh-1": "omat_pbe",
+    "polar-1-s": None,
+    "polar-1-m": None,
+    "polar-1-l": None,
     "small-omat-0": None,
     "medium-omat-0": None,
     "medium-mpa-0": None,
@@ -90,6 +106,24 @@ _ACCELERATOR_FLAG = {"cueq": "enable_cueq", "oeq": "enable_oeq"}
 #: (ACEsuit/mace#1298).
 _PROBE_ATOL_EV = 1e-3
 _PROBE_RTOL = 1e-5
+
+
+def _require_polar_runtime() -> None:
+    """Refuse a MACE-Polar checkpoint that cannot be unpickled once downloaded.
+
+    The published polar checkpoints reference classes from ``graph_longrange``,
+    which ``mace-torch`` does not depend on and which is not on PyPI — it is
+    built from WillBaldwin0's ``graph_electrostatics`` repository. Without it,
+    the failure is ``ModuleNotFoundError: No module named 'graph_longrange'``
+    raised from inside ``torch.load`` after the 30-100 MB download, naming a
+    module that ties back to neither MACE nor this package
+    (ACEsuit/mace#1408). Check first, and say what to install. ``torch.load``
+    imports the module anyway, so importing it here costs nothing.
+    """
+    try:
+        import graph_longrange  # noqa: F401
+    except ImportError as exc:
+        raise MissingDependencyError("graph_longrange") from exc
 
 
 def _resolve_head(model: str | Path, head: str | None) -> str | None:
@@ -285,12 +319,44 @@ class MACEBackend(BaseBackend):
             ``medium-mpa-0``          MPtrj + sAlex, PBE(+U)
             ``mace-matpes-pbe-0``     MatPES, PBE
             ``mace-matpes-r2scan-0``  MatPES, r2SCAN
+            ``polar-1-s``             OMol25, ωB97M-V — MACE-Polar, small
+            ``polar-1-m``             MACE-Polar, medium (12 Å field)
+            ``polar-1-l``             MACE-Polar, large (18 Å field)
             ========================= =====================================
 
             These are upstream's own spellings and this package adds no
             synonyms, so one model has exactly one name. Everything else
             ``mace_mp`` accepts (``"small"``, ``"medium-0b3"``, a path, a URL)
             works too; only the models above carry a dispersion policy.
+
+            The three ``polar-1-*`` names select **MACE-Polar**, the
+            electrostatics foundation models, and are the one group loaded
+            through ``mace_polar`` instead of ``mace_mp`` — the name is what
+            switches the loader, since neither function accepts the other's
+            checkpoints. They need one package beyond ``mace-torch``, which no
+            extra of this project can install because it is not on PyPI::
+
+                pip install git+https://github.com/WillBaldwin0/graph_electrostatics.git@v0.4.0
+
+            Ask for a polar checkpoint without it and this backend says so
+            before downloading anything.
+
+            On top of energy, forces and stress they put a dipole moment
+            (non-periodic cells only), partial charges, spins and an
+            electrostatic energy breakdown into ``calc.results``. Those extra
+            keys are *not* in ``implemented_properties``, so ASE's own getters
+            do not reach them — ``atoms.get_dipole_moment()`` raises
+            ``PropertyNotImplementedError`` while ``calc.results["dipole"]``
+            holds the value. They also take an applied electric field through
+            ``atoms.info["external_field"]`` (a 3-vector in V/Å) alongside
+            ``atoms.info["charge"]`` and ``atoms.info["spin"]``. As with
+            fairchem's ``omol`` task, none of the three is required in form and
+            all three are in practice: MACE substitutes charge 0, spin 1 and a
+            zero field without warning, so an ion, a radical or a field-on
+            calculation comes back silently neutral, closed-shell and unpolarised
+            unless the keys are set. Partial charges are not a uniquely
+            defined quantity — read them as a decomposition of the model's
+            electrostatics, not as a measurement.
 
             MACE prints an Academic Software License (ASL) notice for the
             omat-0 and matpes checkpoints — they are not MIT.
@@ -321,7 +387,11 @@ class MACEBackend(BaseBackend):
         default_dtype:
             ``"float64"`` (default, and what the MH-1 model card recommends —
             geometry optimisation and phonons need it) or ``"float32"`` for
-            faster MD.
+            faster MD. The ``polar-1-*`` checkpoints are stored in float32, so
+            the default makes MACE log ``Default dtype float64 does not match
+            model dtype float32, converting models to float64``. That is the
+            conversion happening, not a failure; ``default_dtype="float32"``
+            keeps the stored precision and skips the message.
         accelerator:
             Equivariant-kernel acceleration on CUDA. ``"auto"`` (default) uses
             cuequivariance when it is installed *and* demonstrably correct,
@@ -349,9 +419,11 @@ class MACEBackend(BaseBackend):
             the MACE-MH-1 authors do: they evaluate their PBE-trained heads with
             torch-dftd D3(BJ) and the PBE parametrisation. Rejected for the two
             heads whose reference already contains dispersion — ``omol``
-            (ωB97M-VV10) and ``spice_wB97M`` (ωB97M-D3(BJ)). A model or head
-            outside the policy table is refused until you pass an explicit
-            ``dispersion_xc``. See ``docs/models.md``.
+            (ωB97M-VV10) and ``spice_wB97M`` (ωB97M-D3(BJ)) — and for the
+            ``polar-1-*`` checkpoints, whose OMol25 reference is ωB97M-V with
+            the same nonlocal VV10 term. A model or head outside the policy
+            table is refused until you pass an explicit ``dispersion_xc``. See
+            ``docs/models.md``.
         dispersion_damping:
             ``"bj"`` (Becke-Johnson, the default) or ``"zero"``. The two are
             separately fitted parameter sets. On molecule-metal systems the
@@ -365,6 +437,9 @@ class MACEBackend(BaseBackend):
             so that the correction added here is the same quantity PFP
             adds. See ``ase_calculator_kit.dispersion.DEFAULT_CUTOFF``.
         """
+        is_polar = str(model) in POLAR_MODELS
+        if is_polar:
+            _require_polar_runtime()
         resolved_head = _resolve_head(model, head)
         _validate_known_head(model, resolved_head)
         resolved_accelerator = _resolve_accelerator(accelerator, kwargs)
@@ -379,8 +454,17 @@ class MACEBackend(BaseBackend):
         )
         resolved_device = resolve_device(device)
 
+        # The checkpoint name picks the loader: mace_mp and mace_polar download
+        # from different release pages and build different model types, and
+        # neither recognises the other's names. mace_polar arrived in
+        # mace-torch 0.3.16, which is the `mace` extra's floor, so it is
+        # imported only on the polar path — an older install then reports a
+        # missing mace-torch instead of a missing MACE-MP.
         try:
-            from mace.calculators import mace_mp
+            if is_polar:
+                from mace.calculators import mace_polar as build
+            else:
+                from mace.calculators import mace_mp as build
         except ImportError as exc:  # pragma: no cover - exercised via tests with mocks
             raise MissingDependencyError("mace-torch") from exc
 
@@ -394,11 +478,12 @@ class MACEBackend(BaseBackend):
         if resolved_accelerator in _ACCELERATOR_FLAG:
             params[_ACCELERATOR_FLAG[resolved_accelerator]] = True
         params.update(kwargs)
-        # `dispersion=` is handled here, not by mace_mp: the policy table is this
-        # package's single source of truth for which xc may be added to what.
-        bare = mace_mp(**params)
+        # `dispersion=` is handled here, not by the loader: the policy table is
+        # this package's single source of truth for which xc may be added to
+        # what.
+        bare = build(**params)
         if resolved_accelerator == "auto":
-            bare = _autoselect_accelerator(mace_mp, params, bare)
+            bare = _autoselect_accelerator(build, params, bare)
         _reject_silent_head_fallback(bare, resolved_head)
 
         if d3_xc is not None:

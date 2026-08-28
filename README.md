@@ -76,16 +76,16 @@ currently does:
 
 | | 3.12 | 3.13 | 3.14 |
 |---|:--:|:--:|:--:|
-| Core, `chgnet`, `sevennet`, `mattersim`, `nequip`, `mace`, `dispersion` | ✅ | ✅ | ✅ |
-| `uma` (and therefore `all`) | ✅ | ✅ | ❌ |
+| Core and every extra | ✅ | ✅ | ✅ |
 
-`fairchem-core` declares `requires-python = ">=3.11,<3.14"` and pins
-`torch~=2.8.0`, which has no cp314 wheels, so `pip install
-"ase-calculator-kit[uma]"` fails on Python 3.14 with an error naming
-`fairchem-core`. Nothing here needs to change once fairchem-core supports 3.14.
+Since 0.5.4 no backend caps below 3.14. `uma` (and therefore `all`) used to be
+❌ on 3.14, because `fairchem-core` declared `requires-python = ">=3.11,<3.14"`
+and pinned `torch~=2.8.0`, which has no cp314 wheels; fairchem-core 2.22.0 —
+the floor this release requires — lifted the cap and moved to `torch~=2.13.0`.
 
-This is deliberately *not* hidden behind an environment marker: a marker would
-make the install succeed on 3.14 while silently leaving UMA out.
+A backend that lags a Python release is left to cap itself rather than hidden
+behind an environment marker: pip then names the backend in the error, while a
+marker would make the install *succeed* and silently leave the backend out.
 
 Use this import for new code:
 
@@ -115,7 +115,7 @@ print(atoms.get_potential_energy())
 atoms.calc = get_calculator("nequip", model="L")
 print(atoms.get_potential_energy())
 
-atoms.calc = get_calculator("uma", model="uma-s-1p2", task="omat")
+atoms.calc = get_calculator("uma", model="uma-s-1p2p1", task="omat")
 print(atoms.get_potential_energy())
 ```
 
@@ -202,7 +202,7 @@ any extra keywords to the underlying calculator.
 | `mattersim` | `model="1M"` (or `"5M"`), `load_path=None` |
 | `nequip` | `model="L"` (`S`/`M`/`L`/`XL`), `model_path=None`, `compile_mode="eager"`, `neighborlist_backend="matscipy"`, `allow_tf32=False` |
 | `mace` | `model="mh-1"`, `head="auto"`, `default_dtype="float64"`, `accelerator="auto"` |
-| `uma` | `model="uma-s-1p2"`, `task="omat"` |
+| `uma` | `model="uma-s-1p2p1"`, `task="omat"` |
 
 ### DFT keyword arguments
 
@@ -461,6 +461,7 @@ whether they read them at all.
 | `uma` | `task="omol"` | ✅ `atoms.info["charge"]`, `atoms.info["spin"]` |
 | `sevennet` | `modal="omol25_low"` / `"omol25_high"` / `"spice"` / `"qcml"` | ❌ not supported by sevenn |
 | `mace` | `head="omol"` / `"spice_wB97M"` | ❌ the MH-1 molecular heads are fitted to neutral closed-shell data |
+| `mace` | `model="polar-1-s"` / `"polar-1-m"` / `"polar-1-l"` | ✅ `atoms.info["charge"]`, `atoms.info["spin"]`, `atoms.info["external_field"]` |
 
 ### UMA: set both keys explicitly
 
@@ -507,13 +508,72 @@ high-spin configurations, but it is not a multiplicity you set per structure.
 Use `get_calculator("uma", task="omol")` when the charge and spin of the system
 matter.
 
-### MACE: molecular heads, no charge or spin
+### MACE-MH-1: molecular heads, no charge or spin
 
 MACE-MH-1's `omol` head was fine-tuned on a subsample of OMol25 that is
 explicitly **neutral and closed-shell**, and `spice_wB97M` on SPICE-1, which is
 likewise neutral. There is no charge or spin input to set, and no head that
 covers ions or a chosen open-shell state. Use `get_calculator("uma",
-task="omol")` when the charge and spin of the system matter.
+task="omol")`, or MACE-Polar below, when the charge and spin of the system
+matter.
+
+### MACE-Polar: charge, spin, and an applied field
+
+`polar-1-s` / `polar-1-m` / `polar-1-l` are MACE's **electrostatics** foundation
+models, trained on OMol25 at ωB97M-V. They are the one group of checkpoints
+loaded through upstream's `mace_polar` rather than `mace_mp` — the model name is
+what switches the loader, so nothing else changes at the call site.
+
+They need one package on top of `mace-torch`. It is not on PyPI, so no extra of
+this project can pull it in and you install it yourself, into the MACE
+environment:
+
+```bash
+.venv-mace/bin/pip install git+https://github.com/WillBaldwin0/graph_electrostatics.git@v0.4.0
+```
+
+That repository builds a distribution named `graph_longrange` — the module the
+checkpoints unpickle. The name mismatch matters at the command line: pip rejects
+the `graph_electrostatics @ git+…` spelling as an inconsistent name, so pass the
+bare URL as above. Ask for a polar checkpoint without it and
+`get_calculator` raises `MissingDependencyError` with this command, rather than
+letting MACE fail with `No module named 'graph_longrange'` after the download.
+
+```python
+from ase.build import molecule
+from ase_calculator_kit import get_calculator
+
+atoms = molecule("H2O")
+atoms.info["charge"] = 0
+atoms.info["spin"] = 1
+atoms.info["external_field"] = [0.0, 0.0, 0.01]   # V/Å, along z
+atoms.calc = get_calculator("mace", model="polar-1-m")
+print(atoms.get_potential_energy())
+print(atoms.calc.results["dipole"])               # non-periodic cells only
+```
+
+Beyond energy, forces and stress, `calc.results` carries `dipole`, `charges`,
+`spins` and an electrostatic energy breakdown (`electrostatic_energy`,
+`electron_energy`, `interaction_energy`). **Read them from `calc.results`
+directly**: MACE leaves them out of `implemented_properties`, so ASE's own
+accessors do not see them and `atoms.get_dipole_moment()` raises
+`PropertyNotImplementedError` even though `calc.results["dipole"]` is there.
+Partial charges are also **not a uniquely defined quantity** — read them as a
+decomposition of the model's electrostatics, not as a measurement.
+
+> **The same silent-default trap as UMA's `omol`.** MACE substitutes
+> `charge=0`, `spin=1` and a zero field when the keys are absent, without a
+> warning. An ion, a radical, or a field-on calculation then comes back
+> **silently** neutral, closed-shell and unpolarised. Set the keys you mean.
+
+`dispersion=True` is refused for all three: OMol25's ωB97M-V reference already
+carries the nonlocal VV10 term, so a D3 correction would double-count it.
+
+`polar-1-m` and `polar-1-l` carry 12 Å and 18 Å receptive fields; `polar-1-s` is
+the small model. All three live in the MACE environment like every other MACE
+checkpoint, and all three are stored in float32 — with this package's
+`default_dtype="float64"` default, MACE logs that it is converting them, which
+is the conversion and not a failure.
 
 ### Non-periodic cells
 

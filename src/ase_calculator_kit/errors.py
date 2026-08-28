@@ -32,15 +32,41 @@ _SEPARATE_ENVIRONMENT_NOTES = {
 }
 
 
+#: Packages no extra of this package can install, and the command that does.
+#:
+#: PyPI rejects a direct reference (``pkg @ git+https://...``) in an uploaded
+#: project's metadata, so a dependency that exists only as a git repository can
+#: never be an extra here. It still has to be *nameable* when something needs
+#: it, which is what this table is for.
+#:
+#: ``graph_longrange`` is the module namespace of WillBaldwin0's
+#: ``graph_electrostatics``, and MACE-Polar's published checkpoints unpickle
+#: classes from it. Note the mismatch: the repository is called
+#: ``graph_electrostatics`` while the distribution it builds is named
+#: ``graph_longrange``, so pip refuses the ``graph_electrostatics @ git+...``
+#: spelling ("has inconsistent name") and the bare URL is the form that works.
+_DIRECT_INSTALLS = {
+    "graph_longrange": (
+        "pip install "
+        "git+https://github.com/WillBaldwin0/graph_electrostatics.git@v0.4.0"
+    ),
+}
+
+
 class MissingDependencyError(CalculatorKitError, ImportError):
     """Raised when the backend package for a requested model is not installed.
 
     NNP packages are optional. The error points to the smallest matching
-    packaging extra instead of asking users to install every backend.
+    packaging extra instead of asking users to install every backend — or, for
+    a package that no extra can reach, to the command that installs it.
     """
 
     def __init__(self, backend: str) -> None:
         self.backend = backend
+        direct = _DIRECT_INSTALLS.get(backend)
+        if direct is not None:
+            super().__init__(f"{backend} is not installed. Install it with: {direct}")
+            return
         extra = {
             "chgnet": "chgnet",
             "sevennet": "sevennet",

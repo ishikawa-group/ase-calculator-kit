@@ -15,7 +15,7 @@ sevenn==0.13.0
 chgnet==0.4.2
 mattersim==1.2.5
 nequip==0.18.0
-fairchem-core==2.20.0
+fairchem-core==2.22.0
 torch-dftd==0.5.3
 
 # MACE lives in a separate virtual environment (it pins e3nn==0.4.4 against the

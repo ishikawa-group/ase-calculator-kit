@@ -53,7 +53,8 @@ jobs:
     # The expectations below mirror the "Python versions" table in README.md.
     # That makes the job fail in *both* directions: when an extra stops
     # resolving, and when an extra we document as unavailable starts working
-    # (fairchem-core adding 3.14 support) and the docs need updating.
+    # and the docs need updating — which is how fairchem-core's 3.14 support
+    # was meant to surface.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -70,10 +71,13 @@ jobs:
       - name: Resolve every extra on every supported Python
         run: |
           set -u
-          # "<python>:<extra>" pairs expected NOT to resolve.
-          # fairchem-core declares requires-python <3.14 and pins torch~=2.8.0,
-          # which has no cp314 wheels; `all` contains fairchem-core.
-          expected_failures="3.14:uma 3.14:all"
+          # "<python>:<extra>" pairs expected NOT to resolve — currently none.
+          # `3.14:uma` and `3.14:all` used to be here: fairchem-core declared
+          # requires-python <3.14 and pinned torch~=2.8.0, which has no cp314
+          # wheels. 2.22.0 lifted the cap and moved to torch~=2.13.0, so every
+          # extra now resolves on every supported Python. Leave the mechanism
+          # in place — the next backend to lag a Python release lands here.
+          expected_failures=""
           status=0
           for py in 3.12 3.13 3.14; do
             # `mace` is resolved on its own, which is also the only way it can

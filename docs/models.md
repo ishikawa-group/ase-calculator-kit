@@ -29,6 +29,7 @@ interaction and give wrong energies. So such models reject `dispersion=True`.
 | **MACE** `medium-mpa-0` | MPtrj + sAlex | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **MACE** `mace-matpes-pbe-0` | MatPES | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **MACE** `mace-matpes-r2scan-0` | MatPES | r2SCAN | ✗ none | ✅ allowed — D3 `xc=r2scan` |
+| **MACE** `polar-1-s` / `polar-1-m` / `polar-1-l` (MACE-Polar) | OMol25 | ωB97M-V | ✓ yes (VV10 nonlocal) | ⛔ error (double-counting) |
 | **MatterSim** `default` / `1M` / `5M` | MatterSim set (MPtrj + T/P-sampled structures) | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **NequIP OAM** `S` / `M` / `L` / `XL` | OMat24 pre-training + sAlex / MPTrj fine-tuning | PBE(+U)-level materials data | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `mpa` | MPtrj + sAlex | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
@@ -131,9 +132,25 @@ future upstream release, for instance — lands there and is refused by default.
 - **`omol25_low` vs `omol25_high`** select the *spin state*, not the accuracy:
   SevenNet trains the low-spin and high-spin OMol25 configurations as separate
   tasks (low-spin organometallics are oversampled 5×). Both are ωB97M-V.
-- **Charge and spin.** Only UMA's `omol` head reads a total charge and spin
-  multiplicity, from `atoms.info["charge"]` and `atoms.info["spin"]`. SevenNet
-  has no charge/spin input at all, so its molecular modals cannot describe ions
-  or a chosen open-shell state. See the README's "Molecular systems" section.
+- **MACE-Polar is loaded by a different upstream function.** `polar-1-s` /
+  `polar-1-m` / `polar-1-l` are electrostatics foundation models and come from
+  `mace_polar`, not `mace_mp`; `get_calculator("mace", model="polar-1-m")`
+  switches on the name. They carry one head, so — like MACE-OMAT-0 — the model
+  name keys the row above. Their OMol25 reference is the same ωB97M-V as the
+  MH-1 `omol` head, which is why they sit in the ⛔ tier: the nonlocal VV10 term
+  is already there. Alongside energy, forces and stress they put a dipole moment
+  (non-periodic cells only), partial charges, spins and an electrostatic energy
+  breakdown into `calc.results` — not into `implemented_properties`, so ASE's
+  own getters do not reach them — and they read an applied field from
+  `atoms.info["external_field"]`. They also need `graph_longrange`, which is
+  built from the `graph_electrostatics` repository rather than published on
+  PyPI; see the README's "MACE-Polar" section.
+- **Charge and spin.** UMA's `omol` head and the MACE-Polar checkpoints read a
+  total charge and spin multiplicity, from `atoms.info["charge"]` and
+  `atoms.info["spin"]`; MACE-Polar reads `atoms.info["external_field"]` as well.
+  Both substitute a neutral closed-shell system (and, for MACE-Polar, a zero
+  field) without raising when the keys are absent. SevenNet has no charge/spin
+  input at all, so its molecular modals cannot describe ions or a chosen
+  open-shell state. See the README's "Molecular systems" section.
 - These functional assignments reflect the datasets as of mid-2026; if upstream
   retrains a task at a different level, update both this table and `dispersion.py`.

@@ -7,9 +7,10 @@ name = "ase-calculator-kit"
 description = "Unified ASE calculator factory for MLIP and DFT calculators."
 readme = "README.md"
 # No upper bound: an upper cap is baked into every uploaded file and makes the
-# package invisible to a newer interpreter even when it works there. Individual
-# backends that lag behind cap themselves — fairchem-core declares <3.14 — and
-# pip then names the backend in the error instead of hiding this package.
+# package invisible to a newer interpreter even when it works there. A backend
+# that lags a Python release caps itself instead — fairchem-core declared <3.14
+# until 2.22.0 lifted it — and pip then names the backend in the error rather
+# than hiding this package. As of 0.5.4 no backend caps below 3.14.
 requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -48,7 +49,7 @@ chgnet = ["chgnet>=0.4,<0.5"]
 sevennet = ["sevenn>=0.13"]
 mattersim = ["mattersim>=1.2,<2"]
 nequip = ["nequip>=0.18,<0.19"]
-uma = ["fairchem-core>=2.20,<3"]
+uma = ["fairchem-core>=2.22,<3"]
 dispersion = ["torch-dftd>=0.5,<0.6"]
 # MACE is deliberately absent from `all` below. mace-torch pins e3nn==0.4.4,
 # while sevenn, fairchem-core, mattersim and nequip all require e3nn>=0.5:
@@ -61,7 +62,7 @@ all = [
     "sevenn>=0.13",
     "mattersim>=1.2,<2",
     "nequip>=0.18,<0.19",
-    "fairchem-core>=2.20,<3",
+    "fairchem-core>=2.22,<3",
     "torch-dftd>=0.5,<0.6",
 ]
 # Development tooling is not a library dependency, so it stays exactly pinned:

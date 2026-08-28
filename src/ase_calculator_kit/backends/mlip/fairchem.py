@@ -17,7 +17,7 @@ class FairChemBackend(BaseBackend):
         self,
         *,
         device: str = "auto",
-        model: str = "uma-s-1p2",
+        model: str = "uma-s-1p2p1",
         task: str = "omat",
         dispersion: bool = False,
         dispersion_xc: str | None = None,
@@ -40,7 +40,15 @@ class FairChemBackend(BaseBackend):
             asserts ``device in {"cpu", "cuda"}``, so ``"mps"`` is rejected
             before this wrapper runs.
         model:
-            UMA model name. Defaults to ``"uma-s-1p2"``.
+            UMA model name. Defaults to ``"uma-s-1p2p1"``, the newest small
+            UMA checkpoint. It is only in fairchem-core's model registry from
+            **2.22.0** onwards — an older install answers this name with
+            ``KeyError: Model 'uma-s-1p2p1' not found``, listing the
+            checkpoints it does carry — which is why the ``uma`` extra requires
+            ``fairchem-core>=2.22``. The earlier checkpoints stay selectable by
+            name: ``"uma-s-1p2"``, ``"uma-s-1p1"``, ``"uma-m-1p1"``. Anything
+            not in the registry is rejected by fairchem itself; this package
+            adds no aliases, so one checkpoint has exactly one name.
         task:
             The ``task_name`` selecting the domain-specific head. A single UMA
             model serves many domains; pick the task matching your system:

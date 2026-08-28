@@ -84,23 +84,28 @@ VARIANTS = [
     ("mace mh-1/spice_wB97M", "mace", {"head": "spice_wB97M"}, make_molecule),
     # Single-head: no head, resolved by head="auto".
     ("mace medium-omat-0", "mace", {"model": "medium-omat-0"}, make_bulk),
+    # MACE-Polar: the name routes to mace_polar, and these read charge/spin
+    # exactly like UMA's omol head does, so both are set here too.
+    ("mace polar-1-s", "mace", {"model": "polar-1-s"}, lambda: make_molecule(charge=0, spin=1)),
+    ("mace polar-1-m", "mace", {"model": "polar-1-m"}, lambda: make_molecule(charge=0, spin=1)),
+    ("mace polar-1-l", "mace", {"model": "polar-1-l"}, lambda: make_molecule(charge=0, spin=1)),
     ("mattersim 1M", "mattersim", {"model": "1M"}, make_bulk),
     ("mattersim 5M", "mattersim", {"model": "5M"}, make_bulk),
     ("nequip OAM-S", "nequip", {"model": "S"}, make_bulk),
     ("nequip OAM-M", "nequip", {"model": "M"}, make_bulk),
     ("nequip OAM-L", "nequip", {"model": "L"}, make_bulk),
     ("nequip OAM-XL", "nequip", {"model": "XL"}, make_bulk),
-    ("uma-s-1p2/omat", "uma", {"task": "omat"}, make_bulk),
-    ("uma-s-1p2/oc20", "uma", {"task": "oc20"}, make_bulk),
-    ("uma-s-1p2/oc22", "uma", {"task": "oc22"}, make_bulk),
-    ("uma-s-1p2/oc25", "uma", {"task": "oc25"}, make_bulk),
-    ("uma-s-1p2/odac", "uma", {"task": "odac"}, make_bulk),
+    ("uma-s-1p2p1/omat", "uma", {"task": "omat"}, make_bulk),
+    ("uma-s-1p2p1/oc20", "uma", {"task": "oc20"}, make_bulk),
+    ("uma-s-1p2p1/oc22", "uma", {"task": "oc22"}, make_bulk),
+    ("uma-s-1p2p1/oc25", "uma", {"task": "oc25"}, make_bulk),
+    ("uma-s-1p2p1/odac", "uma", {"task": "odac"}, make_bulk),
     # The omol head is the only one that reads charge/spin, and fairchem falls
     # back to a neutral singlet with just a warning, so set both explicitly.
-    ("uma-s-1p2/omol", "uma", {"task": "omol"}, lambda: make_molecule(charge=0, spin=1)),
-    ("uma-s-1p2/omol OH-", "uma", {"task": "omol"}, lambda: make_ion(charge=-1, spin=1)),
-    ("uma-s-1p2/omol OH radical", "uma", {"task": "omol"}, lambda: make_ion(charge=0, spin=2)),
-    ("uma-s-1p2/omc", "uma", {"task": "omc"}, lambda: make_molecule(charge=0, spin=1)),
+    ("uma-s-1p2p1/omol", "uma", {"task": "omol"}, lambda: make_molecule(charge=0, spin=1)),
+    ("uma-s-1p2p1/omol OH-", "uma", {"task": "omol"}, lambda: make_ion(charge=-1, spin=1)),
+    ("uma-s-1p2p1/omol OH radical", "uma", {"task": "omol"}, lambda: make_ion(charge=0, spin=2)),
+    ("uma-s-1p2p1/omc", "uma", {"task": "omc"}, lambda: make_molecule(charge=0, spin=1)),
 ]
 
 

@@ -103,10 +103,19 @@ These are deliberate design decisions, not oversights.
     file uploaded to PyPI and cannot be edited afterwards, so it makes the
     package invisible to a newer interpreter until a fresh release goes out —
     even when the code runs there fine. Backends that lag a Python release cap
-    themselves (`fairchem-core` declares `<3.14`), and pip then names the
-    backend in the error. Do not paper over that with an environment marker on
-    the extra: a marker makes the install *succeed* while silently omitting the
-    backend. `tests/test_packaging.py` enforces the absence of a cap.
+    themselves — `fairchem-core` declared `<3.14` until 2.22.0 lifted it, and as
+    of 0.5.4 no backend caps below 3.14 — and pip then names the backend in the
+    error. Do not paper over that with an environment marker on the extra: a
+    marker makes the install *succeed* while silently omitting the backend.
+    `tests/test_packaging.py` enforces the absence of a cap, and the
+    `extras-resolve` CI job (expectations mirroring the README table) is what
+    catches the change in either direction.
+11. **The MACE backend has two upstream loaders, chosen by model name.** Since
+    0.5.4, `POLAR_MODELS` (`polar-1-s/m/l`) load through `mace_polar` and
+    everything else through `mace_mp`. Neither function accepts the other's
+    checkpoint names, so the name *is* the selector and there is no keyword to
+    add. `mace_polar` is imported only on the polar path, so an install predating
+    it reports a missing mace-torch rather than a missing MACE-MP.
 
 ## Conventions
 
@@ -230,6 +239,19 @@ Three things make this go wrong, and all three have happened here:
   either signal; do not "simplify" it back into an import check. The failed
   attempt does not poison the CUDA context — the fallback calculator was
   verified to keep returning correct energies afterwards.
+- **MACE-Polar's checkpoints need a package pip cannot resolve.** The published
+  `polar-1-*` files unpickle classes from `graph_longrange`, which `mace-torch`
+  does not depend on and which is not on PyPI: it is built from
+  WillBaldwin0's `graph_electrostatics` repository, and the distribution it
+  produces is named `graph_longrange`, not `graph_electrostatics` — pip rejects
+  the `graph_electrostatics @ git+…` spelling outright, so the documented
+  command passes the bare URL. PyPI forbids direct references in uploaded
+  metadata, so this can never become an extra here; `_DIRECT_INSTALLS` in
+  `errors.py` exists to name it anyway, and `_require_polar_runtime()` checks
+  for it before the download. Left alone the failure is `ModuleNotFoundError:
+  No module named 'graph_longrange'` from inside `torch.load`, naming neither
+  MACE nor this package (ACEsuit/mace#1408).
+
 - **MACE accepts an unknown `head` and computes anyway.** `MACECalculator` logs
   `Head <x> not found in available heads [...], defaulting to the last head` and
   returns energies from that head — a typo yields a plausible number at the
