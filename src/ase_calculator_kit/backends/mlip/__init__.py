@@ -5,6 +5,7 @@ from __future__ import annotations
 from .chgnet import CHGNetBackend
 from .fairchem import FairChemBackend
 from .mace import MACEBackend
+from .matgl import TensorNetBackend
 from .mattersim import MatterSimBackend
 from .nequip import NequIPBackend
 from .sevennet import SevenNetBackend
@@ -16,4 +17,5 @@ __all__ = [
     "MatterSimBackend",
     "NequIPBackend",
     "SevenNetBackend",
+    "TensorNetBackend",
 ]

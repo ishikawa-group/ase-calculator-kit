@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.5
+
+Adds MatGL's PyG TensorNet MatPES potentials to the calculator factory.
+
+- **`get_calculator("tensornet")` loads `TensorNet-PES-MatPES-PBE-2025.2`.**
+  Select `model="matpes-r2scan"` for `TensorNet-PES-MatPES-r2SCAN-2025.2`.
+  Full dated names and dated suffixes are also accepted; `revision=` can pin
+  the official Hugging Face weights to a commit.
+- **Install the new `matgl` extra**, also included in `all`. The lightweight
+  core remains ASE/PyYAML only. The tested MatGL version is 4.0.3.
+- **D3 follows the selected functional**: PBE or r2SCAN, using the existing BJ
+  damping, 14 Å cutoff and polynomial smoothing defaults.
+- **CPU, CUDA and Apple Silicon MPS are verified.** MPS converts the potential
+  to float32 before device transfer; the D3 term runs on CPU. Stress uses
+  ASE's eV/Å³ and six-component Voigt format rather than MatGL's GPa default.
+- **MatGL CHGNet and M3GNet remain deferred** after upstream consistency issues
+  were found during validation. Existing CHGNet behavior is unchanged.
+  See [the validation record](docs/matgl-validation.md) for measured scope.
+
 ## 0.5.4
 
 Moves the UMA default to the newest checkpoint, and adds MACE's electrostatics

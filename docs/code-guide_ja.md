@@ -51,6 +51,22 @@ YAMLで明示します。最終的に使われた条件は`write_resolved_config
   1つの計算キャンペーン内で混ぜるとエネルギーの比較ができない。
 - 重いMLIP packageはbackend内で遅延importし、未使用backendのimport失敗を避ける。
 
+## MatGLのMatPESモデル
+
+`backends/mlip/matgl.py`がTensorNetの2つのPyGモデルを共通処理する。
+短縮名`matpes-pbe` / `matpes-r2scan`を正式な日付入りモデル名へ解決してから、
+同じ解決結果でD3の汎関数を選ぶ。既存の`chgnet.py`は従来のCHGNetを使う。
+MatGL版CHGNetとM3GNetは上流の問題の対応待ちで、公開対象に含めない。
+
+MatGLの`PESCalculator`は応力の既定単位がGPaなので、`stress_unit="eV/A3"`と
+`use_voigt=True`を指定する。これによりD3と加算したときもstressのshapeが`(6,)`で揃う。
+MPSはfloat64を保持できないため、モデルを`.float()`にしてから`.to("mps")`する。
+CPUでのdtypeやPyTorchのglobal defaultは変更しない。
+
+検証は`temp/`で行い、同一のCu・Si・NaCl構造について単位、shape、有限差分、
+上流出力との一致、セル複製時のenergyの示量性、CPU/MPSの一致、D3加算を確認する。
+検証結果は[`matgl-validation.md`](matgl-validation.md)に記録する。
+
 ## MACEは専用の仮想環境が必要
 
 MACEは0.5.0から利用できるが、**他のMLIP backendと同じ環境には入らない**。

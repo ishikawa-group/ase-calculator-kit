@@ -11,7 +11,7 @@ import yaml
 _ROOT = Path(__file__).resolve().parents[1]
 
 #: Individual backend extras that can share one environment, in pyproject order.
-_BACKEND_EXTRAS = ("chgnet", "sevennet", "mattersim", "nequip", "uma", "dispersion")
+_BACKEND_EXTRAS = ("chgnet", "matgl", "sevennet", "mattersim", "nequip", "uma", "dispersion")
 
 #: Extras that cannot be installed next to the ones above and are therefore
 #: excluded from `all`. mace-torch pins e3nn==0.4.4 against everyone else's

@@ -46,6 +46,7 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 chgnet = ["chgnet>=0.4,<0.5"]
+matgl = ["matgl>=4.0.3,<5"]
 sevennet = ["sevenn>=0.13"]
 mattersim = ["mattersim>=1.2,<2"]
 nequip = ["nequip>=0.18,<0.19"]
@@ -59,6 +60,7 @@ dispersion = ["torch-dftd>=0.5,<0.6"]
 mace = ["mace-torch>=0.3.16,<0.4"]
 all = [
     "chgnet>=0.4,<0.5",
+    "matgl>=4.0.3,<5",
     "sevenn>=0.13",
     "mattersim>=1.2,<2",
     "nequip>=0.18,<0.19",
@@ -87,6 +89,7 @@ where = ["src"]
 ase_calculator_kit = ["py.typed"]
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 addopts = "-m 'not slow'"
 markers = [
     "slow: real single-point calculations that download model weights",

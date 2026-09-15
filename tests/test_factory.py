@@ -19,6 +19,7 @@ def test_available_models():
         "qe",
         "quantum-espresso",
         "sevennet",
+        "tensornet",
         "uma",
         "vasp",
     ]
@@ -31,6 +32,7 @@ def test_available_models():
         "mattersim",
         "nequip",
         "sevennet",
+        "tensornet",
         "uma",
     ]
     assert kit.available_dft_calculators() == [

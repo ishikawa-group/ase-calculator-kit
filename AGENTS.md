@@ -11,7 +11,7 @@ say so explicitly instead of silently changing the behavior.
 ## What this package is
 
 A thin factory layer. It does **not** implement any physics: it maps a name
-plus keywords onto an upstream ASE calculator (`chgnet`, `sevenn`, `mattersim`,
+plus keywords onto an upstream ASE calculator (`chgnet`, `matgl`, `sevenn`, `mattersim`,
 `nequip`, `fairchem-core`, `ase.calculators.vasp`, `ase.calculators.espresso`)
 and returns it unchanged. New behavior belongs upstream unless it is about
 *selection*, *validation*, or *reproducibility*.
@@ -29,7 +29,7 @@ src/ase_calculator_kit/
   errors.py          CalculatorKitError, MissingDependencyError, DispersionError
   config.py          YAML load / deep_merge / resolve / write-resolved-config
   backends/base.py   BaseBackend: every backend implements create_calculator()
-  backends/mlip/     chgnet.py sevennet.py mattersim.py nequip.py fairchem.py
+  backends/mlip/     chgnet.py matgl.py sevennet.py mattersim.py nequip.py fairchem.py
                      mace.py (separate environment — invariant 7)
   backends/dft/      vasp.py espresso.py
   py.typed           PEP 561 marker; keep it listed in [tool.setuptools.package-data]
@@ -75,7 +75,7 @@ These are deliberate design decisions, not oversights.
    `SumCalculator([backend_calc, d3_calc])`. Anything that assumes the backend
    class comes back is wrong.
 6. **MPS support is measured, not assumed.** `resolve_device(..., allow_mps=)`
-   is `True` only for CHGNet, SevenNet, and MatterSim, because those were
+   is `True` for CHGNet, TensorNet (MatGL), SevenNet, and MatterSim, because those were
    validated with a real single point on Apple Silicon. Do not flip a flag
    without running the calculation; record the result in the README matrix.
 7. **MACE ships, but never in the same environment.** `mace-torch` pins
@@ -274,3 +274,8 @@ Three things make this go wrong, and all three have happened here:
   range. Combined with D3's unscreened metal C6 that produces very large
   molecule-metal corrections. Do not "fix" this by substituting another
   functional's parameters — that silently renames the method.
+
+- **MatGL currently exposes only TensorNet MatPES PBE/r2SCAN.** CHGNet is pending
+  upstream issue #834; M3GNet failed finite-difference and supercell checks due to
+  pruned-to-parent bond indexing. Keep experimental fixes in `temp/`, never in
+  the factory. See `docs/matgl-validation.md` before adding either architecture.

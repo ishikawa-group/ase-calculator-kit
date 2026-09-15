@@ -18,7 +18,9 @@ interaction and give wrong energies. So such models reject `dispersion=True`.
 | Model / task | Training dataset | DFT level (functional) | Dispersion in training? | `dispersion=True` behavior |
 |---|---|---|---|---|
 | **CHGNet** `default` / `0.3.0` / `0.2.0` | MPtrj | PBE+U | ✗ none | ✅ allowed — D3 `xc=pbe` |
-| **CHGNet** `r2scan` | MatPES r2SCAN transfer-learning | r2SCAN | ✗ none | ✅ allowed — D3 `xc=r2scan` |
+| **CHGNet** `r2scan` | MP-R2SCAN transfer-learning | r2SCAN | ✗ none | ✅ allowed — D3 `xc=r2scan` |
+| **TensorNet** `matpes-pbe` | MatPES (MatGL PyG) | PBE, no Hubbard U | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **TensorNet** `matpes-r2scan` | MatPES (MatGL PyG) | r2SCAN | ✗ none | ✅ allowed — D3 `xc=r2scan` |
 | **MACE** `omat_pbe` (MH-1 default) | OMat24 replay (10% of the pre-training set) | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **MACE** `mp_pbe_refit_add` | MPtrj | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **MACE** `oc20_usemppbe` | OC20 (2M subsample) | PBE, as stated by the MACE-MH-1 paper — see the note below | ✗ none | ✅ allowed — D3 `xc=pbe` |

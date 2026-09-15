@@ -12,8 +12,9 @@ unchanged.
 
 Supported MLIP backends:
 
-- [SevenNet](https://github.com/MDIL-SNU/SevenNet) (installed by default)
+- [SevenNet](https://github.com/MDIL-SNU/SevenNet)
 - [CHGNet](https://github.com/CederGroupHub/chgnet)
+- [MatGL (PyG)](https://github.com/materialyzeai/matgl): TensorNet MatPES potentials
 - [MatterSim](https://github.com/microsoft/mattersim)
 - [NequIP OAM](https://www.nequip.net/)
 - [UMA / fairchem](https://github.com/facebookresearch/fairchem)
@@ -39,6 +40,7 @@ explicit extra — install only what your workflow needs:
 # One backend
 pip install "ase-calculator-kit[sevennet]"
 pip install "ase-calculator-kit[chgnet]"
+pip install "ase-calculator-kit[matgl]"  # two TensorNet MatPES models
 pip install "ase-calculator-kit[mattersim]"
 pip install "ase-calculator-kit[nequip]"
 pip install "ase-calculator-kit[uma]"
@@ -71,8 +73,8 @@ with the matching extra to install.
 
 ### Python versions
 
-Python 3.12 and newer. The package itself has no upper bound, but one backend
-currently does:
+Python 3.12 and newer. The package itself has no upper bound; backend
+compatibility is checked separately:
 
 | | 3.12 | 3.13 | 3.14 |
 |---|:--:|:--:|:--:|
@@ -178,6 +180,7 @@ atoms.calc = get_calculator(
 |---|---|---|
 | `sevennet` | MLIP | — |
 | `chgnet` | MLIP | — |
+| `tensornet` | MLIP (MatGL PyG) | — |
 | `mattersim` | MLIP | — |
 | `nequip` | MLIP | — |
 | `mace` | MLIP (separate environment) | — |
@@ -199,6 +202,7 @@ any extra keywords to the underlying calculator.
 |---|---|
 | `sevennet` | `model="7net-omni"`, `modal="auto"`, `enable_cueq=False`, `enable_flash=False` |
 | `chgnet` | `model=None` (bundled default), `checkpoint=None` (path to a `.pth`) |
+| `tensornet` | `model="matpes-pbe"` (or `"matpes-r2scan"`), `revision=None` (Hugging Face commit) |
 | `mattersim` | `model="1M"` (or `"5M"`), `load_path=None` |
 | `nequip` | `model="L"` (`S`/`M`/`L`/`XL`), `model_path=None`, `compile_mode="eager"`, `neighborlist_backend="matscipy"`, `allow_tf32=False` |
 | `mace` | `model="mh-1"`, `head="auto"`, `default_dtype="float64"`, `accelerator="auto"` |
@@ -228,7 +232,7 @@ from ase_calculator_kit import (
     resolve_calculator_config,
 )
 
-available_mlip_models()     # ['chgnet', 'fairchem', 'mace', 'mattersim', 'nequip', 'sevennet', 'uma']
+available_mlip_models()     # ['chgnet', 'fairchem', 'mace', 'mattersim', 'nequip', 'sevennet', 'tensornet', 'uma']
 available_dft_calculators() # ['espresso', 'qe', 'quantum-espresso', 'vasp']
 available_calculators()     # both of the above; available_models() is an alias
 attach_calculator(atoms, "uma", task="omat")  # sets atoms.calc, returns atoms
@@ -270,12 +274,14 @@ DFT YAML examples live in [`examples/dft`](https://github.com/ishikawa-group/ase
 ## Apple Silicon (MPS) support
 
 Every MLIP backend was run on a single point (`bulk("Cu")`) with `device="mps"`
-on an Apple Silicon Mac (arm64, PyTorch 2.8, MPS available). Results:
+on Apple Silicon Macs (arm64, MPS available). TensorNet uses the environment
+recorded in its validation report below. Results:
 
 | Backend | `device="mps"` | Notes |
 |---|---|---|
 | SevenNet | ✅ supported | validated locally (`7net-omni`) |
 | CHGNet | ✅ supported | validated locally |
+| MatGL TensorNet | ✅ supported | both MatPES checkpoints; MPS uses float32, D3 runs on CPU; see the [validation record](docs/matgl-validation.md) |
 | MatterSim | ✅ supported | validated locally |
 | NequIP OAM | ❌ not supported | PyTorch MPS lacks float64; the packaged OAM models use float64 buffers |
 | MACE | ❌ not supported | same float64 problem: loading `mace-mh-1.model` with `map_location="mps"` raises `Cannot convert a MPS Tensor to float64`, with `default_dtype="float32"` as well |
@@ -287,6 +293,50 @@ Silicon when no CUDA device is present. NequIP, MACE and UMA accept only
 `device="auto"` falls back to `cpu`.
 
 ## Choosing an MLIP Variant
+
+### MatGL PyG MatPES models
+
+Install `ase-calculator-kit[matgl]`, or `[matgl,dispersion]` to add D3. The
+`[all]` extra includes both. MatGL 4.0.3 or newer (within 4.x) uses PyG only;
+DGL is not installed or selected. The native `chgnet` extra remains independent.
+
+```python
+atoms.calc = get_calculator("tensornet", model="matpes-pbe", device="mps")
+atoms.calc = get_calculator("tensornet", model="matpes-r2scan", dispersion=True)
+```
+
+| `name` | Short `model` | Official model name |
+|---|---|---|
+| `tensornet` | `matpes-pbe` (default) | `TensorNet-PES-MatPES-PBE-2025.2` |
+| `tensornet` | `matpes-r2scan` | `TensorNet-PES-MatPES-r2SCAN-2025.2` |
+
+The full model names and dated suffixes such as
+`model="pes-matpes-pbe-2025.2"` are also accepted, case-insensitively.
+An unknown version or a name belonging to a different architecture is rejected
+before downloading. Short names always map to the dated names above.
+The weights come from the official
+[`materialyze` organization](https://huggingface.co/materialyze); pass
+`revision="<Hugging Face commit SHA>"` to freeze a specific weight revision.
+Upstream has replaced weights under existing dated names, so record the revision
+as well as the model name for reproducible comparisons.
+
+MatGL CHGNet and M3GNet checkpoints are not exposed in this release; see the
+[validation record](docs/matgl-validation.md). The existing `chgnet` backend
+uses the original CHGNet package.
+
+`dispersion=True` selects D3 parameters `xc="pbe"` or `xc="r2scan"` from the
+resolved model. The shared defaults remain BJ damping, 14 Å cutoff and `poly`
+smoothing. When the network runs on MPS, the D3 term runs on CPU.
+
+The calculator returns total-cell energy in eV, forces in eV/Å with shape
+`(N, 3)`, and stress in eV/Å³ with shape `(6,)`, ordered
+`xx, yy, zz, yz, xz, xy`. MatGL's GPa default is explicitly changed through its
+own API; incompatible `stress_unit`, `stress_weight` or `use_voigt` overrides
+are rejected. TensorNet's float64 buffers are cast to float32 before moving to
+MPS. No global PyTorch dtype or graph backend setting is changed.
+
+See [the validation record](docs/matgl-validation.md) for the common-system
+checks against SevenNet-Omni, finite differences and measured CPU/MPS agreement.
 
 ### SevenNet `model`
 

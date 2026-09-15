@@ -11,6 +11,7 @@ from .mlip import (
     MatterSimBackend,
     NequIPBackend,
     SevenNetBackend,
+    TensorNetBackend,
 )
 
 __all__ = [
@@ -22,5 +23,6 @@ __all__ = [
     "MatterSimBackend",
     "NequIPBackend",
     "SevenNetBackend",
+    "TensorNetBackend",
     "VaspBackend",
 ]

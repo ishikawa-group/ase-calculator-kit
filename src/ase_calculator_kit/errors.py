@@ -69,6 +69,7 @@ class MissingDependencyError(CalculatorKitError, ImportError):
             return
         extra = {
             "chgnet": "chgnet",
+            "matgl": "matgl",
             "sevennet": "sevennet",
             "mattersim": "mattersim",
             "nequip": "nequip",
