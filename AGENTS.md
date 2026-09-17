@@ -15,6 +15,9 @@ plus keywords onto an upstream ASE calculator (`chgnet`, `matgl`, `sevenn`, `mat
 `nequip`, `fairchem-core`, `ase.calculators.vasp`, `ase.calculators.espresso`)
 and returns it unchanged. New behavior belongs upstream unless it is about
 *selection*, *validation*, or *reproducibility*.
+The explicit temporary exception is `matgl_chgnet.py`: a user-authorized,
+source-guarded, instance-local three-body gradient correction for MatGL 4.0.3.
+Replace it after validating upstream retrained CHGNet weights.
 
 ## Repository map
 
@@ -75,8 +78,8 @@ These are deliberate design decisions, not oversights.
    `SumCalculator([backend_calc, d3_calc])`. Anything that assumes the backend
    class comes back is wrong.
 6. **MPS support is measured, not assumed.** `resolve_device(..., allow_mps=)`
-   is `True` for CHGNet, TensorNet (MatGL), SevenNet, and MatterSim, because those were
-   validated with a real single point on Apple Silicon. Do not flip a flag
+   is `True` for CHGNet, TensorNet / provisional CHGNet (MatGL), SevenNet, and
+   MatterSim, because those were validated with a real single point on Apple Silicon. Do not flip a flag
    without running the calculation; record the result in the README matrix.
 7. **MACE ships, but never in the same environment.** `mace-torch` pins
    `e3nn==0.4.4`; `sevenn`, `fairchem-core` and `mattersim` require
@@ -275,7 +278,11 @@ Three things make this go wrong, and all three have happened here:
   molecule-metal corrections. Do not "fix" this by substituting another
   functional's parameters — that silently renames the method.
 
-- **MatGL currently exposes only TensorNet MatPES PBE/r2SCAN.** CHGNet is pending
-  upstream issue #834; M3GNet failed finite-difference and supercell checks due to
-  pruned-to-parent bond indexing. Keep experimental fixes in `temp/`, never in
-  the factory. See `docs/matgl-validation.md` before adding either architecture.
+- **MatGL exposes TensorNet and provisional gradient-corrected CHGNet MatPES.**
+  `matgl-chgnet` requires the audited MatGL 4.0.3 source, defaults to frozen HF
+  revisions, and removes only the three-body geometry `no_grad()` block on the
+  loaded instance. This explicitly authorized temporary exception must be
+  replaced after validation of upstream retrained checkpoints, with release
+  notes recording changed weights and behavior. Do not silently accept a new
+  source or globally patch MatGL. M3GNet remains deferred due to pruned-to-parent
+  bond indexing. See `docs/matgl-validation.md` before changing either path.

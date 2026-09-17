@@ -67,6 +67,8 @@ _POLICIES: dict[tuple[str, str], DispersionPolicy] = {
     # MatGL PyG MatPES checkpoints, normalized to the short model selector.
     ("tensornet", "matpes-pbe"): _allowed("PBE", "pbe"),
     ("tensornet", "matpes-r2scan"): _allowed("r2SCAN", "r2scan"),
+    ("matgl-chgnet", "matpes-pbe"): _allowed("PBE", "pbe"),
+    ("matgl-chgnet", "matpes-r2scan"): _allowed("r2SCAN", "r2scan"),
     # MACE-MH-1: the head *is* the level of theory. The model's own authors
     # evaluate the PBE-trained heads with torch-dftd D3(BJ) using the PBE
     # parametrisation, and run the OMol head with no added dispersion

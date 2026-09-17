@@ -8,6 +8,7 @@ from .backends import (
     EspressoBackend,
     FairChemBackend,
     MACEBackend,
+    MatGLCHGNetBackend,
     MatterSimBackend,
     NequIPBackend,
     SevenNetBackend,
@@ -23,6 +24,7 @@ from .backends import (
 #: ``backends/mlip/mace.py``.
 MLIP_BACKENDS: dict[str, type[BaseBackend]] = {
     "chgnet": CHGNetBackend,
+    "matgl-chgnet": MatGLCHGNetBackend,
     "tensornet": TensorNetBackend,
     "sevennet": SevenNetBackend,
     "mattersim": MatterSimBackend,

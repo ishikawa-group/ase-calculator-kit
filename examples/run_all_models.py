@@ -58,6 +58,10 @@ VARIANTS = [
         (f"tensornet matpes-{xc}", "tensornet", {"model": f"matpes-{xc}"}, make_bulk)
         for xc in ("pbe", "r2scan")
     ],
+    *[
+        (f"matgl-chgnet matpes-{xc}", "matgl-chgnet", {"model": f"matpes-{xc}"}, make_bulk)
+        for xc in ("pbe", "r2scan")
+    ],
     ("sevennet 7net-omni/mpa", "sevennet", {"modal": "mpa"}, make_bulk),
     ("sevennet 7net-omni/omat24", "sevennet", {"modal": "omat24"}, make_bulk),
     ("sevennet 7net-omni/matpes_pbe", "sevennet", {"modal": "matpes_pbe"}, make_bulk),
@@ -118,7 +122,7 @@ def main() -> None:
     parser.add_argument("--device", default="cpu", help="cpu (default), cuda, mps, or auto")
     parser.add_argument(
         "--only", nargs="*", default=None,
-        help="restrict to these model names (chgnet tensornet sevennet mattersim nequip mace uma)",
+        help="restrict to these model names (chgnet matgl-chgnet tensornet sevennet mattersim nequip mace uma)",
     )
     args = parser.parse_args()
 

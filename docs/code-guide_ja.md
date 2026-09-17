@@ -56,7 +56,13 @@ YAMLで明示します。最終的に使われた条件は`write_resolved_config
 `backends/mlip/matgl.py`がTensorNetの2つのPyGモデルを共通処理する。
 短縮名`matpes-pbe` / `matpes-r2scan`を正式な日付入りモデル名へ解決してから、
 同じ解決結果でD3の汎関数を選ぶ。既存の`chgnet.py`は従来のCHGNetを使う。
-MatGL版CHGNetとM3GNetは上流の問題の対応待ちで、公開対象に含めない。
+MatGL版CHGNetは`matgl_chgnet.py`の`matgl-chgnet`で暫定対応する。
+MatGL 4.0.3の既知の`forward`ソースをSHA-256で確認し、三体幾何の
+`no_grad()`ブロックだけをASTで除去して、読み込んだモデルのインスタンスに束縛する。
+クラスやモジュール全体を変更せず、重みは検証済みHF revisionを既定値とする。
+これは薄いファクトリという原則の限定例外で、再学習済みモデルではない。
+上流の再学習モデル公開後に検証し、将来のkitリリースで置き換える。
+M3GNetは引き続き公開対象に含めない。
 
 MatGLの`PESCalculator`は応力の既定単位がGPaなので、`stress_unit="eV/A3"`と
 `use_voigt=True`を指定する。これによりD3と加算したときもstressのshapeが`(6,)`で揃う。

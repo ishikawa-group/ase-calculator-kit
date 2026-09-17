@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.6
+
+Adds a provisional MatGL CHGNet backend while upstream retrained weights are pending.
+
+- **`get_calculator("matgl-chgnet", model="matpes-pbe")`** and
+  `model="matpes-r2scan"` load the existing CHGNet-PES-MatPES-2025.2.10 models.
+  Default HF revisions are frozen to the weights used in validation.
+- **Restore three-body force and stress derivatives.** Remove only the audited
+  `no_grad()` block from this model instance's forward method. Require MatGL
+  4.0.3 and reject unfamiliar source before downloading; other instances and
+  the existing Ceder `chgnet` backend are unaffected.
+- **These weights are not retrained.** Consistent energy derivatives do not
+  imply universally improved benchmark accuracy. After upstream retrained
+  models are released and validated, a future kit release will replace the
+  temporary implementation and document the changed weights and behavior.
+- Support PBE/r2SCAN D3(BJ), ASE stress conventions, and CPU/CUDA/MPS. D3 keeps
+  the shared 14 Å/poly defaults and runs on CPU when the model uses MPS.
+  See [validation](docs/matgl-validation.md) for measured scope.
+
 ## 0.5.5
 
 Adds MatGL's PyG TensorNet MatPES potentials to the calculator factory.

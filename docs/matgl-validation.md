@@ -64,18 +64,71 @@ The maximum Mac-CPU/H100-CUDA differences were 2.78×10⁻⁶ eV,
 1.37×10⁻⁶ eV/Å, and 1.21×10⁻⁷ eV/Å³. The CUDA job completed successfully
 in about 59 seconds, including a separate M3GNet diagnostic.
 
-## Deferred architectures
+## Provisional MatGL CHGNet in 0.5.6
 
-- **MatGL CHGNet** is deferred pending
-  [upstream issue #834](https://github.com/materialyzeai/matgl/issues/834):
-  three-body bond geometry was detached from energy derivatives.
-- **MatGL M3GNet** is also deferred. MatGL 4.0.3 direct calls showed force FD
+`matgl-chgnet` provides the existing PBE/r2SCAN 2025.2.10 checkpoints with
+three-body geometry gradients restored. It is **not a retrained model**.
+This explicitly authorized exception to the thin-factory policy is isolated in
+`backends/mlip/matgl_chgnet.py` and requires the unmodified MatGL 4.0.3 source.
+The helper checks the SHA-256 of `CHGNet.forward`, removes exactly the one
+`torch.no_grad()` block around `create_directed_line_graph`, and binds the new
+method to the loaded instance. Other instances, module globals and weights
+are unchanged; an unknown version/source is rejected before loading weights.
+The upstream fix is [PR #835](https://github.com/materialyzeai/matgl/pull/835).
+
+Default Hugging Face revisions:
+
+| Model | Frozen revision |
+|---|---|
+| CHGNet-PES-MatPES-PBE-2025.2.10 | `4ec3c2c323cde07a31ca99d6719cca45919b5e5f` |
+| CHGNet-PES-MatPES-r2SCAN-2025.2.10 | `4447783f53387df4642d13062cafc9571f1668d2` |
+
+The returned PESCalculator records the resolved model, revision and temporary
+correction in its `parameters`. An explicit `revision=` overrides the default;
+only the frozen revisions above have been validated here.
+
+**After upstream retrained models are published and validated, a future kit
+release will replace this temporary implementation and document the changed
+weights and behavior.** The current release never silently switches to new
+weights. Record kit and MatGL versions as well as HF revision to reproduce runs.
+
+The release checks use the same displaced/strained Cu, Si and NaCl structures,
+D3 settings, finite-difference steps and tolerances as above. All 12 CPU/MPS
+cases passed with MPS fallback disabled; the D3 term uses CPU on MPS.
+
+| Model | Max force FD error (eV/Å) | Max stress FD error (eV/Å³) | Max CPU/MPS force difference (eV/Å) |
+|---|---:|---:|---:|
+| matgl-chgnet matpes-pbe | 0.000260 | 1.77e-05 | 2.65e-06 |
+| matgl-chgnet matpes-r2scan | 0.000837 | 2.65e-05 | 2.38e-06 |
+
+All 12 cases also passed on H100 MIG 3g.47gb / CUDA with TF32 disabled.
+The maximum Mac-CPU/CUDA differences were 9.54e-07 eV,
+1.07e-06 eV/Å and 5.42e-08 eV/Å³. CUDA finite-difference
+errors were at most 0.000838 eV/Å (force) and 2.55e-05 eV/Å³
+(stress). The validation process completed in about 34 seconds.
+
+These checks cover total-cell energy, F `(N,3)`, ASE Voigt stress `(6,)`,
+finite differences, supercell scaling and D3 addition. Numerical inputs,
+raw outputs, scripts and hashes are retained under ignored `temp/matgl_v056/`.
+
+Earlier H100/CUDA experiments with the same weights and removal of this block
+found improved MatPES force/stress accuracy and NVE energy conservation.
+Results varied for elastic/adsorption properties; the 5,651-reaction D3
+adsorption comparison had worse mean energy errors after the correction.
+Energy-gradient consistency is therefore not a promise of universal accuracy
+improvement. Adsorption references also differ from the model functionals.
+See development artifacts under `temp/matgl_chgnet_oss_bench_20260916/` and
+`temp/matgl_chgnet_catbench_d3_20260917/` for the scope and raw results.
+
+## Deferred architecture
+
+- **MatGL M3GNet** remains deferred. MatGL 4.0.3 direct calls showed force FD
   discrepancies and dependence on supercell representation in both CPU float64
   and H100/CUDA float64. For the strained/displaced Si cell, doubling the cell
   changed the expected doubled energy by 0.01154 eV (PBE) and 0.04637 eV (r2SCAN).
   Experimental remapping of pruned bond indices to parent graph indices removed
   these discrepancies on the tested structures. This was a diagnostic only;
-  no upstream physics modifications are included in this package.
+  no M3GNet physics modifications are included in this package.
 
 Full input structures, raw E/F/S arrays, model hashes, scripts and experimental
 diagnostics are retained under the development checkout’s ignored

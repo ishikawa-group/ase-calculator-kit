@@ -14,7 +14,7 @@ Supported MLIP backends:
 
 - [SevenNet](https://github.com/MDIL-SNU/SevenNet)
 - [CHGNet](https://github.com/CederGroupHub/chgnet)
-- [MatGL (PyG)](https://github.com/materialyzeai/matgl): TensorNet MatPES potentials
+- [MatGL (PyG)](https://github.com/materialyzeai/matgl): TensorNet and provisional CHGNet MatPES potentials
 - [MatterSim](https://github.com/microsoft/mattersim)
 - [NequIP OAM](https://www.nequip.net/)
 - [UMA / fairchem](https://github.com/facebookresearch/fairchem)
@@ -40,7 +40,7 @@ explicit extra — install only what your workflow needs:
 # One backend
 pip install "ase-calculator-kit[sevennet]"
 pip install "ase-calculator-kit[chgnet]"
-pip install "ase-calculator-kit[matgl]"  # two TensorNet MatPES models
+pip install "ase-calculator-kit[matgl]"  # TensorNet and provisional MatGL CHGNet
 pip install "ase-calculator-kit[mattersim]"
 pip install "ase-calculator-kit[nequip]"
 pip install "ase-calculator-kit[uma]"
@@ -181,6 +181,7 @@ atoms.calc = get_calculator(
 | `sevennet` | MLIP | — |
 | `chgnet` | MLIP | — |
 | `tensornet` | MLIP (MatGL PyG) | — |
+| `matgl-chgnet` | MLIP (MatGL PyG; provisional gradient correction) | — |
 | `mattersim` | MLIP | — |
 | `nequip` | MLIP | — |
 | `mace` | MLIP (separate environment) | — |
@@ -203,6 +204,7 @@ any extra keywords to the underlying calculator.
 | `sevennet` | `model="7net-omni"`, `modal="auto"`, `enable_cueq=False`, `enable_flash=False` |
 | `chgnet` | `model=None` (bundled default), `checkpoint=None` (path to a `.pth`) |
 | `tensornet` | `model="matpes-pbe"` (or `"matpes-r2scan"`), `revision=None` (Hugging Face commit) |
+| `matgl-chgnet` | same model selectors; `revision=None` selects the frozen benchmark revision |
 | `mattersim` | `model="1M"` (or `"5M"`), `load_path=None` |
 | `nequip` | `model="L"` (`S`/`M`/`L`/`XL`), `model_path=None`, `compile_mode="eager"`, `neighborlist_backend="matscipy"`, `allow_tf32=False` |
 | `mace` | `model="mh-1"`, `head="auto"`, `default_dtype="float64"`, `accelerator="auto"` |
@@ -232,7 +234,7 @@ from ase_calculator_kit import (
     resolve_calculator_config,
 )
 
-available_mlip_models()     # ['chgnet', 'fairchem', 'mace', 'mattersim', 'nequip', 'sevennet', 'tensornet', 'uma']
+available_mlip_models()     # ['chgnet', 'fairchem', 'mace', 'matgl-chgnet', 'mattersim', 'nequip', 'sevennet', 'tensornet', 'uma']
 available_dft_calculators() # ['espresso', 'qe', 'quantum-espresso', 'vasp']
 available_calculators()     # both of the above; available_models() is an alias
 attach_calculator(atoms, "uma", task="omat")  # sets atoms.calc, returns atoms
@@ -274,14 +276,15 @@ DFT YAML examples live in [`examples/dft`](https://github.com/ishikawa-group/ase
 ## Apple Silicon (MPS) support
 
 Every MLIP backend was run on a single point (`bulk("Cu")`) with `device="mps"`
-on Apple Silicon Macs (arm64, MPS available). TensorNet uses the environment
-recorded in its validation report below. Results:
+on Apple Silicon Macs (arm64, MPS available). MatGL models use the environment
+recorded in their validation report below. Results:
 
 | Backend | `device="mps"` | Notes |
 |---|---|---|
 | SevenNet | ✅ supported | validated locally (`7net-omni`) |
 | CHGNet | ✅ supported | validated locally |
 | MatGL TensorNet | ✅ supported | both MatPES checkpoints; MPS uses float32, D3 runs on CPU; see the [validation record](docs/matgl-validation.md) |
+| MatGL CHGNet (provisional) | ✅ supported | both corrected MatPES checkpoints; MPS uses float32, D3 runs on CPU; see the [validation record](docs/matgl-validation.md) |
 | MatterSim | ✅ supported | validated locally |
 | NequIP OAM | ❌ not supported | PyTorch MPS lacks float64; the packaged OAM models use float64 buffers |
 | MACE | ❌ not supported | same float64 problem: loading `mace-mh-1.model` with `map_location="mps"` raises `Cannot convert a MPS Tensor to float64`, with `default_dtype="float32"` as well |
@@ -309,6 +312,8 @@ atoms.calc = get_calculator("tensornet", model="matpes-r2scan", dispersion=True)
 |---|---|---|
 | `tensornet` | `matpes-pbe` (default) | `TensorNet-PES-MatPES-PBE-2025.2` |
 | `tensornet` | `matpes-r2scan` | `TensorNet-PES-MatPES-r2SCAN-2025.2` |
+| `matgl-chgnet` | `matpes-pbe` (default) | `CHGNet-PES-MatPES-PBE-2025.2.10` |
+| `matgl-chgnet` | `matpes-r2scan` | `CHGNet-PES-MatPES-r2SCAN-2025.2.10` |
 
 The full model names and dated suffixes such as
 `model="pes-matpes-pbe-2025.2"` are also accepted, case-insensitively.
@@ -320,9 +325,37 @@ The weights come from the official
 Upstream has replaced weights under existing dated names, so record the revision
 as well as the model name for reproducible comparisons.
 
-MatGL CHGNet and M3GNet checkpoints are not exposed in this release; see the
-[validation record](docs/matgl-validation.md). The existing `chgnet` backend
-uses the original CHGNet package.
+**`matgl-chgnet` is a temporary compatibility backend requiring exactly MatGL
+4.0.3.** It uses the existing 2025.2.10 weights, with only the `no_grad()` block
+around three-body geometry removed on the loaded model instance. These are
+**not retrained checkpoints**. This restores consistency between energy and
+its force/stress derivatives; it does not guarantee better accuracy for every
+property or dataset. The original `chgnet` backend uses the Ceder CHGNet package.
+
+```bash
+pip install "ase-calculator-kit[matgl,dispersion]" "matgl==4.0.3"
+```
+
+```python
+atoms.calc = get_calculator("matgl-chgnet", model="matpes-pbe", device="mps")
+atoms.calc = get_calculator("matgl-chgnet", model="matpes-r2scan", dispersion=True)
+```
+
+By default, provisional CHGNet weights are frozen to HF revisions
+`4ec3c2c323cde07a31ca99d6719cca45919b5e5f` (PBE) and
+`4447783f53387df4642d13062cafc9571f1668d2` (r2SCAN); an explicit `revision=`
+overrides this choice. The resolved model/revision and correction are recorded
+in the underlying PESCalculator's `parameters`. With D3 this is
+`calc.mixer.calcs[0].parameters`. Unrecognized MatGL source or versions fail
+before downloading instead of receiving an unverified patch.
+
+**Once upstream retrained models are released and validated, a future kit
+release will replace this provisional implementation and document the new
+weights and behavior.** No automatic weight replacement occurs in this release.
+For reproducibility, record the kit/MatGL versions and HF revision. See the
+[validation record](docs/matgl-validation.md) and
+[upstream fix #835](https://github.com/materialyzeai/matgl/pull/835).
+MatGL M3GNet remains deferred.
 
 `dispersion=True` selects D3 parameters `xc="pbe"` or `xc="r2scan"` from the
 resolved model. The shared defaults remain BJ damping, 14 Å cutoff and `poly`

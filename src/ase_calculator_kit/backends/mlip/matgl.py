@@ -16,6 +16,10 @@ MATPES_MODELS = {
         "matpes-pbe": "TensorNet-PES-MatPES-PBE-2025.2",
         "matpes-r2scan": "TensorNet-PES-MatPES-r2SCAN-2025.2",
     },
+    "matgl-chgnet": {
+        "matpes-pbe": "CHGNet-PES-MatPES-PBE-2025.2.10",
+        "matpes-r2scan": "CHGNet-PES-MatPES-r2SCAN-2025.2.10",
+    },
 }
 
 
