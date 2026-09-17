@@ -5,9 +5,10 @@ from __future__ import annotations
 from ase.calculators.calculator import Calculator
 
 from ...device import resolve_device
-from ...dispersion import precheck_dispersion_xc, wrap_with_d3
+from ...dispersion import precheck_dispersion_xc
 from ...errors import MissingDependencyError
 from ..base import BaseBackend
+from ._matgl_pbc import make_pes_calculator, wrap_with_d3
 
 
 # Short names select these exact dated model names, never an upstream default.
@@ -106,7 +107,8 @@ class TensorNetBackend(BaseBackend):
             # energies, forces and stresses are recorded in docs/matgl-validation.md.
             potential = potential.float()
         potential = potential.to(resolved_device).eval()
-        bare = PESCalculator(
+        bare = make_pes_calculator(
+            PESCalculator,
             potential=potential, stress_unit="eV/A3", use_voigt=True, **kwargs,
         )
         if d3_xc is not None:

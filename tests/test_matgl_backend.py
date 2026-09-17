@@ -36,6 +36,7 @@ def fake_matgl(monkeypatch):
     class PESCalculator:
         def __init__(self, **kwargs):
             seen["calculator_kwargs"] = kwargs
+            self._atoms2graph = object()
 
     potential = Potential()
 

@@ -368,6 +368,17 @@ own API; incompatible `stress_unit`, `stress_weight` or `use_voigt` overrides
 are rejected. TensorNet's float64 buffers are cast to float32 before moving to
 MPS. No global PyTorch dtype or graph backend setting is changed.
 
+Both MatGL backends honor each axis of `atoms.pbc`: bulk `[True, True, True]`,
+slabs such as `[True, True, False]`, wires and nonperiodic molecules. An input
+adapter corrects MatGL 4.0.3's handling of partial PBC, including with D3;
+the supplied atoms are not modified. Missing **nonperiodic** cell vectors are
+allowed for energy/forces. Stress requires three independent cell vectors;
+otherwise ASE raises `PropertyNotImplementedError`. With a vacuum cell, stress
+uses the full cell volume, as in ASE. Fully nonperiodic torch-dftd calculations
+provide energy/forces only, so stress is unavailable with D3 in that case.
+Previously computed partial-PBC MatGL results need recomputation. Full-PBC
+graph construction remains unchanged.
+
 See [the validation record](docs/matgl-validation.md) for the common-system
 checks against SevenNet-Omni, finite differences and measured CPU/MPS agreement.
 

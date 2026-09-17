@@ -120,6 +120,51 @@ improvement. Adsorption references also differ from the model functionals.
 See development artifacts under `temp/matgl_chgnet_oss_bench_20260916/` and
 `temp/matgl_chgnet_catbench_d3_20260917/` for the scope and raw results.
 
+## ASE PBC compatibility correction (unreleased)
+
+MatGL 4.0.3's usual `Atoms2Graph` path checks `atoms.pbc.all()` and treats
+partial PBC as fully nonperiodic. The shared `_matgl_pbc.py` adapter now uses
+ASE neighbor lists, periodic image offsets and the actual cell for partial
+and nonperiodic inputs. Full-PBC graph construction remains upstream's.
+The adapter preserves the supplied atoms and does not modify model weights,
+the provisional CHGNet gradient correction, or D3 parameters.
+
+Missing nonperiodic cell vectors are completed internally for energy/forces,
+including torch-dftd. Stress is unavailable without a physical cell volume;
+fully nonperiodic torch-dftd also does not provide stress. A supplied vacuum
+cell uses its full volume. Nonperiodic MatGL without D3 now uses the supplied
+volume for stress, correcting the upstream unit-volume normalization.
+
+Validation on 2026-09-17 used MatGL 4.0.3, ASE 3.28.0, torch 2.14.0 and
+torch-dftd 0.5.3 on Apple Silicon CPU/MPS, with MPS fallback disabled:
+
+- Actual graph comparison with ASE: all 8 PBC masks × 3 boundary-crossing
+  directions, 24/24 passed. Fast regression tests also cover skew cells,
+  periodic images of the same atom, missing cell vectors and stress caching.
+- TensorNet/CHGNet × PBE/r2SCAN × D3 off/on × 8 masks × CPU/MPS: 128 baseline
+  calculations, with periodic translations and cell replication checks.
+- Missing open-axis cell vectors: 48 energy/force cases passed; stress was
+  correctly unavailable. The input atoms were unchanged.
+- Float64 finite differences on 24 nonperiodic/1D/2D systems, using coordinate
+  and strain steps of `1e-5` and `5e-6`: maximum force error **9.35e-8 eV/Å**
+  and stress error **3.55e-7 eV/Å³**. A coarse 0.002 Å step on one CHGNet case
+  was not converged; the smaller steps resolved that numerical discrepancy.
+
+Maximum absolute differences across the tested models and D3 settings:
+
+| Comparison | E (eV) | F (eV/Å) | S (eV/Å³) |
+|---|---:|---:|---:|
+| Full PBC versus upstream conversion | 3.81e-6 | 1.79e-7 | 3.73e-8 |
+| Cu(111), 20 Å vacuum gap: partial versus full PBC | 3.81e-6 | 3.73e-7 | 6.05e-9 |
+| CPU versus MPS | 3.81e-6 | 2.26e-6 | 1.42e-7 |
+
+The fast suite passed 305 tests; ruff passed. CUDA was not rerun for this input
+adapter change. Scripts, raw outputs, fixed HF revisions, source hashes and
+the Japanese report are in ignored `temp/matgl_pbc_fix_20260917/`.
+Earlier partial-PBC MatGL results require recomputation. The archived CatBench
+inputs were all fully periodic, including in the original source data, so
+that benchmark is unaffected by this partial-PBC defect.
+
 ## Deferred architecture
 
 - **MatGL M3GNet** remains deferred. MatGL 4.0.3 direct calls showed force FD

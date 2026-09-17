@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Fix axis-specific ASE PBC for `tensornet` and `matgl-chgnet`, with or without
+  D3. MatGL 4.0.3 previously treated partial PBC as fully nonperiodic on its
+  usual graph path. Partial-PBC results must be recomputed; full-PBC graph
+  construction and pretrained weights are unchanged.
+- Permit energy/force calculations with missing nonperiodic cell vectors,
+  including D3. Report stress only when a physical 3D cell volume is defined
+  and both calculators provide stress. For nonperiodic MatGL without D3,
+  stress now uses the supplied cell volume instead of a unit volume.
+
 ## 0.5.6
 
 Adds a provisional MatGL CHGNet backend while upstream retrained weights are pending.

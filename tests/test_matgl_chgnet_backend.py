@@ -68,6 +68,7 @@ def fake_matgl(monkeypatch):
         def __init__(self, **kwargs):
             seen["calculator"] = kwargs
             self.parameters = {}
+            self._atoms2graph = object()
 
     def load(name, **kwargs):
         seen["load"] = (name, kwargs)

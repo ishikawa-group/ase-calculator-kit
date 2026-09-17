@@ -13,11 +13,14 @@ say so explicitly instead of silently changing the behavior.
 A thin factory layer. It does **not** implement any physics: it maps a name
 plus keywords onto an upstream ASE calculator (`chgnet`, `matgl`, `sevenn`, `mattersim`,
 `nequip`, `fairchem-core`, `ase.calculators.vasp`, `ase.calculators.espresso`)
-and returns it unchanged. New behavior belongs upstream unless it is about
+and returns an ASE calculator. New behavior belongs upstream unless it is about
 *selection*, *validation*, or *reproducibility*.
 The explicit temporary exception is `matgl_chgnet.py`: a user-authorized,
 source-guarded, instance-local three-body gradient correction for MatGL 4.0.3.
 Replace it after validating upstream retrained CHGNet weights.
+The user-authorized `_matgl_pbc.py` input adapter also makes TensorNet and
+MatGL CHGNet honor each axis of `atoms.pbc`, including when D3 is enabled.
+It retains the upstream full-PBC graph path and never changes model weights.
 
 ## Repository map
 
@@ -33,6 +36,7 @@ src/ase_calculator_kit/
   config.py          YAML load / deep_merge / resolve / write-resolved-config
   backends/base.py   BaseBackend: every backend implements create_calculator()
   backends/mlip/     chgnet.py matgl.py sevennet.py mattersim.py nequip.py fairchem.py
+                     matgl_chgnet.py, _matgl_pbc.py (MatGL compatibility adapters)
                      mace.py (separate environment — invariant 7)
   backends/dft/      vasp.py espresso.py
   py.typed           PEP 561 marker; keep it listed in [tool.setuptools.package-data]
@@ -286,3 +290,11 @@ Three things make this go wrong, and all three have happened here:
   notes recording changed weights and behavior. Do not silently accept a new
   source or globally patch MatGL. M3GNet remains deferred due to pruned-to-parent
   bond indexing. See `docs/matgl-validation.md` before changing either path.
+
+- **MatGL 4.0.3 treats partial PBC as fully nonperiodic** on its usual graph
+  conversion path. `_matgl_pbc.py` uses ASE neighbor lists and lattice image
+  offsets for partial/nonperiodic inputs. Keep `atoms.pbc`, positions and cell
+  unchanged. Complete missing nonperiodic cell vectors only internally; this
+  also permits torch-dftd E/F calculations, but stress requires a real 3D cell.
+  Do not replace partial PBC with `pbc=True` or expose stress normalized by an
+  artificial completed volume. The adapter applies only to MatGL backends.

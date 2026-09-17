@@ -69,6 +69,15 @@ MatGLの`PESCalculator`は応力の既定単位がGPaなので、`stress_unit="e
 MPSはfloat64を保持できないため、モデルを`.float()`にしてから`.to("mps")`する。
 CPUでのdtypeやPyTorchのglobal defaultは変更しない。
 
+両バックエンドの入力変換は`_matgl_pbc.py`で共通化する。MatGL 4.0.3は通常の
+変換経路で部分PBCを全非周期として扱うため、部分PBC・非周期系にはASEの近傍リストを
+使い、周期像のシフトと実際のセルを渡す。全周期系は上流の変換をそのまま利用する。
+入力の`Atoms`やPBCは変更しない。非周期方向の欠けたセルベクトルだけを内部で補完し、
+D3併用時もE/Fを取得できるようにする。体積が定義されない系では応力を返さず、
+`get_stress()`はASEの`PropertyNotImplementedError`となる。真空付きセルの応力は
+セル全体の体積で規格化する。D3側が応力を提供しない全非周期系もE/Fのみとなる。
+この入力アダプタはMatGL経由のモデルだけに適用し、共有D3の数値設定は変更しない。
+
 検証は`temp/`で行い、同一のCu・Si・NaCl構造について単位、shape、有限差分、
 上流出力との一致、セル複製時のenergyの示量性、CPU/MPSの一致、D3加算を確認する。
 検証結果は[`matgl-validation.md`](matgl-validation.md)に記録する。

@@ -18,9 +18,10 @@ from importlib.metadata import version
 from ase.calculators.calculator import Calculator
 
 from ...device import resolve_device
-from ...dispersion import precheck_dispersion_xc, wrap_with_d3
+from ...dispersion import precheck_dispersion_xc
 from ...errors import MissingDependencyError
 from ..base import BaseBackend
+from ._matgl_pbc import make_pes_calculator, wrap_with_d3
 from .matgl import resolve_matpes_model
 
 
@@ -148,7 +149,9 @@ class MatGLCHGNetBackend(BaseBackend):
         if resolved_device == "mps":
             potential = potential.float()
         potential = potential.to(resolved_device).eval()
-        bare = PESCalculator(potential=potential, stress_unit="eV/A3", use_voigt=True, **kwargs)
+        bare = make_pes_calculator(
+            PESCalculator, potential=potential, stress_unit="eV/A3", use_voigt=True, **kwargs,
+        )
         bare.parameters.update(
             model=full_name, revision=resolved_revision,
             three_body_gradients="kit-temporary-matgl-4.0.3",
