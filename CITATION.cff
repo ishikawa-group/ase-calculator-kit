@@ -3,13 +3,14 @@ message: "If you use this software, please cite it using the metadata below."
 title: "ase-calculator-kit: a unified ASE calculator factory for MLIP and DFT calculators"
 abstract: >-
   A thin, unified ASE calculator factory for machine-learning interatomic
-  potentials (SevenNet, CHGNet, TensorNet/MatGL, MatterSim, NequIP OAM, UMA/fairchem, MACE) and
-  external DFT calculators (VASP, Quantum ESPRESSO). Every call returns a
-  standard ase.Calculator, so the rest of an ASE workflow stays unchanged.
+  potentials (SevenNet, CHGNet, TensorNet/MatGL, MatterSim, NequIP OAM, OrbMol,
+  UMA/fairchem, MACE) and external DFT calculators (VASP, Quantum ESPRESSO).
+  Every call returns a standard ase.Calculator, so the rest of an ASE workflow
+  stays unchanged.
 type: software
 license: MIT
-version: 0.5.6
-date-released: "2026-09-17"
+version: 0.5.7
+date-released: "2026-09-21"
 repository-code: "https://github.com/ishikawa-group/ase-calculator-kit"
 url: "https://github.com/ishikawa-group/ase-calculator-kit"
 keywords:

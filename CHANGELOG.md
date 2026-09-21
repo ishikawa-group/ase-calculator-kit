@@ -1,7 +1,46 @@
 # Changelog
 
-## Unreleased
+## 0.5.7
 
+Adds OrbMol-v2, and fixes axis-specific PBC in the MatGL backends.
+
+- **`get_calculator("orb")` loads OrbMol-v2**, Orbital Materials' molecular
+  potential with learnable electrostatics: a latent per-atom charge head
+  constrained to the system's total charge, plus a long-range Coulomb term —
+  a bare 1/r sum for isolated systems, particle mesh Ewald for periodic ones.
+  Trained on OMol25 and OPoly26 at ωB97M-V/def2-TZVPD, the same reference level
+  as UMA's `omol` task. `precision=` and `compile=` are exposed; energy, forces
+  and stress all come from autograd. Install it with the new `orb` extra.
+- **Charge and spin are required, and upstream enforces it.**
+  `atoms.info["charge"]` and `atoms.info["spin"]` must both be set;
+  `ORBCalculator` raises when either is missing rather than substituting a
+  neutral closed-shell system the way UMA's `omol` head and MACE-Polar do.
+- **`dispersion=True` is refused.** ωB97M-V already carries the nonlocal VV10
+  term, so OrbMol-v2 joins the always-refused tier in `docs/models.md`.
+- **Only `model="orbmol-v2"` is accepted.** orb-models' registry also holds the
+  Orb-v3 OMat/MPA models, Orb-v2 and OrbMol-v1; each is a different reference
+  level, so an unsupported name raises `ValueError` instead of computing at an
+  undocumented level of theory.
+- **A charged molecule in a periodic cell is not the isolated one.** The
+  periodic Coulomb term is an Ewald sum against a neutralizing background:
+  acetate⁻ in a 14 Å box measured 1.45 eV below the same anion at `pbc=False`,
+  while neutral molecules in the same box moved by under 3 meV.
+- **`orb` is not part of `[all]`, and installs from wheels only on Python
+  3.12.** orb-models pins `dm-tree==0.1.8`, whose newest wheels are cp312, so
+  an `[all]` carrying it would stop installing on 3.13 and 3.14. The model
+  itself runs on 3.13 — checked against the 3.12 energies, to the last digit —
+  once that one pin is overridden; the README has the command, and CI now
+  checks wheel availability rather than resolvability alone.
+- **No Apple Silicon MPS.** Graph construction runs through NVIDIA Warp, which
+  has no Metal backend, and the legacy edge methods either need float64 that
+  MPS cannot hold or refuse a non-CPU device. `device="mps"` raises;
+  `device="auto"` falls back to CPU.
+- **Cross-checked against UMA.** On eight isolated molecules and ions — neutral,
+  anionic and open-shell — `get_calculator("orb")` and
+  `get_calculator("uma", task="omol")` with `uma-s-1p2p1` agreed to 0.18–5.87
+  meV in total energy, on absolute energies of 1.5–6.3 keV. Force directions
+  were identical and components agreed to 0.05 eV/Å, except the O₂ triplet at
+  0.21 eV/Å.
 - Fix axis-specific ASE PBC for `tensornet` and `matgl-chgnet`, with or without
   D3. MatGL 4.0.3 previously treated partial PBC as fully nonperiodic on its
   usual graph path. Partial-PBC results must be recomputed; full-PBC graph
