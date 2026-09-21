@@ -1297,3 +1297,23 @@ state in YAML at calculation time. Initial per-atom charges/magnetic moments
 are not interpreted as the total charge or multiplicity. The execution example
 also saves `final.extxyz` with charge/multiplicity for reuse; ordinary XYZ does
 not preserve that metadata.
+
+
+Validated on Apple Silicon CPU (2026-09-22), Python 3.12, fairchem-core 2.22.0,
+PyTorch 2.13.0, `inference_settings="batch"`. All three eSEN checkpoints returned
+finite H2O energies and forces; the conserving model also handled OH doublet
+and OH-minus singlet through the same calculator, with changed results after
+info-only updates. This release's eSEN numerical check is CPU-only; CUDA is
+provided through upstream fairchem but was not re-measured for eSEN here.
+
+| eSEN OMol25 checkpoint | H2O energy (eV) |
+| --- | ---: |
+| `esen-sm-conserving-all-omol` | -2079.861931112 |
+| `esen-sm-direct-all-omol` | -2079.862334347 |
+| `esen-md-direct-all-omol` | -2079.862224540 |
+
+The checked Hugging Face snapshot is
+`facebook/OMol25@f3fdf382be3c22e8c67d1d76bacb1961627cf8d8`; all three downloaded
+checkpoint SHA256 hashes matched the official file pages. No weights or tokens
+are included in this repository. Model access is granted per Hugging Face
+account and repository: UMA access does not automatically grant OMol25 access.

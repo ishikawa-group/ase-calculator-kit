@@ -23,7 +23,9 @@ Adds molecular PySCF and GPU4PySCF through the existing config-only DFT factory.
   failure. Five YAML examples cover gas phase, solvent, dispersion and Ru ECP.
 - **Small validation scope:** five focused new unit cases plus existing tests/lint,
   and actual CPU/GPU energy/force comparisons on TSUBAME4. See
-  [validation and limitations](docs/pyscf.md). No benchmark framework or
+  [validation and limitations](docs/pyscf.md). All three eSEN models were also
+  checked on Apple Silicon CPU, including electronic-state changes for the
+  conserving model. No benchmark framework or
   periodic/stress support is introduced.
 
 ## 0.5.8
