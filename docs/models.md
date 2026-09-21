@@ -36,6 +36,7 @@ interaction and give wrong energies. So such models reject `dispersion=True`.
 | **MACE** `polar-1-s` / `polar-1-m` / `polar-1-l` (MACE-Polar) | OMol25 | ωB97M-V | ✓ yes (VV10 nonlocal) | ⛔ error (double-counting) |
 | **MatterSim** `default` / `1M` / `5M` | MatterSim set (MPtrj + T/P-sampled structures) | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **NequIP OAM** `S` / `M` / `L` / `XL` | OMat24 pre-training + sAlex / MPTrj fine-tuning | PBE(+U)-level materials data | ✗ none | ✅ allowed — D3 `xc=pbe` |
+| **OrbMol** `orbmol-v2` | OMol25 + OPoly26 | ωB97M-V | ✓ yes (VV10 nonlocal) | ⛔ error (double-counting) |
 | **SevenNet** `mpa` | MPtrj + sAlex | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `omat24` | OMat24 | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **SevenNet** `matpes_pbe` | MatPES | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
@@ -133,6 +134,20 @@ future upstream release, for instance — lands there and is refused by default.
   molecular-crystal / MOF sets (OMC25, ODAC23) through PBE+D3. None of them may
   take another D3 correction, and because the ⛔ tier cannot be overridden, a
   stray `dispersion_xc=` cannot re-enable one either.
+- **OrbMol-v2** is the only orb-models checkpoint this package loads, so the
+  model name keys its row. It is trained on OMol25 *and* OPoly26 at
+  ωB97M-V/def2-TZVPD — the same functional as UMA's `omol` task and SevenNet's
+  `omol25_*` modals, so it sits in the same ⛔ tier for the same reason. What it
+  adds is long-range electrostatics: a latent per-atom charge head constrained
+  to the system's total charge, plus a Coulomb term that is a bare 1/r sum for
+  isolated systems and particle mesh Ewald for periodic ones. Those per-atom
+  charges are emergent — upstream trained against energies and forces only and
+  says the values should be treated with caution — so read them as a
+  decomposition, not a population analysis. The Ewald convention also means a
+  **charged** molecule in a periodic box is computed against a neutralizing
+  background and is not comparable with the same ion at `pbc=False`; measured
+  here, acetate⁻ in a 14 Å box sat 1.45 eV below its isolated counterpart while
+  neutral molecules moved by under 3 meV.
 - **`omol25_low` vs `omol25_high`** select the *spin state*, not the accuracy:
   SevenNet trains the low-spin and high-spin OMol25 configurations as separate
   tasks (low-spin organometallics are oversampled 5×). Both are ωB97M-V.
@@ -149,12 +164,14 @@ future upstream release, for instance — lands there and is refused by default.
   `atoms.info["external_field"]`. They also need `graph_longrange`, which is
   built from the `graph_electrostatics` repository rather than published on
   PyPI; see the README's "MACE-Polar" section.
-- **Charge and spin.** UMA's `omol` head and the MACE-Polar checkpoints read a
-  total charge and spin multiplicity, from `atoms.info["charge"]` and
-  `atoms.info["spin"]`; MACE-Polar reads `atoms.info["external_field"]` as well.
-  Both substitute a neutral closed-shell system (and, for MACE-Polar, a zero
-  field) without raising when the keys are absent. SevenNet has no charge/spin
-  input at all, so its molecular modals cannot describe ions or a chosen
-  open-shell state. See the README's "Molecular systems" section.
+- **Charge and spin.** UMA's `omol` head, the MACE-Polar checkpoints and
+  OrbMol-v2 all read a total charge and spin multiplicity, from
+  `atoms.info["charge"]` and `atoms.info["spin"]`; MACE-Polar reads
+  `atoms.info["external_field"]` as well. UMA and MACE-Polar substitute a
+  neutral closed-shell system (and, for MACE-Polar, a zero field) without
+  raising when the keys are absent; **OrbMol-v2 raises instead**, which is the
+  behavior the other two should have. SevenNet has no charge/spin input at all,
+  so its molecular modals cannot describe ions or a chosen open-shell state.
+  See the README's "Molecular systems" section.
 - These functional assignments reflect the datasets as of mid-2026; if upstream
   retrains a task at a different level, update both this table and `dispersion.py`.

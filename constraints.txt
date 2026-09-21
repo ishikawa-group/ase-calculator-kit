@@ -19,6 +19,12 @@ nequip==0.18.0
 fairchem-core==2.22.0
 torch-dftd==0.5.3
 
+# orb-models is not in `all` (it pins dm-tree==0.1.8, which has no wheel past
+# cp312), so this pin only applies when the `orb` extra is installed:
+#
+#     pip install -e ".[orb,dev]" -c constraints.txt     # Python 3.12
+orb-models==0.7.0
+
 # MACE lives in a separate virtual environment (it pins e3nn==0.4.4 against the
 # others' e3nn>=0.5), so this pin never applies to the main one — a constraint
 # on a package that is not being installed does nothing. It records the version

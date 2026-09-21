@@ -103,6 +103,13 @@ VARIANTS = [
     ("nequip OAM-M", "nequip", {"model": "M"}, make_bulk),
     ("nequip OAM-L", "nequip", {"model": "L"}, make_bulk),
     ("nequip OAM-XL", "nequip", {"model": "XL"}, make_bulk),
+    # OrbMol-v2 reads charge and spin exactly like UMA's omol head, but raises
+    # instead of assuming a neutral singlet, so both keys are always set here.
+    # compile=False keeps this demo quick: the default compiles the model, which
+    # only pays off in a run longer than a single point.
+    ("orb orbmol-v2", "orb", {"compile": False}, lambda: make_molecule(charge=0, spin=1)),
+    ("orb orbmol-v2 OH-", "orb", {"compile": False}, lambda: make_ion(charge=-1, spin=1)),
+    ("orb orbmol-v2 OH radical", "orb", {"compile": False}, lambda: make_ion(charge=0, spin=2)),
     ("uma-s-1p2p1/omat", "uma", {"task": "omat"}, make_bulk),
     ("uma-s-1p2p1/oc20", "uma", {"task": "oc20"}, make_bulk),
     ("uma-s-1p2p1/oc22", "uma", {"task": "oc22"}, make_bulk),
@@ -122,7 +129,7 @@ def main() -> None:
     parser.add_argument("--device", default="cpu", help="cpu (default), cuda, mps, or auto")
     parser.add_argument(
         "--only", nargs="*", default=None,
-        help="restrict to these model names (chgnet matgl-chgnet tensornet sevennet mattersim nequip mace uma)",
+        help="restrict to these model names (chgnet matgl-chgnet tensornet sevennet mattersim nequip orb mace uma)",
     )
     args = parser.parse_args()
 

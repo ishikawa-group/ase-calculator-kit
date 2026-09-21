@@ -29,6 +29,7 @@ _DISPLAY_TO_BACKEND = {
     "MACE": "mace",
     "MatterSim": "mattersim",
     "NequIP OAM": "nequip",
+    "OrbMol": "orb",
     "SevenNet": "sevennet",
     "UMA": "uma",
 }

@@ -9,6 +9,7 @@ from .matgl import TensorNetBackend
 from .matgl_chgnet import MatGLCHGNetBackend
 from .mattersim import MatterSimBackend
 from .nequip import NequIPBackend
+from .orb import OrbBackend
 from .sevennet import SevenNetBackend
 
 __all__ = [
@@ -18,6 +19,7 @@ __all__ = [
     "MatGLCHGNetBackend",
     "MatterSimBackend",
     "NequIPBackend",
+    "OrbBackend",
     "SevenNetBackend",
     "TensorNetBackend",
 ]

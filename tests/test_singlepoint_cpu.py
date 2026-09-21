@@ -50,6 +50,14 @@ def _molecule(*, charge: int | None = None, spin: int | None = None) -> Atoms:
     return atoms
 
 
+def _hydroxide(*, charge: int, spin: int) -> Atoms:
+    """OH as an anion (charge=-1, spin=1) or a radical (charge=0, spin=2)."""
+    atoms = molecule("OH")
+    atoms.info["charge"] = charge
+    atoms.info["spin"] = spin
+    return atoms
+
+
 # (test id, model name, kwargs, system factory)
 # NOTE: the tiny bulk("Cu") / H2O systems below are intentionally API smoke-test
 # structures to confirm each calculator can be built and run on CPU. They are NOT
@@ -90,6 +98,14 @@ CASES = [
     ("nequip-OAM-M", "nequip", {"model": "M"}, _bulk),
     ("nequip-OAM-L", "nequip", {"model": "L"}, _bulk),
     ("nequip-OAM-XL", "nequip", {"model": "XL"}, _bulk),
+    # OrbMol-v2 raises when charge/spin are missing, so every case sets both.
+    # The first case exercises the default (compiled) path; the other two turn
+    # compilation off, since re-paying it per case buys nothing.
+    ("orb-orbmol-v2", "orb", {}, lambda: _molecule(charge=0, spin=1)),
+    ("orb-orbmol-v2-anion", "orb", {"compile": False},
+     lambda: _hydroxide(charge=-1, spin=1)),
+    ("orb-orbmol-v2-radical", "orb", {"compile": False},
+     lambda: _hydroxide(charge=0, spin=2)),
     ("uma-omat", "uma", {"task": "omat"}, _bulk),
     ("uma-oc20", "uma", {"task": "oc20"}, _bulk),
     ("uma-oc22", "uma", {"task": "oc22"}, _bulk),

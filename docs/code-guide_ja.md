@@ -98,6 +98,31 @@ python -m venv .venv-mace
 `MissingDependencyError`になるだけである。逆に通常の環境で`mace`を要求した場合も、
 同じ例外がこの制約を説明する。
 
+## OrbMolは`all`に入れないが、環境は分けない
+
+`orb`もMACEと同じく`all`から外してあるが、理由は依存衝突ではない。orb-modelsは
+他のbackendと問題なく同居する。外す理由は**Pythonのバージョン**である。
+orb-modelsが`dm-tree==0.1.8`を厳密固定しており、dm-tree 0.1.8のwheelは全
+プラットフォームでcp312までしか存在しない。3.13/3.14ではsource buildに落ちて
+失敗するため、`all`に入れると`all`自体が3つのうち2つのPythonでinstallできなく
+なってしまう。
+
+modelそのものは3.13で問題なく動く。orb-modelsがdm-treeから使っているのは
+`tree.flatten`と`tree.map_structure`だけで、dm-tree 0.1.10にはcp313/cp314の
+wheelがある。実測でも3.13 + dm-tree 0.1.10は3.12の参照energyを最後の桁まで
+再現した。pipには依存を上書きする機構が無く、PyPIはgit直接参照を禁じているので、
+この事実はpackageのmetadataには書けない。READMEに`uv pip install --override`の
+手順を置いてあるのはそのためで、forkはしない。
+
+```bash
+uv venv --python 3.12 .venv-orb
+uv pip install --python .venv-orb/bin/python "ase-calculator-kit[orb]"
+```
+
+`uv pip compile`はsource buildを計画するだけで成功してしまうので、
+`extras-resolve`には`--only-binary dm-tree`でwheelの有無を見る段を足してある。
+上流が固定を緩めた時点でここが落ち、READMEの表を直す合図になる。
+
 ### headの検証をこちら側で行う理由
 
 MACE-MH-1は1つのcheckpointに6つのheadを持ち、**headの選択がそのままDFT参照レベルの
@@ -137,6 +162,7 @@ ASEにはこれらの標準的な置き場所が無いため`atoms.info`を経�
 | backend | 分子系の指定 | charge / spin |
 |---|---|---|
 | `uma` | `task="omol"` | ✅ `atoms.info["charge"]`, `atoms.info["spin"]` |
+| `orb` | `model="orbmol-v2"` | ✅ `atoms.info["charge"]`, `atoms.info["spin"]`（**必須**） |
 | `sevennet` | `modal="omol25_low"`など | ❌ sevennetに入力そのものが存在しない |
 
 ```python
@@ -149,6 +175,10 @@ UMAで特に注意が要るのは、**未設定でもエラーにならない**�
 logに出したうえで、呼び出し側が渡した`atoms.info`へ`charge=0`/`spin=1`を書き込み、
 中性閉殻として計算を続ける。したがってアニオンやラジカルは**無警告で誤った値**が返る。
 分子系では毎回明示的に設定する。
+
+OrbMol-v2は同じ2つのkeyを読むが、**未設定なら`ValueError`を投げる**点だけが違う。
+UMAやMACE-Polarのように中性閉殻で代用して計算を続けたりはしない。分子系で
+両方のmodelを比べたい場合、この差は実験としてはUMA側の落とし穴になる。
 
 SevenNetにはcharge/spinの入力が無いため、イオンや任意の開殻状態は表現できない。
 `omol25_high`は高スピン配置で学習されたmodelを選ぶだけで、構造ごとに指定する
@@ -167,8 +197,10 @@ SevenNetにはcharge/spinの入力が無いため、イオンや任意の開殻�
    policy keyを必ずbacktickで書く。
 5. `pyproject.toml`へextraを追加し、`.github/workflows/ci.yml`の
    `extras-resolve`が対象Python全てで解決できることを確認する。
-   他のbackendと依存が衝突する場合はMACEと同様に`all`へ入れず、
-   `tests/test_packaging.py`で「`all`に含まれないこと」を固定する。
+   他のbackendと依存が衝突する場合はMACEと同様に、対象Pythonのwheelが無い場合は
+   orbと同様に`all`へ入れず、`tests/test_packaging.py`で「`all`に含まれないこと」
+   を固定する。解決できてもwheelが無いことはあるので、疑わしい依存は
+   `--only-binary <名前>`で実際のinstall結果を確認する。
 6. modelをdownloadしないmock testと、必要に応じて`slow` single-point testを追加する。
 
 backend間の共通化より、各上流packageへ実際に渡す引数が一目で分かることを優先します。

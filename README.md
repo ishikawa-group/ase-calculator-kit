@@ -17,6 +17,9 @@ Supported MLIP backends:
 - [MatGL (PyG)](https://github.com/materialyzeai/matgl): TensorNet and provisional CHGNet MatPES potentials
 - [MatterSim](https://github.com/microsoft/mattersim)
 - [NequIP OAM](https://www.nequip.net/)
+- [OrbMol (orb-models)](https://github.com/orbital-materials/orb-models):
+  OrbMol-v2, a molecular potential with learnable electrostatics — installs
+  from wheels **only on Python 3.12**, see [OrbMol (orb-models)](#orbmol-orb-models)
 - [UMA / fairchem](https://github.com/facebookresearch/fairchem)
 - [MACE](https://github.com/ACEsuit/mace) — **must be installed in a separate
   virtual environment**, see [MACE needs its own environment](#mace-needs-its-own-environment)
@@ -43,6 +46,7 @@ pip install "ase-calculator-kit[chgnet]"
 pip install "ase-calculator-kit[matgl]"  # TensorNet and provisional MatGL CHGNet
 pip install "ase-calculator-kit[mattersim]"
 pip install "ase-calculator-kit[nequip]"
+pip install "ase-calculator-kit[orb]"        # Python 3.12; see the note below
 pip install "ase-calculator-kit[uma]"
 
 # Several selected backends
@@ -68,6 +72,13 @@ pip install "ase-calculator-kit[dispersion]"
 >
 > See [MACE needs its own environment](#mace-needs-its-own-environment).
 
+> ⚠️ **`orb` is also outside `[all]`, for an unrelated reason.** It co-installs
+> with every other backend, but `orb-models` pins `dm-tree==0.1.8`, whose newest
+> wheels are cp312 — so on Python 3.13 and 3.14 the install stops in a source
+> build. Putting it in `[all]` would take `[all]` down with it. The model itself
+> runs fine on 3.13; see [OrbMol (orb-models)](#orbmol-orb-models) for the
+> one-line override.
+
 Missing backend packages are reported only when that calculator is requested,
 with the matching extra to install.
 
@@ -78,7 +89,14 @@ compatibility is checked separately:
 
 | | 3.12 | 3.13 | 3.14 |
 |---|:--:|:--:|:--:|
-| Core and every extra | ✅ | ✅ | ✅ |
+| Core, `all`, and every extra but `orb` | ✅ | ✅ | ✅ |
+| `orb` | ✅ | ⚠️ override | ⚠️ override |
+
+`orb` is the one entry that is not a plain ✅, and the cause is one line of
+upstream metadata rather than the model: `orb-models` pins `dm-tree==0.1.8`,
+whose newest wheels are cp312. OrbMol-v2 itself runs on 3.13 — verified against
+the 3.12 results, to the last digit — once `dm-tree` is allowed to be newer.
+[OrbMol (orb-models)](#orbmol-orb-models) has the command.
 
 Since 0.5.4 no backend caps below 3.14. `uma` (and therefore `all`) used to be
 ❌ on 3.14, because `fairchem-core` declared `requires-python = ">=3.11,<3.14"`
@@ -119,6 +137,19 @@ print(atoms.get_potential_energy())
 
 atoms.calc = get_calculator("uma", model="uma-s-1p2p1", task="omat")
 print(atoms.get_potential_energy())
+```
+
+OrbMol-v2 is a molecular model, so it takes a molecule and needs the system's
+total charge and spin multiplicity:
+
+```python
+from ase.build import molecule
+
+mol = molecule("H2O")
+mol.info["charge"] = 0
+mol.info["spin"] = 1
+mol.calc = get_calculator("orb")
+print(mol.get_potential_energy())
 ```
 
 In the separate MACE environment, the same call shape applies:
@@ -184,6 +215,7 @@ atoms.calc = get_calculator(
 | `matgl-chgnet` | MLIP (MatGL PyG; provisional gradient correction) | — |
 | `mattersim` | MLIP | — |
 | `nequip` | MLIP | — |
+| `orb` | MLIP (OrbMol-v2; Python 3.12) | — |
 | `mace` | MLIP (separate environment) | — |
 | `uma` | MLIP | `fairchem` |
 | `vasp` | DFT | — |
@@ -207,6 +239,7 @@ any extra keywords to the underlying calculator.
 | `matgl-chgnet` | same model selectors; `revision=None` selects the frozen benchmark revision |
 | `mattersim` | `model="1M"` (or `"5M"`), `load_path=None` |
 | `nequip` | `model="L"` (`S`/`M`/`L`/`XL`), `model_path=None`, `compile_mode="eager"`, `neighborlist_backend="matscipy"`, `allow_tf32=False` |
+| `orb` | `model="orbmol-v2"`, `precision="float32-high"`, `compile=None` |
 | `mace` | `model="mh-1"`, `head="auto"`, `default_dtype="float64"`, `accelerator="auto"` |
 | `uma` | `model="uma-s-1p2p1"`, `task="omat"` |
 
@@ -234,7 +267,7 @@ from ase_calculator_kit import (
     resolve_calculator_config,
 )
 
-available_mlip_models()     # ['chgnet', 'fairchem', 'mace', 'matgl-chgnet', 'mattersim', 'nequip', 'sevennet', 'tensornet', 'uma']
+available_mlip_models()     # ['chgnet', 'fairchem', 'mace', 'matgl-chgnet', 'mattersim', 'nequip', 'orb', 'sevennet', 'tensornet', 'uma']
 available_dft_calculators() # ['espresso', 'qe', 'quantum-espresso', 'vasp']
 available_calculators()     # both of the above; available_models() is an alias
 attach_calculator(atoms, "uma", task="omat")  # sets atoms.calc, returns atoms
@@ -287,11 +320,12 @@ recorded in their validation report below. Results:
 | MatGL CHGNet (provisional) | ✅ supported | both corrected MatPES checkpoints; MPS uses float32, D3 runs on CPU; see the [validation record](docs/matgl-validation.md) |
 | MatterSim | ✅ supported | validated locally |
 | NequIP OAM | ❌ not supported | PyTorch MPS lacks float64; the packaged OAM models use float64 buffers |
+| OrbMol | ❌ not supported | graph construction runs through NVIDIA Warp, which has no Metal backend; the legacy edge methods need float64 or refuse a non-CPU device |
 | MACE | ❌ not supported | same float64 problem: loading `mace-mh-1.model` with `map_location="mps"` raises `Cannot convert a MPS Tensor to float64`, with `default_dtype="float32"` as well |
 | UMA / fairchem | ❌ not supported | `fairchem-core` asserts `device in {"cpu", "cuda"}` |
 
 For the MPS-supported backends, `device="auto"` resolves to `mps` on Apple
-Silicon when no CUDA device is present. NequIP, MACE and UMA accept only
+Silicon when no CUDA device is present. NequIP, OrbMol, MACE and UMA accept only
 `"cpu"` / `"cuda"`; passing `device="mps"` raises a clear `ValueError`, and
 `device="auto"` falls back to `cpu`.
 
@@ -505,6 +539,59 @@ Two things worth knowing before trusting a number from this model:
   the right choice for geometry optimisation and phonons. Pass
   `default_dtype="float32"` for faster MD.
 
+### OrbMol `model`
+
+`get_calculator("orb")` loads **OrbMol-v2**, and that is the only checkpoint
+this backend accepts (`model="orbmol-v2"`, also spelled `"orbmol_v2"`). The rest
+of orb-models' registry — the Orb-v3 OMat/MPA models, Orb-v2, OrbMol-v1 — is not
+wired up: each is a different reference level and needs its own row in the
+dispersion policy, so asking for one raises `ValueError` rather than quietly
+computing at a level this package does not document.
+
+OrbMol-v2 continues the Orb-v3 architecture with **learnable electrostatics**: a
+latent-charge head predicts per-atom charges constrained to sum to the system's
+total charge, and a Coulomb module adds the long-range term — a bare 1/r sum for
+isolated systems, particle mesh Ewald for periodic ones. It is trained on OMol25
+and OPoly26 at ωB97M-V/def2-TZVPD, the same reference level as UMA's `omol` task
+and SevenNet's `omol25_*` modals, and unlike OrbMol-v1 it has seen periodic
+systems.
+
+```python
+from ase.build import molecule
+from ase_calculator_kit import get_calculator
+
+atoms = molecule("H2O")
+atoms.info["charge"] = 0
+atoms.info["spin"] = 1
+atoms.calc = get_calculator("orb")
+print(atoms.get_potential_energy())
+```
+
+| Keyword | Default | Meaning |
+|---|---|---|
+| `precision` | `"float32-high"` | also `"float32-highest"` (same dtype, exact matmuls) or `"float64"` |
+| `compile` | `None` | `None` follows orb-models and compiles; `False` skips it |
+
+- **The first single point is the slow one, twice over.** On a machine that has
+  never run orb-models, NVIDIA Warp compiles its neighbor-list kernels once —
+  about a minute and a half here, then cached under `~/.cache/warp` and
+  unrelated to `compile=`. With those caches warm, measured on CPU:
+  `compile=None` costs ~7 s on the first call against ~1.4 s with
+  `compile=False`, and both settle at ~0.02 s per call afterwards. Compiling is
+  worth it across a trajectory, not in a one-shot script.
+- **Energy, forces and stress are all derivatives.** OrbMol-v2 is conservative,
+  and orb-models turns the stress derivative on when preparing it for
+  inference. `calc.results` also carries `confidence` (the model's own
+  uncertainty estimate), `rotational_grad`, and `grad_forces` / `grad_stress`
+  under their upstream names.
+- **A charged system in a periodic cell is not the isolated one.** The periodic
+  Coulomb term is an Ewald sum against a neutralizing background, so acetate⁻
+  in a 14 Å box came out 1.45 eV below the same anion with `pbc=False` here.
+  That is the Ewald convention doing its job, not a model error — but it means
+  `pbc=True` on a charged molecule answers a different question. Neutral
+  molecules in the same box moved by under 3 meV.
+- `dispersion=True` is refused: ωB97M-V already carries the nonlocal VV10 term.
+
 ### UMA `task`
 
 | `task` | Use for |
@@ -556,6 +643,7 @@ whether they read them at all.
 | `sevennet` | `modal="omol25_low"` / `"omol25_high"` / `"spice"` / `"qcml"` | ❌ not supported by sevenn |
 | `mace` | `head="omol"` / `"spice_wB97M"` | ❌ the MH-1 molecular heads are fitted to neutral closed-shell data |
 | `mace` | `model="polar-1-s"` / `"polar-1-m"` / `"polar-1-l"` | ✅ `atoms.info["charge"]`, `atoms.info["spin"]`, `atoms.info["external_field"]` |
+| `orb` | `model="orbmol-v2"` (the default) | ✅ `atoms.info["charge"]`, `atoms.info["spin"]` — **required**, not defaulted |
 
 ### UMA: set both keys explicitly
 
@@ -668,6 +756,45 @@ the small model. All three live in the MACE environment like every other MACE
 checkpoint, and all three are stored in float32 — with this package's
 `default_dtype="float64"` default, MACE logs that it is converting them, which
 is the conversion and not a failure.
+
+### OrbMol-v2: charge and spin, enforced
+
+OrbMol-v2 reads the same two `atoms.info` keys, with one difference that makes
+it the safest of the group: it **raises** when they are missing.
+
+```python
+oh_minus = molecule("OH")
+oh_minus.info["charge"] = -1
+oh_minus.info["spin"] = 1
+oh_minus.calc = get_calculator("orb")
+print(oh_minus.get_potential_energy())
+
+forgot = molecule("OH")
+forgot.calc = get_calculator("orb")
+forgot.get_potential_energy()
+# ValueError: atoms.info must contain both 'charge' and 'spin'
+```
+
+UMA and MACE-Polar substitute a neutral closed-shell system and compute on;
+orb-models stops.
+
+The two agree closely where both are defined. On eight small molecules and ions
+— neutral, anionic and open-shell, isolated — `get_calculator("orb")` and
+`get_calculator("uma", task="omol")` with `uma-s-1p2p1` differed by **0.18 to
+5.87 meV in total energy**, on absolute energies of 1.5 to 6.3 keV. Both are
+OMol25 ωB97M-V models, so their absolute energy scales are directly comparable.
+Force directions were identical (direction cosine 1.0000 throughout) and
+components agreed to 0.05 eV/Å, except the O₂ triplet at 0.21 eV/Å — that and
+the acetate anion were the two largest disagreements.
+
+They also handle a periodic box differently, and that is a real difference
+rather than a tolerance. Put each molecule in a 14 Å cell with `pbc=True` and
+UMA returns the isolated energy unchanged to 1e-7 eV: its `omol` head has no
+long-range electrostatic term, so nothing reaches past the cutoff. OrbMol-v2's
+Coulomb term is an Ewald sum and is not cutoff-limited, so it moves — by under
+3 meV for the neutral molecules, and by 1.45 eV for acetate⁻, which the Ewald
+convention computes against a neutralizing background. See
+[OrbMol `model`](#orbmol-model).
 
 ### Non-periodic cells
 
@@ -857,6 +984,66 @@ Measured on a V100 with cuequivariance 0.11.1 installed: `accelerator="auto"`
 warns, falls back, and returns −3.74034995 eV for `bulk("Cu")` — identical to
 CPU float64 to 1e-13 eV — while `accelerator="cueq"` raises.
 
+## OrbMol (orb-models)
+
+OrbMol-v2 shares an environment happily with every other backend — there is no
+`e3nn` problem here and no second virtual environment to make. What it has is a
+Python-version problem, and it is one line of upstream metadata deep:
+`orb-models` pins `dm-tree==0.1.8`, and dm-tree 0.1.8's newest wheels are cp312
+on every platform. On Python 3.13 or 3.14 pip therefore falls into a source
+build that needs a C++ toolchain and a CMake old enough to accept the project,
+and stops:
+
+```
+ERROR: Failed building wheel for dm-tree
+```
+
+That is why `orb` is not part of `[all]`: an `[all]` carrying it would fail to
+install on two of the three Pythons this package supports.
+
+**On Python 3.12, nothing special is needed:**
+
+```bash
+pip install "ase-calculator-kit[orb]"
+```
+
+**On Python 3.13 and 3.14, override that one pin.** dm-tree 0.1.10 ships cp313
+and cp314 wheels, orb-models uses exactly two functions from it
+(`tree.flatten`, `tree.map_structure`), and OrbMol-v2 on 3.13 with dm-tree
+0.1.10 reproduced every one of this package's 3.12 reference energies to the
+last digit. With [uv](https://docs.astral.sh/uv/), which has a dependency
+override mechanism:
+
+```bash
+echo 'dm-tree>=0.1.10' > dm-tree-override.txt
+uv pip install --override dm-tree-override.txt "ase-calculator-kit[orb]"
+```
+
+pip has no equivalent, so there the override is spelled `--no-deps` plus the
+dependency list:
+
+```bash
+pip install "ase-calculator-kit" "dm-tree>=0.1.10"
+pip install --no-deps "orb-models>=0.7,<0.8"
+pip install "cached-path>=1.7.1" "scipy>=1.15.1" "torch>=2.8,<3" \
+            "tqdm>=4.67.1" "nvalchemi-toolkit-ops[torch]>=0.3.1,<0.4"
+```
+
+`pip check` will then report that `orb-models 0.7.0 requires dm-tree==0.1.8`.
+That warning is the override working, not a broken install.
+
+The pin is tracked upstream as
+[orbital-materials/orb-models#168](https://github.com/orbital-materials/orb-models/issues/168);
+it was introduced deliberately, in
+[#78](https://github.com/orbital-materials/orb-models/pull/78), to dodge a macOS
+build problem that dm-tree has since fixed. When it is relaxed, CI's
+wheel-availability check fails and the Python-versions table above gets updated.
+
+OrbMol-v2 does not run on Apple Silicon GPUs — see
+[Apple Silicon (MPS) support](#apple-silicon-mps-support) — and needs
+`atoms.info["charge"]` and `atoms.info["spin"]` on every structure, see
+[Molecular systems](#molecular-systems-charge-and-spin).
+
 ## Development
 
 ```bash
@@ -868,6 +1055,11 @@ python -m venv .venv
 python -m venv .venv-mace
 .venv-mace/bin/pip install -e ".[mace,dispersion,dev]" -c constraints.txt
 .venv-mace/bin/pytest
+
+# orb shares the main environment, but needs Python 3.12 (see above)
+uv venv --python 3.12 .venv-orb
+uv pip install --python .venv-orb/bin/python -e ".[orb,dev]" -c constraints.txt
+.venv-orb/bin/pytest -m slow -k orb
 ```
 
 `pyproject.toml` declares compatible version ranges so the package installs

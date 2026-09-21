@@ -17,17 +17,25 @@ class DispersionError(CalculatorKitError, ValueError):
     """
 
 
-#: Backends that cannot share an environment with the rest, and why.
+#: Extras whose install command alone is not the whole story, and why.
 #:
 #: The note is appended to the install hint because this is where a user
 #: actually lands: they run ``pip install 'ase-calculator-kit[mace]'`` into the
 #: environment they already have, pip fails on the e3nn conflict, and nothing
-#: has told them that a second environment was the intended answer.
-_SEPARATE_ENVIRONMENT_NOTES = {
+#: has told them that a second environment was the intended answer. ``orb`` is
+#: the same shape of surprise for a different reason — the command is right,
+#: but on Python 3.13+ it fails inside a dependency of a dependency.
+_INSTALL_NOTES = {
     "mace": (
         " Install it into a virtual environment of its own: mace-torch pins "
         "e3nn==0.4.4, while sevenn, fairchem-core, mattersim and nequip all "
         "require e3nn>=0.5, so MACE cannot coexist with the other backends."
+    ),
+    "orb": (
+        " On Python 3.13 and newer that command fails while building dm-tree: "
+        "orb-models pins dm-tree==0.1.8, whose newest wheels are cp312. See "
+        "the README's \"OrbMol (orb-models)\" section for the one-line "
+        "override that installs it anyway."
     ),
 }
 
@@ -75,9 +83,10 @@ class MissingDependencyError(CalculatorKitError, ImportError):
             "nequip": "nequip",
             "mace-torch": "mace",
             "fairchem-core": "uma",
+            "orb-models": "orb",
         }.get(backend.lower(), backend.lower())
         super().__init__(
             f"{backend} is not installed. "
             f"Install it with: pip install 'ase-calculator-kit[{extra}]'"
-            + _SEPARATE_ENVIRONMENT_NOTES.get(extra, "")
+            + _INSTALL_NOTES.get(extra, "")
         )

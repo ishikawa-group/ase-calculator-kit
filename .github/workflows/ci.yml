@@ -80,10 +80,11 @@ jobs:
           expected_failures=""
           status=0
           for py in 3.12 3.13 3.14; do
-            # `mace` is resolved on its own, which is also the only way it can
-            # be installed: mace-torch pins e3nn==0.4.4 against the others'
-            # e3nn>=0.5, so it is absent from `all` by design.
-            for extra in chgnet matgl sevennet mattersim nequip mace uma dispersion all; do
+            # `mace` and `orb` are resolved on their own because neither is
+            # in `all`: mace-torch pins e3nn==0.4.4 against the others'
+            # e3nn>=0.5, and orb-models pins dm-tree==0.1.8, whose newest
+            # wheels are cp312 (see the next step).
+            for extra in chgnet matgl sevennet mattersim nequip mace orb uma dispersion all; do
               if uv pip compile pyproject.toml --extra "$extra" \
                    --python-version "$py" -q >/dev/null 2>&1; then
                 actual=resolves
@@ -101,5 +102,34 @@ jobs:
                 status=1
               fi
             done
+          done
+          exit $status
+
+      - name: The orb extra installs from wheels only on Python 3.12
+        # `uv pip compile` is happy to plan a source build, so the step above
+        # says orb "resolves" on every Python. What a user actually hits on
+        # 3.13+ is dm-tree: orb-models pins dm-tree==0.1.8, whose newest wheels
+        # are cp312, and the sdist needs a C++ toolchain and a CMake old enough
+        # to accept it (orbital-materials/orb-models#168). Restricting just
+        # that one package to wheels reproduces the real outcome, and fails in
+        # both directions — when 3.12 breaks, and when 3.13 starts working and
+        # the README's Python-versions table needs updating.
+        run: |
+          set -u
+          status=0
+          for py in 3.12 3.13 3.14; do
+            case "$py" in 3.12) expected=resolves ;; *) expected=fails ;; esac
+            if uv pip compile pyproject.toml --extra orb --python-version "$py" \
+                 --only-binary dm-tree -q >/dev/null 2>&1; then
+              actual=resolves
+            else
+              actual=fails
+            fi
+            if [ "$actual" = "$expected" ]; then
+              echo "  py$py [orb, wheels-only dm-tree]: $actual"
+            else
+              echo "::error::py$py extra 'orb' $actual from wheels, but README.md says it $expected"
+              status=1
+            fi
           done
           exit $status

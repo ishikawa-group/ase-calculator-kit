@@ -13,8 +13,9 @@ say so explicitly instead of silently changing the behavior.
 A thin factory layer. It does **not** implement any physics: it maps a name
 plus keywords onto an upstream ASE calculator (`chgnet`, `matgl`, `sevenn`, `mattersim`,
 `nequip`, `fairchem-core`, `ase.calculators.vasp`, `ase.calculators.espresso`)
-and returns an ASE calculator. New behavior belongs upstream unless it is about
-*selection*, *validation*, or *reproducibility*.
+and returns an ASE calculator. `orb-models` is in that list too. New behavior
+belongs upstream unless it is about *selection*, *validation*, or
+*reproducibility*.
 The explicit temporary exception is `matgl_chgnet.py`: a user-authorized,
 source-guarded, instance-local three-body gradient correction for MatGL 4.0.3.
 Replace it after validating upstream retrained CHGNet weights.
@@ -37,6 +38,7 @@ src/ase_calculator_kit/
   backends/base.py   BaseBackend: every backend implements create_calculator()
   backends/mlip/     chgnet.py matgl.py sevennet.py mattersim.py nequip.py fairchem.py
                      matgl_chgnet.py, _matgl_pbc.py (MatGL compatibility adapters)
+                     orb.py (OrbMol-v2; outside `all` — invariant 11)
                      mace.py (separate environment — invariant 7)
   backends/dft/      vasp.py espresso.py
   py.typed           PEP 561 marker; keep it listed in [tool.setuptools.package-data]
@@ -117,7 +119,20 @@ These are deliberate design decisions, not oversights.
     `tests/test_packaging.py` enforces the absence of a cap, and the
     `extras-resolve` CI job (expectations mirroring the README table) is what
     catches the change in either direction.
-11. **The MACE backend has two upstream loaders, chosen by model name.** Since
+11. **The `orb` extra is outside `all` for a Python-version reason, not a
+    conflict.** Since 0.5.7 the backend exists and `orb-models` co-installs
+    happily with every other backend — no e3nn problem, no second environment.
+    What it cannot do is install on Python 3.13 or 3.14: it pins
+    `dm-tree==0.1.8`, whose newest wheels are cp312, so an `all` containing it
+    would stop installing on two of the three supported interpreters. That is
+    why the extra exists and why `all` must keep not containing it
+    (`tests/test_packaging.py` enforces it, and the `extras-resolve` job's
+    second step pins the wheel reality with `--only-binary dm-tree`, because a
+    plain resolve is happy to plan a source build). Do not paper over this with
+    an environment marker — invariant 10 applies. When upstream relaxes the pin
+    (orbital-materials/orb-models#168), the CI step fails, and *that* is when
+    the README table and this invariant get revisited.
+12. **The MACE backend has two upstream loaders, chosen by model name.** Since
     0.5.4, `POLAR_MODELS` (`polar-1-s/m/l`) load through `mace_polar` and
     everything else through `mace_mp`. Neither function accepts the other's
     checkpoint names, so the name *is* the selector and there is no keyword to
@@ -147,6 +162,12 @@ python -m venv .venv
 .venv/bin/ruff check src tests examples
 .venv/bin/pytest -m slow                # real single points, downloads weights
 .venv/bin/pytest -m slow -s             # with the tqdm progress bar
+
+# orb (invariant 11) needs Python 3.12; it shares the main environment
+# otherwise. On 3.13+ add an override for orb-models' dm-tree pin.
+uv venv --python 3.12 .venv-orb
+uv pip install --python .venv-orb/bin/python -e ".[orb,dev]" -c constraints.txt
+.venv-orb/bin/pytest -m slow -k orb
 
 # MACE (invariant 7) is verified from its own environment. The fast suite is
 # identical there; in the slow suite the MACE cases run and every other case
@@ -281,6 +302,38 @@ Three things make this go wrong, and all three have happened here:
   range. Combined with D3's unscreened metal C6 that produces very large
   molecule-metal corrections. Do not "fix" this by substituting another
   functional's parameters — that silently renames the method.
+
+- **orb-models pins `dm-tree==0.1.8`, and that is the whole Python-version
+  story.** dm-tree 0.1.8's newest wheels are cp312 on every platform, so on
+  3.13+ pip falls into a source build that needs a C++ toolchain and a CMake old
+  enough to accept the project (orbital-materials/orb-models#168; the pin itself
+  came from orbital-materials/orb-models#78). Nothing about the model is
+  3.12-only: orb-models uses exactly `tree.flatten` and `tree.map_structure`,
+  dm-tree 0.1.10 ships cp313 and cp314 wheels, and OrbMol-v2 on 3.13 with
+  dm-tree 0.1.10 reproduced all sixteen 3.12 reference energies to the last
+  digit. pip has no dependency-override mechanism and PyPI forbids direct
+  references in uploaded metadata, so this cannot be fixed in our metadata —
+  the README documents `uv pip install --override` instead. Do not fork
+  orb-models for one line.
+
+- **OrbMol-v2 cannot run on MPS, and the reason is three deep.** Graph
+  construction defaults to `knn_alchemi`, which goes through `nvalchemiops` and
+  NVIDIA Warp; Warp has no Metal backend and raises `Unsupported Torch device
+  type mps`. The legacy fallbacks do not rescue it — `knn_brute_force` builds
+  the neighbor list in float64, which MPS cannot hold, and `knn_scipy` rejects
+  any non-CPU device itself. Measured on Apple Silicon, all three. There is also
+  a loader trap: `pretrained.orbmol_v2(device=...)` calls `model.cuda(device)`
+  for anything that is not CPU, so even `device="mps"` fails before the graph.
+  `resolve_device(..., allow_mps=False)` is therefore correct here, per
+  invariant 6 — do not flip it without re-measuring all three paths.
+
+- **`orb` deliberately loads one checkpoint.** `ORB_PRETRAINED_MODELS` carries
+  the Orb-v3 OMat/MPA models, Orb-v2, the D3-trained `orb-d3-*` variants and
+  OrbMol-v1 as well. Each is a different reference level — `orb-d3-v2` is
+  trained *on* D3-corrected targets and would belong in the ⛔ tier for a
+  different reason than OrbMol-v2 — so adding one means adding its
+  `dispersion.py` row and `docs/models.md` row together. Until then an
+  unsupported name is a `ValueError`, not a pass-through.
 
 - **MatGL exposes TensorNet and provisional gradient-corrected CHGNet MatPES.**
   `matgl-chgnet` requires the audited MatGL 4.0.3 source, defaults to frozen HF

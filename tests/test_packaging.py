@@ -13,10 +13,14 @@ _ROOT = Path(__file__).resolve().parents[1]
 #: Individual backend extras that can share one environment, in pyproject order.
 _BACKEND_EXTRAS = ("chgnet", "matgl", "sevennet", "mattersim", "nequip", "uma", "dispersion")
 
-#: Extras that cannot be installed next to the ones above and are therefore
-#: excluded from `all`. mace-torch pins e3nn==0.4.4 against everyone else's
-#: e3nn>=0.5, so `pip install '...[all,mace]'` has no solution.
-_SEPARATE_ENVIRONMENT_EXTRAS = ("mace",)
+#: Extras deliberately excluded from `all`, and why each one is.
+#:
+#: mace-torch pins e3nn==0.4.4 against everyone else's e3nn>=0.5, so
+#: `pip install '...[all,mace]'` has no solution at all. orb-models resolves
+#: alongside every other backend, but pins dm-tree==0.1.8, whose newest wheels
+#: are cp312 — putting it in `all` would make `all` stop installing on 3.13
+#: and 3.14.
+_EXTRAS_OUTSIDE_ALL = ("mace", "orb")
 
 
 def _project_metadata() -> dict:
@@ -40,18 +44,20 @@ def test_individual_and_all_extras_are_consistent():
     assert set(extras["all"]) == expected_all
 
 
-def test_mace_is_installable_but_never_part_of_all():
-    """MACE has to stay out of `all`, or `all` stops resolving at all.
+def test_extras_outside_all_are_installable_but_never_part_of_all():
+    """Both exclusions are the reason the extra exists, not a reason to drop it.
 
     Before 0.5.0 the answer to the e3nn conflict was to leave MACE out of the
     package entirely. It is supported now, in its own environment — the extra
-    exists, and `all` must keep not containing it.
+    exists, and `all` must keep not containing it. `orb` is the same bargain
+    for a Python-version reason: orb-models pins dm-tree==0.1.8, so an `all`
+    carrying it would fail to install on 3.13 and 3.14.
     """
     extras = _project_metadata()["optional-dependencies"]
-    for name in _SEPARATE_ENVIRONMENT_EXTRAS:
+    for name in _EXTRAS_OUTSIDE_ALL:
         assert name in extras, f"the '{name}' extra is how it gets installed"
-        conflicting = _distribution_names(extras[name])
-        assert conflicting.isdisjoint(_distribution_names(extras["all"]))
+        excluded = _distribution_names(extras[name])
+        assert excluded.isdisjoint(_distribution_names(extras["all"]))
 
 
 def test_published_requirements_are_ranges_not_exact_pins():
@@ -59,7 +65,7 @@ def test_published_requirements_are_ranges_not_exact_pins():
     project = _project_metadata()
     extras = project["optional-dependencies"]
     published = list(project["dependencies"])
-    for name in (*_BACKEND_EXTRAS, *_SEPARATE_ENVIRONMENT_EXTRAS, "all"):
+    for name in (*_BACKEND_EXTRAS, *_EXTRAS_OUTSIDE_ALL, "all"):
         published.extend(extras[name])
     assert [req for req in published if "==" in req] == []
 
@@ -72,7 +78,7 @@ def test_constraints_cover_every_published_requirement():
     project = _project_metadata()
     extras = project["optional-dependencies"]
     required = _distribution_names(project["dependencies"]) | _distribution_names(extras["all"])
-    for name in _SEPARATE_ENVIRONMENT_EXTRAS:
+    for name in _EXTRAS_OUTSIDE_ALL:
         required |= _distribution_names(extras[name])
     assert required.issubset(_distribution_names(pinned))
 

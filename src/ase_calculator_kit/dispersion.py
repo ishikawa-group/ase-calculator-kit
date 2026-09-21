@@ -8,8 +8,8 @@ it. See ``docs/models.md`` for the human-readable version of these tables — th
 two MUST be kept in sync.
 
 Three tiers (keyed by ``(backend, key)`` where ``key`` is the model's functional
-discriminator — CHGNet model, MatterSim model, NequIP model, SevenNet modal,
-MACE head, or UMA task):
+discriminator — CHGNet model, MatterSim model, NequIP model, OrbMol model,
+SevenNet modal, MACE head, or UMA task):
 
 1. Allowed   -> a default D3 ``xc`` is known; ``dispersion=True`` wraps the model.
 2. Included  -> dispersion is already in the training functional; always an error.
@@ -119,6 +119,12 @@ _POLICIES: dict[tuple[str, str], DispersionPolicy] = {
     ("nequip", "M"): _allowed("PBE(+U)", "pbe"),
     ("nequip", "L"): _allowed("PBE(+U)", "pbe"),
     ("nequip", "XL"): _allowed("PBE(+U)", "pbe"),
+    # OrbMol-v2: OMol25 + OPoly26, the same wB97M-V reference as UMA's omol
+    # task, so the nonlocal VV10 term is already in the training data.
+    ("orb", "orbmol-v2"): _included(
+        "ωB97M-V",
+        "OMol25 and OPoly26 already include nonlocal VV10 dispersion",
+    ),
     # SevenNet: the modal selects both dataset and reference functional. The
     # fidelity of every 7net-omni task is listed in SevenNet's "Pretrained
     # models" documentation; the rows below follow it.
