@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.5.9
+
+Adds molecular PySCF and GPU4PySCF through the existing config-only DFT factory.
+
+- **`pyscf` and `gpu4pyscf`** expose upstream HF/DFT energies and analytic forces
+  in ASE units, with charge and spin/multiplicity from YAML or atoms.info, basis/ECP, density
+  fitting, grids, and convergence settings. Periodic inputs are rejected.
+- **omegaB97M-V/def2-TZVPD + VV10**, PBE-D3(BJ)/D4, SMD and PCM are supported;
+  VV10 plus D3/D4 is rejected. GPU requests never silently fall back to CPU.
+- **Electronic-state disagreement raises** before calculation or cached results;
+  changing atoms.info charge/multiplicity alone triggers recalculation.
+- **eSEN OMol25** is available as `esen`, defaulting to the small conserving
+  model with both direct-force variants selectable. It uses the existing
+  fairchem dependency and refuses additional dispersion.
+- **Molecular DFT optional dependencies remain separate from `all`.** The CUDA 12 extra uses
+  a tested CuPy 13.4.1/cuTENSOR 2.2.0 pair on Linux x86_64, Python 3.12/3.13.
+  CPU PySCF is independent of CUDA. Unsupported dependency combinations fail
+  explicitly instead of silently omitting the backend.
+- **XYZ single-point and ASE optimization example** saves JSON metadata, NPZ
+  energies/forces and final XYZ, with nonzero exit status on SCF/optimization
+  failure. Five YAML examples cover gas phase, solvent, dispersion and Ru ECP.
+- **Small validation scope:** five focused new unit cases plus existing tests/lint,
+  and actual CPU/GPU energy/force comparisons on TSUBAME4. See
+  [validation and limitations](docs/pyscf.md). No benchmark framework or
+  periodic/stress support is introduced.
+
 ## 0.5.8
 
 Makes UMA's inference presets selectable, which they were not.

@@ -71,20 +71,20 @@ jobs:
       - name: Resolve every extra on every supported Python
         run: |
           set -u
-          # "<python>:<extra>" pairs expected NOT to resolve — currently none.
+          # "<python>:<extra>" pairs expected NOT to resolve.
+          # GPU4PySCF uses the validated CuPy 13.4/cuTENSOR 2.2 pair; no cp314 wheel.
           # `3.14:uma` and `3.14:all` used to be here: fairchem-core declared
           # requires-python <3.14 and pinned torch~=2.8.0, which has no cp314
-          # wheels. 2.22.0 lifted the cap and moved to torch~=2.13.0, so every
-          # extra now resolves on every supported Python. Leave the mechanism
-          # in place — the next backend to lag a Python release lands here.
-          expected_failures=""
+          # wheels. 2.22.0 lifted that cap and moved to torch~=2.13.0.
+          # Keep the GPU wheel limitation separate from the core Python range.
+          expected_failures="3.14:gpu4pyscf-cuda12x"
           status=0
           for py in 3.12 3.13 3.14; do
             # `mace` and `orb` are resolved on their own because neither is
             # in `all`: mace-torch pins e3nn==0.4.4 against the others'
             # e3nn>=0.5, and orb-models pins dm-tree==0.1.8, whose newest
             # wheels are cp312 (see the next step).
-            for extra in chgnet matgl sevennet mattersim nequip mace orb uma dispersion all; do
+            for extra in chgnet matgl sevennet mattersim nequip mace orb uma esen dispersion pyscf pyscf-dispersion gpu4pyscf-cuda12x all; do
               if uv pip compile pyproject.toml --extra "$extra" \
                    --python-version "$py" -q >/dev/null 2>&1; then
                 actual=resolves

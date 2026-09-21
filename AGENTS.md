@@ -16,6 +16,16 @@ plus keywords onto an upstream ASE calculator (`chgnet`, `matgl`, `sevenn`, `mat
 and returns an ASE calculator. `orb-models` is in that list too. New behavior
 belongs upstream unless it is about *selection*, *validation*, or
 *reproducibility*.
+The molecular PySCF/GPU4PySCF adapter is a user-authorized exception to
+returning an existing upstream ASE calculator: it converts ASE structures and
+units, and delegates all energies/analytic gradients to upstream. It supports
+nonperiodic molecules only, reads explicit charge and spin/multiplicity from YAML and/or atoms.info, and
+never silently falls back from GPU to CPU. Factory settings remain YAML-only; atoms.info carries structure-specific state.
+Conflicting electronic states raise before cache reuse; info-only state changes
+must invalidate the PySCF cache. atoms.info spin is multiplicity, YAML spin is 2S.
+PySCF runs in-process, so no external profile.command is required. Its optional
+extras stay outside `all`; CUDA 12 wheels target Linux x86_64 and Python 3.12/3.13.
+
 The explicit temporary exception is `matgl_chgnet.py`: a user-authorized,
 source-guarded, instance-local three-body gradient correction for MatGL 4.0.3.
 Replace it after validating upstream retrained CHGNet weights.
@@ -369,3 +379,9 @@ Three things make this go wrong, and all three have happened here:
   also permits torch-dftd E/F calculations, but stress requires a real 3D cell.
   Do not replace partial PBC with `pbc=True` or expose stress normalized by an
   artificial completed volume. The adapter applies only to MatGL backends.
+
+
+- **eSEN OMol25 is separate from UMA and legacy OMat.** `esen` accepts the three
+  OMol25 registry checkpoints, defaults to `esen-sm-conserving-all-omol`, fixes
+  task to omol and defaults inference_settings to batch. Its `esen` extra shares
+  fairchem-core with UMA and `all`; D3 is refused for the OMol reference level.

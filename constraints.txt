@@ -33,3 +33,10 @@ orb-models==0.7.0
 #     python -m venv .venv-mace
 #     .venv-mace/bin/pip install -e ".[mace,dev]" -c constraints.txt
 mace-torch==0.3.16
+
+# Molecular CPU/GPU validation (Linux CUDA 12; macOS CPU).
+pyscf==2.14.0
+gpu4pyscf-cuda12x==1.8.1
+cupy-cuda12x==13.4.1
+cutensor-cu12==2.2.0
+pyscf-dispersion==1.5.0

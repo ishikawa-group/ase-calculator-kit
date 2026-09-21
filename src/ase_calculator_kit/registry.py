@@ -5,8 +5,11 @@ from __future__ import annotations
 from .backends import (
     BaseBackend,
     CHGNetBackend,
+    ESENBackend,
     EspressoBackend,
     FairChemBackend,
+    GPU4PySCFBackend,
+    PySCFBackend,
     MACEBackend,
     MatGLCHGNetBackend,
     MatterSimBackend,
@@ -25,6 +28,7 @@ from .backends import (
 #: ``backends/mlip/mace.py``.
 MLIP_BACKENDS: dict[str, type[BaseBackend]] = {
     "chgnet": CHGNetBackend,
+    "esen": ESENBackend,
     "matgl-chgnet": MatGLCHGNetBackend,
     "tensornet": TensorNetBackend,
     "sevennet": SevenNetBackend,
@@ -38,6 +42,8 @@ MLIP_BACKENDS: dict[str, type[BaseBackend]] = {
 
 #: Public DFT names accepted by :func:`ase_calculator_kit.get_calculator`.
 DFT_BACKENDS: dict[str, type[BaseBackend]] = {
+    "pyscf": PySCFBackend,
+    "gpu4pyscf": GPU4PySCFBackend,
     "vasp": VaspBackend,
     "qe": EspressoBackend,
     "espresso": EspressoBackend,

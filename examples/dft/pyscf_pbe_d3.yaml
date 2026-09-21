@@ -1,0 +1,9 @@
+calculator: pyscf
+directory: runs/pyscf/pbe_d3
+parameters:
+  charge: 0
+  multiplicity: 1
+  basis: def2-svp
+  xc: pbe
+  disp: d3bj
+  density_fit: true

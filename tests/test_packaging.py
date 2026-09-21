@@ -11,7 +11,7 @@ import yaml
 _ROOT = Path(__file__).resolve().parents[1]
 
 #: Individual backend extras that can share one environment, in pyproject order.
-_BACKEND_EXTRAS = ("chgnet", "matgl", "sevennet", "mattersim", "nequip", "uma", "dispersion")
+_BACKEND_EXTRAS = ("chgnet", "matgl", "sevennet", "mattersim", "nequip", "uma", "esen", "dispersion")
 
 #: Extras deliberately excluded from `all`, and why each one is.
 #:
@@ -20,7 +20,7 @@ _BACKEND_EXTRAS = ("chgnet", "matgl", "sevennet", "mattersim", "nequip", "uma", 
 #: alongside every other backend, but pins dm-tree==0.1.8, whose newest wheels
 #: are cp312 — putting it in `all` would make `all` stop installing on 3.13
 #: and 3.14.
-_EXTRAS_OUTSIDE_ALL = ("mace", "orb")
+_EXTRAS_OUTSIDE_ALL = ("mace", "orb", "pyscf", "pyscf-dispersion", "gpu4pyscf-cuda12x")
 
 
 def _project_metadata() -> dict:

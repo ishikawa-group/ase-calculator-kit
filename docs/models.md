@@ -51,6 +51,7 @@ interaction and give wrong energies. So such models reject `dispersion=True`.
 | **SevenNet** `spice` | SPICE | ωB97M-D3(BJ)/def2-TZVPPD | ✓ yes (D3(BJ) included) | ⛔ error (double-counting) |
 | **SevenNet** `qcml` | QCML | PBE0 + MBD-NL | ✓ yes (MBD-NL many-body) | ⛔ error (double-counting) |
 | **SevenNet** `odac23` | ODAC23 | PBE-D3 | ✓ yes (D3 included) | ⛔ error (double-counting) |
+| **eSEN** `omol` (all three OMol25 checkpoints) | OMol25 | ωB97M-V | ✓ yes (VV10 nonlocal) | ⛔ error (double-counting) |
 | **UMA** `omat` | OMat24 | PBE+U | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **UMA** `oc20` | OC20 | RPBE | ✗ none | ✅ allowed — D3 `xc=rpbe` |
 | **UMA** `oc22` | OC22 | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |

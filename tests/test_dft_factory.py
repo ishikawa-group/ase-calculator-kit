@@ -8,7 +8,7 @@ import ase_calculator_kit as kit
 from ase_calculator_kit.registry import BACKENDS, DFT_BACKENDS
 
 
-@pytest.mark.parametrize("name", ["vasp", "qe"])
+@pytest.mark.parametrize("name", ["vasp", "qe", "pyscf", "gpu4pyscf"])
 def test_dft_requires_config(name):
     with pytest.raises(TypeError, match="requires config"):
         kit.get_calculator(name)

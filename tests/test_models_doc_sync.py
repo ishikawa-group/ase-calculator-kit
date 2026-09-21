@@ -32,6 +32,7 @@ _DISPLAY_TO_BACKEND = {
     "OrbMol": "orb",
     "SevenNet": "sevennet",
     "UMA": "uma",
+    "eSEN": "esen",
 }
 
 

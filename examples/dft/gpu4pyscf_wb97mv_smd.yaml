@@ -1,0 +1,22 @@
+calculator: gpu4pyscf
+directory: runs/gpu4pyscf/wb97mv_smd
+parameters:
+  charge: 0
+  multiplicity: 1
+  method: auto
+  basis: def2-tzvpd
+  xc: wb97m_v
+  nlc: vv10
+  density_fit: true
+  auxbasis: def2-universal-jkfit
+  grids:
+    atom_grid: [99, 590]
+    prune: null
+  nlcgrids:
+    atom_grid: [50, 194]
+  conv_tol: 1.0e-9
+  max_cycle: 200
+  max_memory: 4000
+  solvent:
+    model: smd
+    solvent: water

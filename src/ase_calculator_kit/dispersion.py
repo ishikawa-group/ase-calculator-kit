@@ -157,6 +157,7 @@ _POLICIES: dict[tuple[str, str], DispersionPolicy] = {
         "PBE-D3", "ODAC23 is computed at the PBE-D3 level"
     ),
     # UMA: each task is a separate chemical domain and DFT reference level.
+    ("esen", "omol"): _included("ωB97M-V", "OMol25 already includes nonlocal VV10 dispersion"),
     ("uma", "omat"): _allowed("PBE+U", "pbe"),
     ("uma", "oc20"): _allowed("RPBE", "rpbe"),
     ("uma", "oc22"): _allowed("PBE(+U)", "pbe"),

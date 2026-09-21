@@ -254,3 +254,24 @@ mergeとcompileを払って捨てているだけなので、そこは`"batch"`�
 6. modelをdownloadしないmock testと、必要に応じて`slow` single-point testを追加する。
 
 backend間の共通化より、各上流packageへ実際に渡す引数が一目で分かることを優先します。
+
+
+## 分子PySCFバックエンド（0.5.9）
+
+`pyscf` / `gpu4pyscf` はVASP・QEと同じconfig-only factoryに登録する。
+`backends/dft/pyscf.py` はASEの構造・単位を上流APIへ接続する薄いアダプターで、
+量子化学の計算式は実装しない。非周期系限定、電荷とspinまたは多重度をYAML／atoms.infoから受け取り、
+未収束では `CalculationFailed` を返す。GPU要求をCPUに黙って変更しない。
+
+エネルギーはEhからeV、力は勾配の符号を反転しEh/BohrからeV/Åへ変換する。
+構造が変わればASEのキャッシュを無効化する。forceを先に要求すると同じSCFの
+energyを再利用できる。VV10とD3/D4の重複は拒否し、分散・溶媒・ECPの計算は
+PySCF/GPU4PySCFの実装に委譲する。設定項目と実測結果は [pyscf.md](pyscf.md)。
+PySCFの追加テストは境界の4件に限定し、実計算検証を通常CIへ大量追加しない。
+
+
+`atoms.info["spin"]` はUMA／OrbMol同様に多重度であり、PySCF spinへは1を引く。
+YAMLと異なるときはキャッシュを返す前にもエラーにし、infoだけの変更でも再計算する。
+解決済みYAMLは計算時の電子状態まで記録し、metadataは取得元も保持する。
+`esen` はfairchemを共有する独立バックエンドで、OMol25の3 checkpointのみを許可する。
+既定はsmall conservingで、directモデルの力はエネルギー勾配とは限らない。

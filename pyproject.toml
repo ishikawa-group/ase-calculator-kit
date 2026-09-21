@@ -45,12 +45,24 @@ dependencies = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
+# Molecular quantum chemistry stays optional and outside the MLIP `all` extra.
+pyscf = ["pyscf>=2.14,<2.15"]
+pyscf-dispersion = ["pyscf-dispersion>=1.5,<2"]
+gpu4pyscf-cuda12x = [
+    "pyscf>=2.14,<2.15",
+    "gpu4pyscf-cuda12x>=1.8.1,<1.9",
+    "pyscf-dispersion>=1.5,<2",
+    "cupy-cuda12x>=13.4.1,<13.5",
+    "cutensor-cu12>=2.2,<2.3",
+]
+
 chgnet = ["chgnet>=0.4,<0.5"]
 matgl = ["matgl>=4.0.3,<5"]
 sevennet = ["sevenn>=0.13"]
 mattersim = ["mattersim>=1.2,<2"]
 nequip = ["nequip>=0.18,<0.19"]
 uma = ["fairchem-core>=2.22,<3"]
+esen = ["fairchem-core>=2.22,<3"]
 dispersion = ["torch-dftd>=0.5,<0.6"]
 # orb-models is deliberately absent from `all` below too, for a different
 # reason: it pins dm-tree==0.1.8, whose newest wheels are cp312, so an `all`

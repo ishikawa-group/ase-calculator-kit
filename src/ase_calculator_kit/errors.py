@@ -76,6 +76,7 @@ class MissingDependencyError(CalculatorKitError, ImportError):
             super().__init__(f"{backend} is not installed. Install it with: {direct}")
             return
         extra = {
+            "gpu4pyscf": "gpu4pyscf-cuda12x",
             "chgnet": "chgnet",
             "matgl": "matgl",
             "sevennet": "sevennet",

@@ -6,7 +6,7 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21807793.svg)](https://doi.org/10.5281/zenodo.21807793)
 
 A thin, unified [ASE](https://wiki.fysik.dtu.dk/ase/) calculator factory for
-machine-learning interatomic potentials and external DFT calculators. Every call
+machine-learning interatomic potentials and DFT calculators. Every call
 returns a standard `ase.Calculator`, so the rest of your ASE workflow stays
 unchanged.
 
@@ -21,6 +21,7 @@ Supported MLIP backends:
   OrbMol-v2, a molecular potential with learnable electrostatics — installs
   from wheels **only on Python 3.12**, see [OrbMol (orb-models)](#orbmol-orb-models)
 - [UMA / fairchem](https://github.com/facebookresearch/fairchem)
+- eSEN OMol25 (`esen`): conserving and direct-force checkpoints through fairchem
 - [MACE](https://github.com/ACEsuit/mace) — **must be installed in a separate
   virtual environment**, see [MACE needs its own environment](#mace-needs-its-own-environment)
 
@@ -28,6 +29,8 @@ Supported DFT backends:
 
 - VASP
 - Quantum ESPRESSO (`qe`, `espresso`, `quantum-espresso`)
+- Molecular PySCF (`pyscf`) and GPU4PySCF (`gpu4pyscf`): HF/DFT energy and forces,
+  VV10, D3/D4, ECP, SMD/PCM; see [configuration](docs/pyscf.md)
 
 ## Install
 
@@ -48,6 +51,7 @@ pip install "ase-calculator-kit[mattersim]"
 pip install "ase-calculator-kit[nequip]"
 pip install "ase-calculator-kit[orb]"        # Python 3.12; see the note below
 pip install "ase-calculator-kit[uma]"
+pip install "ase-calculator-kit[esen]"        # same fairchem dependency
 
 # Several selected backends
 pip install "ase-calculator-kit[chgnet,mattersim]"
@@ -89,16 +93,19 @@ compatibility is checked separately:
 
 | | 3.12 | 3.13 | 3.14 |
 |---|:--:|:--:|:--:|
-| Core, `all`, and every extra but `orb` | ✅ | ✅ | ✅ |
+| Core, `all`, and MLIP extras except `orb` | ✅ | ✅ | ✅ |
+| `pyscf`, `pyscf-dispersion` (Linux) | ✅ | ✅ | ✅ |
+| `gpu4pyscf-cuda12x` (Linux x86_64) | ✅ | ✅ | ❌ |
 | `orb` | ✅ | ⚠️ override | ⚠️ override |
 
-`orb` is the one entry that is not a plain ✅, and the cause is one line of
+For `orb`, the cause is one line of
 upstream metadata rather than the model: `orb-models` pins `dm-tree==0.1.8`,
 whose newest wheels are cp312. OrbMol-v2 itself runs on 3.13 — verified against
 the 3.12 results, to the last digit — once `dm-tree` is allowed to be newer.
 [OrbMol (orb-models)](#orbmol-orb-models) has the command.
 
-Since 0.5.4 no backend caps below 3.14. `uma` (and therefore `all`) used to be
+The molecular GPU extra uses a validated CuPy version without cp314 wheels.
+`uma` (and therefore `all`) used to be
 ❌ on 3.14, because `fairchem-core` declared `requires-python = ">=3.11,<3.14"`
 and pinned `torch~=2.8.0`, which has no cp314 wheels; fairchem-core 2.22.0 —
 the floor this release requires — lifted the cap and moved to `torch~=2.13.0`.
@@ -218,8 +225,11 @@ atoms.calc = get_calculator(
 | `orb` | MLIP (OrbMol-v2; Python 3.12) | — |
 | `mace` | MLIP (separate environment) | — |
 | `uma` | MLIP | `fairchem` |
+| `esen` | MLIP (OMol25) | — |
 | `vasp` | DFT | — |
 | `qe` | DFT | `espresso`, `quantum-espresso` |
+| `pyscf` | Molecular HF/DFT (CPU) | — |
+| `gpu4pyscf` | Molecular HF/DFT (CUDA) | — |
 
 An unknown name raises `ValueError` listing the valid names.
 
@@ -716,6 +726,8 @@ whether they read them at all.
 
 | Backend | Molecular option | Takes charge / spin? |
 |---|---|---|
+| `esen` | OMol25 checkpoints | ✅ `atoms.info["charge"]`, `atoms.info["spin"]` |
+| `pyscf` / `gpu4pyscf` | Molecular HF/DFT | ✅ `atoms.info` or YAML; mismatches raise |
 | `uma` | `task="omol"` | ✅ `atoms.info["charge"]`, `atoms.info["spin"]` |
 | `sevennet` | `modal="omol25_low"` / `"omol25_high"` / `"spice"` / `"qcml"` | ❌ not supported by sevenn |
 | `mace` | `head="omol"` / `"spice_wB97M"` | ❌ the MH-1 molecular heads are fitted to neutral closed-shell data |
@@ -1185,3 +1197,103 @@ the [Zenodo record](https://doi.org/10.5281/zenodo.21807793) — 0.3.4 is
 ## License
 
 MIT
+
+
+### Molecular PySCF and GPU4PySCF (0.5.9)
+
+Molecular HF/DFT uses the same config-only factory as VASP/QE, with upstream
+PySCF energies and analytic gradients exposed through a small ASE adapter:
+
+```python
+from ase.io import read
+from ase_calculator_kit import get_calculator
+
+atoms = read("complex.xyz")
+atoms.calc = get_calculator(
+    "gpu4pyscf", config="examples/dft/gpu4pyscf_wb97mv.yaml",
+    overrides={"parameters": {"charge": 2, "multiplicity": 3}},
+    write_resolved_config=True,
+)
+forces = atoms.get_forces()             # eV/Angstrom (request first)
+energy = atoms.get_potential_energy()   # eV, reuses the SCF above
+```
+
+Install only the required extra, preferably in a dedicated environment:
+
+```bash
+pip install 'ase-calculator-kit[pyscf]'
+# Linux x86_64, NVIDIA GPU, CUDA Toolkit 12.x; validated with CUDA 12.8:
+pip install 'ase-calculator-kit[gpu4pyscf-cuda12x,pyscf-dispersion]' -c constraints.txt
+# CPU D3(BJ)/D4 (validated on Linux):
+pip install 'ase-calculator-kit[pyscf,pyscf-dispersion]'
+```
+
+These extras are excluded from `all`. CPU PySCF and pyscf-dispersion resolve
+on Linux with Python 3.12–3.14; actual numerical validation uses Python 3.12.
+The CUDA extra supports Python 3.12/3.13, **not 3.14**, because the validated
+CuPy 13.4.1/cuTENSOR 2.2.0 pair has no cp314 wheel. GPU wheels do not support
+macOS. Bare CPU PySCF was also tested on Apple Silicon; the dispersion extra
+requires >=1.5, which is unavailable on macOS at this release. The older macOS
+1.0.0 wheel fails during import and is intentionally not accepted.
+
+See [molecular configuration and validation](docs/pyscf.md) for the complete
+settings, scope, CPU/GPU comparisons, and limitations. The primary examples
+use **omegaB97M-V/def2-TZVPD + VV10**, with explicit electronic states and grids;
+SMD water, Ru ECP and PBE-D3 examples are separate files.
+
+```bash
+python examples/dft/run_pyscf.py complex.xyz \
+  --config examples/dft/gpu4pyscf_wb97mv.yaml --output runs/complex
+python examples/dft/run_pyscf.py complex.xyz \
+  --config examples/dft/gpu4pyscf_wb97mv_smd.yaml --output runs/complex-smd \
+  --optimize --fmax 0.05 --steps 100
+```
+
+The example writes energy/forces/coordinates to `results.npz`, settings,
+versions and convergence to `results.json`, the effective settings to
+`resolved_calculator_config.yaml`, and the final geometry to `final.xyz`.
+Optimization also writes a trajectory. The output directory must be new;
+SCF failure or incomplete optimization exits with an error. Choose charge and
+multiplicity in the YAML for each system: the supplied neutral singlet examples
+are examples, not a default inference about your complex.
+
+
+### eSEN OMol25
+
+```python
+atoms.info.update(charge=0, spin=1)  # spin is multiplicity
+atoms.calc = get_calculator("esen", device="cuda")
+```
+
+The default is `esen-sm-conserving-all-omol`, whose forces are energy gradients.
+Also selectable with `model=`: `esen-sm-direct-all-omol` and
+`esen-md-direct-all-omol`. Direct models predict forces separately and should
+not be assumed to conserve energy. All three use `task="omol"` only and reject
+additional D3: OMol25's omegaB97M-V/def2-TZVPD reference already includes VV10.
+They use fairchem-core 2.22+, with `inference_settings="batch"` by default,
+CPU/CUDA devices, and Hugging Face `facebook/OMol25` access. No MPS support is
+claimed. `[esen]` is an alias for the same dependency as `[uma]`, already in
+`[all]`; it adds no conflicting stack. Legacy eSEN-30M-OMat remains unsupported.
+Set charge/multiplicity explicitly: the upstream FAIRChemCalculator otherwise
+warns and supplies neutral-singlet values, just as it does for UMA omol.
+
+### Sharing electronic states between MLIP and PySCF
+
+```python
+atoms.info.update(charge=-1, spin=1)  # anion, singlet
+atoms.calc = get_calculator("pyscf", config={
+    "calculator": "pyscf",
+    "parameters": {"basis": "def2-tzvpd", "xc": "wb97m_v"},
+})
+```
+
+PySCF reads the same `atoms.info` fields as UMA/OrbMol and converts multiplicity
+into PySCF's `spin = multiplicity - 1`. You may also supply charge/spin or
+multiplicity in YAML, but **any disagreement raises before calculation or
+returning a cached result**. Missing values never default to neutral singlet.
+Changing charge/spin alone triggers a recalculation. `calc.metadata` records the
+actual values and sources; `write_resolved_config=True` records the effective
+state in YAML at calculation time. Initial per-atom charges/magnetic moments
+are not interpreted as the total charge or multiplicity. The execution example
+also saves `final.extxyz` with charge/multiplicity for reuse; ordinary XYZ does
+not preserve that metadata.

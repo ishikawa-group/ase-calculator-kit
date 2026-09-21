@@ -111,3 +111,24 @@ def test_a_misspelled_preset_is_refused_before_the_download(monkeypatch):
     with pytest.raises(ValueError, match="'default', 'turbo', 'batch', 'traineval'"):
         get_calculator("uma", device="cpu", inference_settings="trubo")
     assert "model" not in seen
+
+
+def test_esen_is_separate_and_omol_only(monkeypatch):
+    from ase_calculator_kit.backends.mlip.esen import ESEN_MODELS
+    from ase_calculator_kit.errors import DispersionError
+
+    seen = {}
+    _install_fake_fairchem(monkeypatch, seen)
+    get_calculator("esen", device="cpu")
+    assert seen["model"] == "esen-sm-conserving-all-omol"
+    assert seen["kwargs"] == {"task_name": "omol"}
+    assert seen["predict_unit_kwargs"] == {"inference_settings": "batch"}
+    for model in ESEN_MODELS:
+        get_calculator("esen", model=model, device="cpu")
+        assert seen["model"] == model
+    with pytest.raises(ValueError):
+        get_calculator("esen", task="omat")
+    with pytest.raises(ValueError):
+        get_calculator("esen", model="esen_30m_omat")
+    with pytest.raises(DispersionError):
+        get_calculator("esen", dispersion=True)
