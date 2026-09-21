@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.5.8
+
+Makes UMA's inference presets selectable, which they were not.
+
+- **`get_calculator("uma", inference_settings=...)`** now reaches fairchem's
+  `get_predict_unit()`. It could not before: `**kwargs` went to
+  `FAIRChemCalculator`, which takes only `predict_unit`, `task_name` and a
+  deprecated `seed`, so the argument came back as a `TypeError` and the preset
+  was unreachable from this package at all. Accepts `"default"` (unchanged
+  behavior), `"turbo"`, `"batch"`, `"traineval"`, or a `fairchem.core`
+  `InferenceSettings` object for settings the four names do not cover.
+- **The default stays `"default"`, and that is already the MD fast path.** Since
+  fairchem-core 2.22 `"default"` merges the MOLE experts and compiles the model;
+  `"turbo"` is the same path with TF32 on top, not the switch that enables
+  compilation.
+- **`"turbo"` is worth about 5 %, for an error the size of a model difference.**
+  Measured on an H100 (MIG 4g.47gb), 27-atom fcc Cu, `task="omat"`, twelve
+  frames of one system: 12.8 ms per step against `"default"`'s 13.5 ms, with the
+  energy moved by 3.69 meV — 0.137 meV/atom. OrbMol-v2 and UMA differ by
+  0.08–0.8 meV/atom on small molecules, so enabling TF32 by default would put a
+  numerical artefact where a model difference belongs. It stays opt-in, as it is
+  in fairchem. On CPU it changes nothing.
+- **The fast path itself costs no accuracy.** `"batch"`, which uses neither
+  merge nor compile, landed within 0.005 meV of `"default"` on the same frames,
+  at 4x the per-step cost and 0.38 s rather than 59.4 s to the first result.
+- **`examples/run_all_models.py` and the slow UMA test cases now pass
+  `inference_settings="batch"`.** `merge_mole` assumes fixed composition, task,
+  charge and spin; a loop over different structures breaks that contract, and
+  fairchem falls back after paying for a merge and a compile. On CPU that was
+  18.8 s per single point against 2.6 s.
+- A misspelled preset raises `ValueError` listing the four, before the
+  checkpoint is downloaded. fairchem checks the name with a bare `assert`,
+  which `python -O` strips.
+
 ## 0.5.7
 
 Adds OrbMol-v2, and fixes axis-specific PBC in the MatGL backends.

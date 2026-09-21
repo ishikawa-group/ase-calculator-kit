@@ -58,6 +58,9 @@ def _hydroxide(*, charge: int, spin: int) -> Atoms:
     return atoms
 
 
+_UMA_BATCH = {"inference_settings": "batch"}
+
+
 # (test id, model name, kwargs, system factory)
 # NOTE: the tiny bulk("Cu") / H2O systems below are intentionally API smoke-test
 # structures to confirm each calculator can be built and run on CPU. They are NOT
@@ -106,13 +109,19 @@ CASES = [
      lambda: _hydroxide(charge=-1, spin=1)),
     ("orb-orbmol-v2-radical", "orb", {"compile": False},
      lambda: _hydroxide(charge=0, spin=2)),
+    # uma-omat keeps the "default" preset so the MD fast path is exercised;
+    # the rest use "batch", which skips a MOLE merge and a compile this suite
+    # discards after one single point anyway (18.8 s vs 2.6 s on CPU).
     ("uma-omat", "uma", {"task": "omat"}, _bulk),
-    ("uma-oc20", "uma", {"task": "oc20"}, _bulk),
-    ("uma-oc22", "uma", {"task": "oc22"}, _bulk),
-    ("uma-oc25", "uma", {"task": "oc25"}, _bulk),
-    ("uma-odac", "uma", {"task": "odac"}, _bulk),
-    ("uma-omol", "uma", {"task": "omol"}, lambda: _molecule(charge=0, spin=1)),
-    ("uma-omc", "uma", {"task": "omc"}, lambda: _molecule(charge=0, spin=1)),
+    ("uma-omat-turbo", "uma", {"task": "omat", "inference_settings": "turbo"}, _bulk),
+    ("uma-oc20", "uma", {"task": "oc20", **_UMA_BATCH}, _bulk),
+    ("uma-oc22", "uma", {"task": "oc22", **_UMA_BATCH}, _bulk),
+    ("uma-oc25", "uma", {"task": "oc25", **_UMA_BATCH}, _bulk),
+    ("uma-odac", "uma", {"task": "odac", **_UMA_BATCH}, _bulk),
+    ("uma-omol", "uma", {"task": "omol", **_UMA_BATCH},
+     lambda: _molecule(charge=0, spin=1)),
+    ("uma-omc", "uma", {"task": "omc", **_UMA_BATCH},
+     lambda: _molecule(charge=0, spin=1)),
 ]
 
 

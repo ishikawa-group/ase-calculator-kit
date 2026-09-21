@@ -234,6 +234,24 @@ Three things make this go wrong, and all three have happened here:
 
 ## Known upstream quirks
 
+- **UMA's `"default"` inference preset is already the fast path; `"turbo"` only
+  adds TF32.** In fairchem-core 2.22 `inference_settings_default()` sets
+  `merge_mole=True, compile=True`, and `inference_settings_turbo()` is the same
+  dataclass with `tf32=True`. Earlier fairchem releases made `turbo` the one
+  that enabled compilation, so "switch to turbo for MD" is stale advice worth
+  not repeating. `turbo` stays opt-in here for the same reason MACE defaults to
+  float64: this package exists to compare models, and a silently reduced
+  precision corrupts the comparison. Measured on an H100 (27-atom fcc Cu,
+  `task="omat"`): `turbo` 12.8 ms/step against `default` 13.5 ms, for 0.137
+  meV/atom of energy shift — a 5 % gain bought with an error the size of a
+  model difference. The same run shows the fast path itself is faithful:
+  `"batch"`, with neither merge nor compile, lands within 0.005 meV of
+  `default`. `merge_mole` also assumes fixed
+  composition/task/charge/spin — true for MD, false for a loop over structures,
+  where fairchem logs a fallback and `"batch"` is the right preset. The four
+  names are validated in `backends/mlip/fairchem.py` because upstream checks
+  them with a bare `assert`, which `python -O` strips.
+
 - **eSEN-30M-OMat cannot be added to the `uma` backend** (checked 2026-08-11, so
   it does not get re-investigated). `esen_30m_omat.pt` lives in the gated repo
   `facebook/OMAT24` and is a fairchem-core **1.x** checkpoint used through

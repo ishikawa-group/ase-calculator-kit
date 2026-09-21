@@ -241,7 +241,7 @@ any extra keywords to the underlying calculator.
 | `nequip` | `model="L"` (`S`/`M`/`L`/`XL`), `model_path=None`, `compile_mode="eager"`, `neighborlist_backend="matscipy"`, `allow_tf32=False` |
 | `orb` | `model="orbmol-v2"`, `precision="float32-high"`, `compile=None` |
 | `mace` | `model="mh-1"`, `head="auto"`, `default_dtype="float64"`, `accelerator="auto"` |
-| `uma` | `model="uma-s-1p2p1"`, `task="omat"` |
+| `uma` | `model="uma-s-1p2p1"`, `task="omat"`, `inference_settings="default"` |
 
 ### DFT keyword arguments
 
@@ -607,6 +607,83 @@ print(atoms.get_potential_energy())
 For the molecular task (`omol`), set `atoms.info["charge"]` and
 `atoms.info["spin"]` before computing — see
 [Molecular systems](#molecular-systems-charge-and-spin) for why this matters.
+
+### UMA `inference_settings`
+
+`inference_settings=` chooses how the predict unit is built, which is where
+UMA's speed/precision trade lives. It reaches fairchem's `get_predict_unit()`,
+so it must be set when the calculator is created, not afterwards.
+
+| `inference_settings` | TF32 | `merge_mole` | `compile` | Use for |
+|---|:--:|:--:|:--:|---|
+| `"default"` | ✗ | ✅ | ✅ | MD and relaxation — one system, many steps |
+| `"turbo"` | ✅ | ✅ | ✅ | the same, trading a little precision for speed |
+| `"batch"` | ✗ | ✗ | ✗ | many different structures |
+| `"traineval"` | ✗ | ✗ | ✗ | reproducing fairchem's training/eval numbers |
+
+```python
+atoms.calc = get_calculator("uma", task="omat")                          # MD
+atoms.calc = get_calculator("uma", task="omat", inference_settings="turbo")
+atoms.calc = get_calculator("uma", task="omat", inference_settings="batch")
+```
+
+Two things about this are easy to get backwards.
+
+**The default is already the MD fast path.** Since fairchem-core 2.22,
+`"default"` merges the MOLE experts *and* compiles the model; `"turbo"` is that
+same path with TF32 switched on. So `turbo` is not what turns compilation on.
+
+Measured on an H100 (MIG 4g.47gb), 27-atom fcc Cu, `task="omat"`, twelve frames
+of the same system, averaged over the last eight:
+
+| `inference_settings` | first step | steady state | ΔE vs `default` | ΔF rmse |
+|---|--:|--:|--:|--:|
+| `"default"` | 59.4 s | **13.5 ms** | — | — |
+| `"turbo"` | 48.2 s | **12.8 ms** | 3.69 meV (0.137 meV/atom) | 0.0004 eV/Å |
+| `"batch"` | 0.38 s | **56.7 ms** | 0.005 meV | 0.000001 eV/Å |
+
+So on this hardware `turbo` bought about 5 %, and cost 0.137 meV/atom. That
+error is the same size as the gap between two *different* models — OrbMol-v2 and
+UMA differ by 0.08–0.8 meV/atom on small molecules — so turning it on by default
+would put a numerical artefact where a model difference is supposed to be. It
+stays opt-in here, as it does in fairchem. Turn it on when you are running one
+model and want throughput; leave it off when the number is going into a
+comparison. On CPU it does nothing at all.
+
+The same table says `merge_mole` + `compile` is numerically honest: `"batch"`,
+which uses neither, lands within 0.005 meV of `"default"`. The 4× per-step cost
+is what you give up for skipping them.
+
+TF32 is applied inside a context manager around UMA's own forward pass, which
+restores `torch.get_float32_matmul_precision()` afterwards — so `turbo` does not
+leak reduced precision into other calculators sharing the process.
+
+**`merge_mole` assumes the system never changes.** Composition, task, total
+charge and spin must all stay fixed — true of an MD trajectory, false of a loop
+over structures. fairchem notices and falls back, logging `The UMA fast path
+(merge_mole + compile) is only available for fixed composition, task, charge,
+and spin`. Nothing is wrong when you see that, but a merge and a compile were
+paid for and thrown away: pass `inference_settings="batch"` when the structures
+vary. On CPU that was 18.8 s per single point against 2.6 s; on the H100 above,
+0.38 s to the first result against 59.4 s. Which is why
+[`examples/run_all_models.py`](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/examples/run_all_models.py)
+uses `"batch"` for its UMA lines.
+
+Anything the four names do not cover — `max_atoms`, `edge_chunk_size`,
+`execution_mode`, a different `base_precision_dtype` — goes through as a
+`fairchem.core` `InferenceSettings` object:
+
+```python
+from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+
+atoms.calc = get_calculator(
+    "uma", task="omat",
+    inference_settings=InferenceSettings(merge_mole=True, compile=True, max_atoms=2048),
+)
+```
+
+A misspelled name raises `ValueError` listing the four, before the checkpoint is
+downloaded. fairchem checks it with a bare `assert`, which `python -O` removes.
 
 ### eSEN-30M-OMat is not available through this package
 

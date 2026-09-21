@@ -187,6 +187,56 @@ SevenNetにはcharge/spinの入力が無いため、イオンや任意の開殻�
 なお`get_calculator`にcharge/spin引数は用意していない。SevenNetでは黙って捨てるしか
 なくなり、「引数を渡したのに効かない」という最悪の失敗の仕方になるためである。
 
+## UMAのinference_settings
+
+`inference_settings=`はfairchemの`get_predict_unit()`の引数で、UMAの速度と精度の
+交換条件がここにある。calculatorを作る時にしか指定できない。
+
+| 値 | TF32 | merge_mole | compile | 用途 |
+|---|:--:|:--:|:--:|---|
+| `"default"` | ✗ | ✅ | ✅ | MD・構造最適化（系が固定） |
+| `"turbo"` | ✅ | ✅ | ✅ | 同上、精度を少し落として速度を取る |
+| `"batch"` | ✗ | ✗ | ✗ | 構造を次々変える場合 |
+| `"traineval"` | ✗ | ✗ | ✗ | fairchemの学習・評価値の再現 |
+
+誤解しやすい点が2つある。
+
+**既定が既にMDのfast pathである。** fairchem-core 2.22では`default`がMOLE expertの
+mergeとcompileを両方有効にしており、`turbo`はそこにTF32を足しただけである。
+つまり`turbo`は「compileを有効にするスイッチ」ではない。昔のfairchemではそうだったが
+今は違う。
+
+H100（MIG 4g.47gb）でfcc Cu 27原子・`task="omat"`・同一系12フレームを回した実測:
+
+| 設定 | 初回 | 定常 | `default`との⊿E | ⊿F rmse |
+|---|--:|--:|--:|--:|
+| `"default"` | 59.4 s | 13.5 ms | — | — |
+| `"turbo"` | 48.2 s | 12.8 ms | 3.69 meV (0.137 meV/atom) | 0.0004 eV/Å |
+| `"batch"` | 0.38 s | 56.7 ms | 0.005 meV | 0.000001 eV/Å |
+
+`turbo`の利得は約5%で、代償が0.137 meV/atom。これは**別のmodel同士の差と同じ桁**で
+ある（OrbMol-v2とUMAの差が小分子で0.08〜0.8 meV/atom）。既定で入れると、model差を
+見たい場所に数値誤差を置くことになる。opt-inのままにする理由はこれで、MACEで
+`float64`を既定にしているのと同じ判断である。CPUでは何も起きない。
+
+なおTF32はUMAのforward計算を囲むcontext managerの中だけで有効になり、抜けるときに
+`torch.get_float32_matmul_precision()`を戻す。同じprocessの他のcalculatorには
+漏れない。
+
+同じ表から、merge+compile自体は数値的に忠実だと分かる。どちらも使わない`"batch"`が
+`default`と0.005 meVしか違わない。
+
+**`merge_mole`は系が変わらない前提である。** composition・task・電荷・スピンが
+固定でなければならない。MDは満たすが、構造をループする用途は満たさない。fairchemは
+気づいてfallbackし、`The UMA fast path (merge_mole + compile) is only available
+for fixed composition, task, charge, and spin`とlogに出す。エラーではないが、
+mergeとcompileを払って捨てているだけなので、そこは`"batch"`が正しい。CPUで
+1点計算あたり18.8秒対2.6秒、上のH100では最初の結果まで0.38秒対59.4秒だった。
+
+4つの名前は`backends/mlip/fairchem.py`側で検証する。上流は`assert`で見ているため
+`python -O`で消えるからである。名前で足りない設定（`max_atoms`など）は
+`InferenceSettings`オブジェクトをそのまま渡せる。
+
 ## backend追加時の順序
 
 1. `backends/mlip/`または`backends/dft/`へ小さなclassを追加する。

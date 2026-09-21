@@ -48,6 +48,10 @@ def make_ion(*, charge: int, spin: int) -> Atoms:
     return atoms
 
 
+#: See the UMA block below: a loop over different systems wants "batch".
+UMA_BATCH = {"inference_settings": "batch"}
+
+
 # (label, model name, kwargs for get_calculator, system factory)
 # NOTE: the tiny bulk("Cu") / H2O systems are API smoke-test structures to show
 # each calculator running on CPU — not domain-representative benchmark systems
@@ -110,17 +114,23 @@ VARIANTS = [
     ("orb orbmol-v2", "orb", {"compile": False}, lambda: make_molecule(charge=0, spin=1)),
     ("orb orbmol-v2 OH-", "orb", {"compile": False}, lambda: make_ion(charge=-1, spin=1)),
     ("orb orbmol-v2 OH radical", "orb", {"compile": False}, lambda: make_ion(charge=0, spin=2)),
-    ("uma-s-1p2p1/omat", "uma", {"task": "omat"}, make_bulk),
-    ("uma-s-1p2p1/oc20", "uma", {"task": "oc20"}, make_bulk),
-    ("uma-s-1p2p1/oc22", "uma", {"task": "oc22"}, make_bulk),
-    ("uma-s-1p2p1/oc25", "uma", {"task": "oc25"}, make_bulk),
-    ("uma-s-1p2p1/odac", "uma", {"task": "odac"}, make_bulk),
+    # inference_settings="batch" throughout: UMA's default merges the MOLE
+    # experts and compiles for one fixed system, which is right for MD and
+    # wasted here, where every line is a different task and structure. On CPU
+    # that was 18.8 s per single point against 2.6 s with "batch".
+    ("uma-s-1p2p1/omat", "uma", {"task": "omat", **UMA_BATCH}, make_bulk),
+    ("uma-s-1p2p1/oc20", "uma", {"task": "oc20", **UMA_BATCH}, make_bulk),
+    ("uma-s-1p2p1/oc22", "uma", {"task": "oc22", **UMA_BATCH}, make_bulk),
+    ("uma-s-1p2p1/oc25", "uma", {"task": "oc25", **UMA_BATCH}, make_bulk),
+    ("uma-s-1p2p1/odac", "uma", {"task": "odac", **UMA_BATCH}, make_bulk),
     # The omol head is the only one that reads charge/spin, and fairchem falls
     # back to a neutral singlet with just a warning, so set both explicitly.
-    ("uma-s-1p2p1/omol", "uma", {"task": "omol"}, lambda: make_molecule(charge=0, spin=1)),
-    ("uma-s-1p2p1/omol OH-", "uma", {"task": "omol"}, lambda: make_ion(charge=-1, spin=1)),
-    ("uma-s-1p2p1/omol OH radical", "uma", {"task": "omol"}, lambda: make_ion(charge=0, spin=2)),
-    ("uma-s-1p2p1/omc", "uma", {"task": "omc"}, lambda: make_molecule(charge=0, spin=1)),
+    ("uma-s-1p2p1/omol", "uma", {"task": "omol", **UMA_BATCH}, lambda: make_molecule(charge=0, spin=1)),
+    ("uma-s-1p2p1/omol OH-", "uma", {"task": "omol", **UMA_BATCH}, lambda: make_ion(charge=-1, spin=1)),
+    ("uma-s-1p2p1/omol OH radical", "uma", {"task": "omol", **UMA_BATCH}, lambda: make_ion(charge=0, spin=2)),
+    ("uma-s-1p2p1/omc", "uma", {"task": "omc", **UMA_BATCH}, lambda: make_molecule(charge=0, spin=1)),
+    # The MD setting, run once so this list also shows what a trajectory uses.
+    ("uma-s-1p2p1/omat (MD default)", "uma", {"task": "omat"}, make_bulk),
 ]
 
 
