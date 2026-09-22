@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.6.0
+
+Major update introducing complete molecular state cache management, advanced PySCF / GPU4PySCF acceleration and control, Cartesian Hessian computation, structured diagnostics, and full documentation restructuring.
+
+### Molecular Model Cache Invalidation Fix (OrbMol & others)
+- **Accurate electronic-state and electric-field tracking**: Detects changes to molecular electronic states (`charge`, `spin`) and external electric fields (`external_field`), correctly invalidating ASE calculator caches.
+- **Deep comparison**: Properly handles Python lists, NumPy arrays, in-place mutations, default zero-field normalization (`None` vs `[0, 0, 0]`), and NumPy integer types.
+- **Cache leak prevention**: Guarantees that `allow_calculation=False` or `calculation_required()` never returns stale cached energies across charge/spin/field state switches.
+- **Action required**: Users who relied on ASE calculator caching across electronic state changes in prior versions must recalculate those states.
+
+### Advanced Molecular PySCF & GPU4PySCF Support
+- **SCF Convergence Control**: Supports `scf_algorithm` (`"cdiis"` or `"newton"`), `init_guess` (`"minao"`, `"1e"`, `"atom"`, `"huckel"`, `"vsap"`), explicit DIIS parameter tuning (`diis_space`, `diis_start_cycle`), `level_shift`, and `damp`.
+- **Wavefunction & Density Reuse (`reuse_density: true`)**: Accelerates geometry optimizations by projecting converged molecular orbitals across coordinate steps using PySCF's `project_mo_nr2nr`, falling back safely on large geometry jumps.
+- **Atomic Checkpoint Serialization (`checkpoint`)**: Saves PySCF HDF5 checkpoints via atomic temporary file swapping. Embeds `ase_calculator_kit` metadata (`atoms_hash`, `basis`, `xc`, `charge`, `spin`) to verify compatibility before restarting.
+- **Structured Diagnostics (`calc.metadata["scf"]`)**: Comprehensive diagnostics recording convergence status, cycle counts, energy components, open-shell $\langle S^2 \rangle$, ideal spin, spin contamination, Mulliken spin populations, and GPU VRAM usage.
+- **Continuum Solvation Refinements**: Detailed PCM/COSMO controls including per-element atomic `radii`, `vdw_scale`, `r_probe`, `surface_method`, and grid orders, absorbing upstream CPU/GPU4PySCF internal unit differences.
+- **Cartesian Hessian API (`calc.get_hessian(atoms)`)**: Full analytical Cartesian Hessian computation ($(3N, 3N)$ in $\text{eV/Å}^2$). Automatically combines analytical electronic Hessians with finite-difference gradient steps for DFT-D3/D4 dispersion and SMD implicit solvation.
+- **Hardware-Level TSUBAME4 H100 Validation**: Complete parity verification between PySCF (CPU) and GPU4PySCF (NVIDIA H100), plus end-to-end testing of Hessian, checkpointing, density reuse, CDIIS, and open-shell spin diagnostics.
+
+### Documentation Restructuring
+- **Streamlined README**: Reduced root `README.md` to ~150 lines focusing on installation, quickstart, backend matrices, and documentation navigation.
+- **Modular Documentation Portal**: Added `docs/README.md`, `docs/getting-started.md`, `docs/backends.md`, and `docs/validation-records.md`.
+- **Comprehensive PySCF Guide**: Extensively expanded `docs/pyscf.md` covering all 0.6.0 parameters, recipes, and best practices.
+
 ## 0.5.10
 
 Fixes silent input loss, electronic-state defaults, and redundant SCF work;
