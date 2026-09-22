@@ -85,6 +85,8 @@ def main():
         if not converged:
             raise RuntimeError("Geometry optimization did not reach fmax within the step limit.")
     except Exception as exc:
+        if "calc" in locals() and hasattr(calc, "metadata") and calc.metadata:
+            result.update(calc.metadata)
         result.update(success=False, error=f"{type(exc).__name__}: {exc}")
         raise
     finally:
