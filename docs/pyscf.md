@@ -68,12 +68,13 @@ molecule into a periodic calculation. Properties are energy (eV) and forces
 post-HF methods and periodic k-points are not implemented. SCF failures,
 nonfinite energies/gradients and unavailable GPU features propagate as errors.
 
-Request forces first when both energy and forces are needed: the energy is
-then cached from the same SCF. Asking for energy first avoids unnecessary
-gradient work, but a subsequent force request repeats the SCF. Atomic geometry
-changes invalidate ASE's cache. SCF runs start from upstream initial guesses;
-this release does not reuse density matrices between optimization steps.
-`pyscf.log` is appended in the calculation directory and is closed on failure.
+Energy and forces share one converged SCF at the same geometry/electronic state,
+regardless of request order. The SCF object and output stream are retained after
+an energy-only request, and released when forces complete, a calculation fails,
+or `calc.reset()` is called. Atomic or electronic-state changes invalidate the
+SCF. Runs at a new geometry still start from upstream initial guesses; this
+release does not reuse density matrices between optimization steps.
+`pyscf.log` is appended in the calculation directory.
 Use separate directories for concurrent calculations and different states.
 
 ## Functional, dispersion, ECP and solvent choices
@@ -160,3 +161,15 @@ CPU/GPU results agreed within the limits above, every state changed the energy,
 and cached calls rejected both charge and multiplicity conflicts with YAML.
 The example was also exercised from extxyz through optimization, resolved YAML,
 JSON/NPZ output and final extxyz, retaining charge/multiplicity.
+
+## 0.5.10 SCF reuse validation
+
+For H2O with omegaB97M-V/def2-SVP, density fitting, VV10 and SMD water,
+CPU and H100 GPU runs requested energy first, then forces while disabling
+new RKS construction. Both succeeded. Forces agreed with a direct gradient
+call on that same SCF to 0 (CPU) and 3.66e-13 eV/Angstrom (GPU).
+Independent fresh SCFs differed by 4.68e-8 and 1.70e-8 eV/Angstrom, respectively;
+these use a 1e-6 eV/Angstrom repeat-SCF tolerance, separate from the 1e-8
+same-SCF gradient tolerance. Energy differences were below 2.3e-12 eV.
+Changing geometry created a new SCF and closed the old stream; reset and
+failure cleanup are also covered by the regression tests.

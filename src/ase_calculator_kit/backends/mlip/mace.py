@@ -26,6 +26,7 @@ from ...device import resolve_device
 from ...dispersion import precheck_dispersion_xc, wrap_with_d3
 from ...errors import MissingDependencyError
 from ..base import BaseBackend
+from ._molecular_state import molecular_calculator_type
 
 #: Heads carried by the MACE-MH-1 checkpoint, read back from the real file
 #: (``MACECalculator.available_heads`` for ``mace-mh-1.model``).
@@ -43,7 +44,7 @@ MH1_HEADS = (
 )
 
 #: Multi-head checkpoints whose head names are known without downloading them.
-_KNOWN_HEADS: dict[str, tuple[str, ...]] = {"mh-1": MH1_HEADS}
+_KNOWN_HEADS: dict[str, tuple[str, ...]] = {"mh-1": MH1_HEADS, "omol-0": ("omol",)}
 
 #: MACE-Polar checkpoints, which are loaded by ``mace_polar``, not ``mace_mp``.
 #:
@@ -68,6 +69,7 @@ POLAR_MODELS = ("polar-1-s", "polar-1-m", "polar-1-l")
 #: which lets MACE raise its own error listing the heads it actually has.
 _DEFAULT_HEAD: dict[str, str | None] = {
     "mh-1": "omat_pbe",
+    "omol-0": "omol",
     "polar-1-s": None,
     "polar-1-m": None,
     "polar-1-l": None,
@@ -86,6 +88,20 @@ _DEFAULT_HEAD: dict[str, str | None] = {
     "large-0b2": None,
     "medium-0b3": None,
 }
+
+# Public family names map to unambiguous checkpoints; explicit sizes still work.
+_MODEL_ALIASES = {
+    "mace-omol-0": "omol-0", "omol-0": "omol-0",
+    "mace-polar-1": "polar-1-m", "polar-1": "polar-1-m",
+    **{f"mace-{name}": name for name in POLAR_MODELS},
+    **{name: name for name in POLAR_MODELS},
+}
+
+
+def _canonical_model(model):
+    # Do not normalize paths or URLs; their case may be significant.
+    return _MODEL_ALIASES.get(model.lower(), model) if isinstance(model, str) else model
+
 
 _HEAD_FALLBACK_WARNING = (
     "MACE does not raise on an unknown head: it logs a warning and silently "
@@ -153,6 +169,8 @@ def _policy_key(model: str | Path, head: str | None) -> str:
     r2SCAN — so the model name keys it instead. Neither known: no row, and D3 is
     refused as unverified unless the caller passes an explicit ``dispersion_xc``.
     """
+    if str(model) == "omol-0":
+        return "omol-0"
     return head if head is not None else str(model)
 
 
@@ -319,13 +337,17 @@ class MACEBackend(BaseBackend):
             ``medium-mpa-0``          MPtrj + sAlex, PBE(+U)
             ``mace-matpes-pbe-0``     MatPES, PBE
             ``mace-matpes-r2scan-0``  MatPES, r2SCAN
+            ``omol-0``                OMol25, ωB97M-V — MACE-OMOL-0
             ``polar-1-s``             OMol25, ωB97M-V — MACE-Polar, small
             ``polar-1-m``             MACE-Polar, medium (12 Å field)
             ``polar-1-l``             MACE-Polar, large (18 Å field)
             ========================= =====================================
 
-            These are upstream's own spellings and this package adds no
-            synonyms, so one model has exactly one name. Everything else
+            ``MACE-OMOL-0`` aliases ``omol-0`` and ``MACE-POLAR-1`` aliases
+            ``polar-1-m``; explicit ``MACE-POLAR-1-S/M/L`` names are accepted.
+            OMOL-0 uses ``mace_omol(model="extra_large")`` with its own omol
+            head. OMOL-0 and Polar require atoms.info charge and spin multiplicity.
+            Everything else
             ``mace_mp`` accepts (``"small"``, ``"medium-0b3"``, a path, a URL)
             works too; only the models above carry a dispersion policy.
 
@@ -350,11 +372,9 @@ class MACEBackend(BaseBackend):
             holds the value. They also take an applied electric field through
             ``atoms.info["external_field"]`` (a 3-vector in V/Å) alongside
             ``atoms.info["charge"]`` and ``atoms.info["spin"]``. As with
-            fairchem's ``omol`` task, none of the three is required in form and
-            all three are in practice: MACE substitutes charge 0, spin 1 and a
-            zero field without warning, so an ion, a radical or a field-on
-            calculation comes back silently neutral, closed-shell and unpolarised
-            unless the keys are set. Partial charges are not a uniquely
+            kit-created fairchem omol calculators, charge and multiplicity
+            are required and must match the electron count. An omitted field
+            means zero external field. Partial charges are not a uniquely
             defined quantity — read them as a decomposition of the model's
             electrostatics, not as a measurement.
 
@@ -362,8 +382,9 @@ class MACEBackend(BaseBackend):
             omat-0 and matpes checkpoints — they are not MIT.
         head:
             Which readout head of a multi-head checkpoint to evaluate.
-            ``"auto"`` (default) picks ``omat_pbe`` for ``mh-1`` and passes no
-            head at all for the single-head checkpoints above, so selecting one
+            ``"auto"`` (default) picks ``omat_pbe`` for ``mh-1``; ``omol-0``
+            uses its loader-owned ``omol`` head. Other single-head checkpoints
+            need no head argument, so selecting one
             of them needs nothing else. Each head is a different *level of
             theory*, not a different accuracy setting:
 
@@ -437,6 +458,8 @@ class MACEBackend(BaseBackend):
             so that the correction added here is the same quantity PFP
             adds. See ``ase_calculator_kit.dispersion.DEFAULT_CUTOFF``.
         """
+        model = _canonical_model(model)
+        is_omol = str(model) == "omol-0"
         is_polar = str(model) in POLAR_MODELS
         if is_polar:
             _require_polar_runtime()
@@ -461,7 +484,9 @@ class MACEBackend(BaseBackend):
         # imported only on the polar path — an older install then reports a
         # missing mace-torch instead of a missing MACE-MP.
         try:
-            if is_polar:
+            if is_omol:
+                from mace.calculators import mace_omol as build
+            elif is_polar:
                 from mace.calculators import mace_polar as build
             else:
                 from mace.calculators import mace_mp as build
@@ -469,11 +494,12 @@ class MACEBackend(BaseBackend):
             raise MissingDependencyError("mace-torch") from exc
 
         params: dict = {
-            "model": model,
+            "model": "extra_large" if is_omol else model,
             "device": resolved_device,
             "default_dtype": default_dtype,
         }
-        if resolved_head is not None:
+        # mace_omol supplies head="omol" itself; passing it twice raises TypeError.
+        if resolved_head is not None and not is_omol:
             params["head"] = resolved_head
         if resolved_accelerator in _ACCELERATOR_FLAG:
             params[_ACCELERATOR_FLAG[resolved_accelerator]] = True
@@ -485,6 +511,9 @@ class MACEBackend(BaseBackend):
         if resolved_accelerator == "auto":
             bare = _autoselect_accelerator(build, params, bare)
         _reject_silent_head_fallback(bare, resolved_head)
+        if is_omol or is_polar:
+            # Keep the same upstream instance and API; add only input validation.
+            bare.__class__ = molecular_calculator_type(type(bare))
 
         if d3_xc is not None:
             return wrap_with_d3(

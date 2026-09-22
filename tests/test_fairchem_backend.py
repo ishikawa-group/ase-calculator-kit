@@ -6,17 +6,25 @@ import sys
 import types
 
 import pytest
+from ase import Atoms
+from ase.calculators.calculator import Calculator, all_changes
 
 from ase_calculator_kit import get_calculator
 
 
 def _install_fake_fairchem(monkeypatch, seen: dict):
-    class FakeFAIRChemCalculator:
+    class FakeFAIRChemCalculator(Calculator):
         implemented_properties = ["energy"]
 
         def __init__(self, predictor, **kwargs):
+            super().__init__()
             seen["predictor"] = predictor
             seen["kwargs"] = kwargs
+
+        def calculate(self, atoms=None, properties=("energy",), system_changes=all_changes):
+            super().calculate(atoms, properties, system_changes)
+            seen["runs"] = seen.get("runs", 0) + 1
+            self.results = {"energy": -1.}
 
     def fake_get_predict_unit(model_name, device=None, **kwargs):
         seen["model"] = model_name
@@ -132,3 +140,49 @@ def test_esen_is_separate_and_omol_only(monkeypatch):
         get_calculator("esen", model="esen_30m_omat")
     with pytest.raises(DispersionError):
         get_calculator("esen", dispersion=True)
+
+
+@pytest.mark.parametrize("backend", ["esen", "uma"])
+def test_omol_requires_state_before_inference_and_cache(monkeypatch, backend):
+    seen = {}
+    _install_fake_fairchem(monkeypatch, seen)
+    a = Atoms("OH")
+    a.calc = get_calculator(backend, task="omol", device="cpu")
+    for info in ({}, {"charge": 0}, {"charge": 0, "spin": 1}, {"charge": 0., "spin": 2}):
+        a.info = info.copy()
+        with pytest.raises(ValueError):
+            a.get_potential_energy()
+        assert a.info == info and "runs" not in seen
+    a.info.update(charge=0, spin=2)
+    assert a.get_potential_energy() == -1.
+    assert seen["runs"] == 1
+    del a.info["spin"]
+    with pytest.raises(ValueError, match="requires"):
+        a.get_potential_energy()
+    assert not a.calc.results
+    # Unrelated UMA tasks retain their upstream input contract.
+    a.calc = get_calculator("uma", task="omat", device="cpu")
+    a.info.clear()
+    assert a.get_potential_energy() == -1.
+
+
+def test_molecular_guard_preserves_ase_name_and_mapped_state():
+    from ase_calculator_kit.backends.mlip._molecular_state import molecular_calculator_type
+
+    class Dummy(Calculator):
+        implemented_properties = ["energy"]
+        info_keys = {"total_charge": "q", "total_spin": "multiplicity"}
+
+        def calculate(self, atoms=None, properties=("energy",), system_changes=all_changes):
+            super().calculate(atoms, properties, system_changes)
+            self.results = {"energy": -1.}
+
+    calc = molecular_calculator_type(Dummy)()
+    assert calc.name == Dummy().name
+    atoms = Atoms("H2")
+    atoms.info.update(q=0, multiplicity=1)
+    calc.calculate(atoms)  # keep the optional-argument ASE interface
+    assert calc.get_potential_energy(atoms) == -1.
+    atoms.info.pop("q")
+    with pytest.raises(ValueError, match="requires"):
+        calc.get_potential_energy(atoms)

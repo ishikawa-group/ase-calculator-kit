@@ -10,6 +10,7 @@ from ...device import resolve_device
 from ...dispersion import precheck_dispersion_xc, wrap_with_d3
 from ...errors import MissingDependencyError
 from ..base import BaseBackend
+from ._molecular_state import molecular_calculator_type
 
 if TYPE_CHECKING:  # never imported at runtime - see invariant 3
     from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
@@ -87,13 +88,10 @@ class FairChemBackend(BaseBackend):
                 atoms.info["spin"] = 2
                 atoms.calc = get_calculator("uma", task="omol")
 
-            This is not optional in practice, only in form: fairchem does **not**
-            raise when they are missing. It logs a warning, writes
-            ``charge=0`` / ``spin=1`` into ``atoms.info`` (mutating the object you
-            passed in), and returns a neutral closed-shell result. An anion or a
-            radical therefore comes back silently wrong unless both keys are set.
-            ``charge`` and ``spin`` are read only by the ``omol`` head; other
-            tasks ignore them.
+            For ``omol``, the kit rejects missing/noninteger charge or
+            multiplicity and inconsistent electron counts before inference or
+            cached results. Upstream's neutral-singlet fallback is not used.
+            Other tasks keep their existing input contract.
         inference_settings:
             How the predict unit is built, which is where UMA's speed/precision
             trade lives. One of the names below, or a ``fairchem.core``
@@ -178,7 +176,10 @@ class FairChemBackend(BaseBackend):
         predictor = pretrained_mlip.get_predict_unit(
             model, device=resolved_device, inference_settings=inference_settings
         )
-        bare = FAIRChemCalculator(predictor, task_name=task, **kwargs)
+        calculator_type = molecular_calculator_type(FAIRChemCalculator) if task == "omol" else (
+            FAIRChemCalculator
+        )
+        bare = calculator_type(predictor, task_name=task, **kwargs)
 
         if d3_xc is not None:
             return wrap_with_d3(

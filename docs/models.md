@@ -33,6 +33,7 @@ interaction and give wrong energies. So such models reject `dispersion=True`.
 | **MACE** `medium-mpa-0` | MPtrj + sAlex | PBE(+U) | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **MACE** `mace-matpes-pbe-0` | MatPES | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **MACE** `mace-matpes-r2scan-0` | MatPES | r2SCAN | ✗ none | ✅ allowed — D3 `xc=r2scan` |
+| **MACE** `omol-0` (MACE-OMOL-0) | OMol25 | ωB97M-V | ✓ yes (VV10 nonlocal) | ⛔ error (double-counting) |
 | **MACE** `polar-1-s` / `polar-1-m` / `polar-1-l` (MACE-Polar) | OMol25 | ωB97M-V | ✓ yes (VV10 nonlocal) | ⛔ error (double-counting) |
 | **MatterSim** `default` / `1M` / `5M` | MatterSim set (MPtrj + T/P-sampled structures) | PBE | ✗ none | ✅ allowed — D3 `xc=pbe` |
 | **NequIP OAM** `S` / `M` / `L` / `XL` | OMat24 pre-training + sAlex / MPTrj fine-tuning | PBE(+U)-level materials data | ✗ none | ✅ allowed — D3 `xc=pbe` |

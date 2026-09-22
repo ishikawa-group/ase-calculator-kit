@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.10
+
+Fixes silent input loss, electronic-state defaults, and redundant SCF work;
+adds the dedicated MACE-OMOL-0 route and public MACE-POLAR-1 names.
+
+- VASP/QE reject unknown config/profile keys; QE also validates calculation
+  keys against ASE before writing inputs or resolved configs.
+- UMA/eSEN omol and MACE OMOL/Polar require explicit, consistent charge and
+  multiplicity. Missing values no longer become neutral singlets.
+- PySCF energy followed by forces reuses one converged SCF. Geometry/state
+  changes, reset and failures invalidate it and release its log stream.
+- Slow tests classify transport/auth failures by exception type. Model
+  incompatibilities and missing checkpoint files fail instead of being skipped
+  because their messages contain words such as "checkpoint" or "resolve".
+- The PySCF example validates inputs before claiming output, records backend
+  setup/calculation failures as JSON, and preserves existing results on retry.
+- `model="MACE-OMOL-0"` (`omol-0`) calls mace_omol with its extra-large checkpoint.
+  `model="MACE-POLAR-1"` selects medium; explicit S/M/L names also work. Both
+  use the separate MACE environment and refuse additional D3.
+
 ## 0.5.9
 
 Adds molecular PySCF and GPU4PySCF through the existing config-only DFT factory.

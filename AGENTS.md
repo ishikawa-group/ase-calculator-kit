@@ -142,9 +142,10 @@ These are deliberate design decisions, not oversights.
     an environment marker — invariant 10 applies. When upstream relaxes the pin
     (orbital-materials/orb-models#168), the CI step fails, and *that* is when
     the README table and this invariant get revisited.
-12. **The MACE backend has two upstream loaders, chosen by model name.** Since
-    0.5.4, `POLAR_MODELS` (`polar-1-s/m/l`) load through `mace_polar` and
-    everything else through `mace_mp`. Neither function accepts the other's
+12. **The MACE backend selects upstream loaders by model name.** Since
+    0.5.4, `POLAR_MODELS` (`polar-1-s/m/l`) load through `mace_polar`;
+    since 0.5.10, `omol-0` loads through `mace_omol(model="extra_large")`. Other
+    models use `mace_mp`. These functions do not accept each other's
     checkpoint names, so the name *is* the selector and there is no keyword to
     add. `mace_polar` is imported only on the polar path, so an install predating
     it reports a missing mace-torch rather than a missing MACE-MP.
@@ -380,8 +381,19 @@ Three things make this go wrong, and all three have happened here:
   Do not replace partial PBC with `pbc=True` or expose stress normalized by an
   artificial completed volume. The adapter applies only to MatGL backends.
 
-
 - **eSEN OMol25 is separate from UMA and legacy OMat.** `esen` accepts the three
   OMol25 registry checkpoints, defaults to `esen-sm-conserving-all-omol`, fixes
   task to omol and defaults inference_settings to batch. Its `esen` extra shares
   fairchem-core with UMA and `all`; D3 is refused for the OMol reference level.
+
+- Since 0.5.10, UMA/eSEN omol and molecular MACE use an instance-local
+  validation subclass: explicit charge/multiplicity is required, with integer
+  and electron-count checks before inference and cache reuse. Do not restore
+  upstream's neutral-singlet fallback. MACE custom info_keys are respected.
+- MACE-OMOL-0 has its own upstream loader/head; never route it through mace_mp
+  or pass a second head argument to mace_omol. MACE-POLAR-1 names the medium
+  checkpoint; explicit small/medium/large names remain available.
+- PySCF may retain an energy-only SCF and its stream until forces or reset.
+  All structure/state changes invalidate it; failures must close the stream.
+- External DFT configs reject unknown envelope/profile keys; QE namelists use
+  ASE's supported-key table. Do not silently drop an unknown YAML field.

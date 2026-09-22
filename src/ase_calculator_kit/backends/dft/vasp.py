@@ -7,7 +7,9 @@ from typing import Any
 
 from ase.calculators.calculator import Calculator
 
-from ...config import resolve_calculator_config, write_resolved_config_file
+from ...config import (
+    resolve_calculator_config, validate_external_dft_config, write_resolved_config_file,
+)
 from ..base import BaseBackend
 
 
@@ -29,18 +31,20 @@ class VaspBackend(BaseBackend):
             config=config,
             overrides=overrides,
         )
+        validate_external_dft_config(resolved, "vasp")
         profile = resolved.get("profile", {})
         if "command" not in profile:
             raise ValueError("VASP config requires profile.command.")
 
         parameters = resolved.get("parameters", {})
         directory = resolved.get("directory", ".")
-        if write_resolved_config:
-            write_resolved_config_file(resolved, directory)
 
-        return Vasp(
+        calculator = Vasp(
             command=profile["command"],
             directory=directory,
             txt=profile.get("txt", "vasp.out"),
             **parameters,
         )
+        if write_resolved_config:
+            write_resolved_config_file(resolved, directory)
+        return calculator

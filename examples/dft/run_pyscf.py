@@ -19,6 +19,17 @@ from ase_calculator_kit import get_calculator
 from ase_calculator_kit.config import load_config
 
 
+def _json_value(value):
+    # Invalid YAML settings must not prevent writing the failure report itself.
+    if isinstance(value, float) and not np.isfinite(value):
+        return repr(value)
+    if isinstance(value, dict):
+        return {str(key): _json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_value(item) for item in value]
+    return value
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("xyz", type=Path)
@@ -33,13 +44,11 @@ def main():
     cfg = load_config(args.config)
     if cfg.get("calculator", "").lower() not in {"pyscf", "gpu4pyscf"}:
         parser.error("config must select pyscf or gpu4pyscf")
-    # Refuse stale output rather than mixing different charge/spin calculations.
+    # Read input before claiming an output directory, so a corrected path can retry.
+    atoms = read(args.xyz)
+    # Refuse existing results; failures after this point are recorded in results.json.
     args.output.mkdir(parents=True, exist_ok=False)
     cfg["directory"] = str(args.output)
-    atoms = read(args.xyz)
-    calc = get_calculator(cfg["calculator"], config=cfg, write_resolved_config=True)
-    atoms.calc = calc
-    cfg = load_config(args.output / "resolved_calculator_config.yaml")
     versions = {}
     for name in ("ase-calculator-kit", "ase", "pyscf", "gpu4pyscf-cuda12x",
                  "cupy-cuda12x", "cutensor-cu12", "pyscf-dispersion"):
@@ -51,6 +60,9 @@ def main():
               "units": {"energy": "eV", "forces": "eV/Angstrom", "positions": "Angstrom"},
               "optimization_requested": args.optimize, "success": False}
     try:
+        calc = get_calculator(cfg["calculator"], config=cfg, write_resolved_config=True)
+        atoms.calc = calc
+        result["config"] = load_config(args.output / "resolved_calculator_config.yaml")
         if args.optimize:
             optimizer = BFGS(atoms, logfile=str(args.output / "optimization.log"),
                              trajectory=str(args.output / "optimization.traj"))
@@ -59,7 +71,7 @@ def main():
                           optimization_steps=optimizer.nsteps, fmax=args.fmax)
         else:
             converged = True
-        # Asking for forces first avoids a second SCF for the energy.
+        # Both properties share the same converged SCF regardless of request order.
         forces = atoms.get_forces()
         energy = atoms.get_potential_energy()
         result.update(calc.metadata, energy=energy, success=bool(converged),
@@ -77,7 +89,7 @@ def main():
         raise
     finally:
         (args.output / "results.json").write_text(
-            json.dumps(result, indent=2, allow_nan=False) + "\n", encoding="utf-8"
+            json.dumps(_json_value(result), indent=2, allow_nan=False, default=str) + "\n", encoding="utf-8"
         )
 
 

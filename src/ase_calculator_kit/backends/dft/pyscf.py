@@ -157,6 +157,23 @@ class PySCFCalculator(Calculator):
         self.metadata: dict[str, Any] = {}
         self._state_key = None
         self._write_config = False
+        self._scf = None
+        self._scf_energy = None
+        self._scf_log = None
+
+    def _discard_scf(self):
+        self._scf = None
+        self._scf_energy = None
+        log = getattr(self, "_scf_log", None)
+        self._scf_log = None
+        if log is not None:
+            log.close()
+
+    def reset(self):
+        super().reset()
+        self._discard_scf()
+        self._state_key = None
+        self.metadata = {}
 
     def _state(self, atoms):
         state, sources = _electronic_state(self.settings, atoms.info)
@@ -175,7 +192,9 @@ class PySCFCalculator(Calculator):
             try:
                 if self._state(candidate)[2] != self._state_key:
                     self.results = {}
+                    self._discard_scf()
             except ValueError:
+                self._discard_scf()
                 self.results = {}
                 self.metadata = {}
                 raise
@@ -197,6 +216,14 @@ class PySCFCalculator(Calculator):
         return {}
 
     def calculate(self, atoms=None, properties=("energy",), system_changes=all_changes):
+        candidate = atoms if atoms is not None else self.atoms
+        try:
+            reuse = self._scf is not None and not self.check_state(candidate)
+        except ValueError:
+            self.reset()
+            raise
+        if not reuse:
+            self._discard_scf()
         super().calculate(atoms, properties, system_changes)
         self.results = {}
         self.metadata = {}
@@ -208,62 +235,68 @@ class PySCFCalculator(Calculator):
 
         state, sources, state_key = self._state(self.atoms)
         p = self.settings | state
-        self._save_config(p)
-        Path(self.directory).mkdir(parents=True, exist_ok=True)
-        # A context manager closes PySCF's output even when SCF/gradients fail.
-        with (Path(self.directory) / "pyscf.log").open("a", encoding="utf-8") as log:
-            mol = gto.Mole()
-            mol.stdout = log
-            mol.verbose = p["verbose"]
-            mol.atom = list(zip(self.atoms.get_chemical_symbols(), self.atoms.positions))
-            mol.unit = "Angstrom"
-            mol.basis, mol.charge, mol.spin = p["basis"], p["charge"], p["spin"]
-            mol.max_memory = p["max_memory"]
-            if p["ecp"] is not None:
-                mol.ecp = p["ecp"]
-            mol.build()
-            if mol.nelectron < mol.spin or (mol.nelectron - mol.spin) % 2:
-                raise ValueError("charge/spin are inconsistent with the effective electron count.")
-            method = p["method"]
-            if method == "auto":
-                method = "uks" if mol.spin else "rks"
-            is_dft = method.endswith("ks")
-            mf = getattr(dft if is_dft else scf, method.upper())(mol)
-            if is_dft:
-                mf.xc = p["xc"]
-                if p["nlc"] is not None:
-                    mf.nlc = 0 if p["nlc"] is False else p["nlc"]
-                if p["disp"] and (dft.libxc.is_nlc(mf.xc) or p["nlc"]):
-                    raise DispersionError("D3/D4 cannot be combined with a VV10/NLC functional.")
-            if p["density_fit"]:
-                mf = mf.density_fit(auxbasis=p["auxbasis"])
-            if p["disp"]:
-                try:
-                    import pyscf.dispersion  # noqa: F401
-                except ImportError as exc:
-                    raise MissingDependencyError("pyscf-dispersion") from exc
-                mf.disp = p["disp"]
-            if is_dft:
-                for name in ("grids", "nlcgrids"):
-                    for key, value in p[name].items():
-                        setattr(getattr(mf, name), key, tuple(value) if key == "atom_grid" else value)
-            mf.conv_tol, mf.max_cycle = p["conv_tol"], p["max_cycle"]
-            if p["solvent"]:
-                s = p["solvent"]
-                if s["model"] == "smd":
-                    mf = mf.SMD()
-                    mf.with_solvent.solvent = s["solvent"]
-                else:
-                    mf = mf.PCM()
-                    mf.with_solvent.eps = s["eps"]
-                    mf.with_solvent.method = s.get("method", "IEF-PCM")
-            if self.gpu:
-                mf = mf.to_gpu()
-                if not type(mf).__module__.startswith("gpu4pyscf"):
-                    raise RuntimeError("GPU4PySCF did not produce a GPU SCF object.")
-            energy = float(mf.kernel())
-            if not mf.converged or not np.isfinite(energy):
-                raise CalculationFailed("PySCF SCF did not converge to a finite energy.")
+        method = p["method"]
+        if method == "auto":
+            method = "uks" if state["spin"] else "rks"
+        try:
+            self._save_config(p)
+            if reuse:
+                mf, energy = self._scf, self._scf_energy
+            else:
+                Path(self.directory).mkdir(parents=True, exist_ok=True)
+                # Retain the stream with SCF: upstream gradient objects also use it.
+                self._scf_log = (Path(self.directory) / "pyscf.log").open("a", encoding="utf-8")
+                mol = gto.Mole()
+                mol.stdout = self._scf_log
+                mol.verbose = p["verbose"]
+                mol.atom = list(zip(self.atoms.get_chemical_symbols(), self.atoms.positions))
+                mol.unit = "Angstrom"
+                mol.basis, mol.charge, mol.spin = p["basis"], p["charge"], p["spin"]
+                mol.max_memory = p["max_memory"]
+                if p["ecp"] is not None:
+                    mol.ecp = p["ecp"]
+                mol.build()
+                if mol.nelectron < mol.spin or (mol.nelectron - mol.spin) % 2:
+                    raise ValueError("charge/spin are inconsistent with the effective electron count.")
+                is_dft = method.endswith("ks")
+                mf = getattr(dft if is_dft else scf, method.upper())(mol)
+                if is_dft:
+                    mf.xc = p["xc"]
+                    if p["nlc"] is not None:
+                        mf.nlc = 0 if p["nlc"] is False else p["nlc"]
+                    if p["disp"] and (dft.libxc.is_nlc(mf.xc) or p["nlc"]):
+                        raise DispersionError("D3/D4 cannot be combined with a VV10/NLC functional.")
+                if p["density_fit"]:
+                    mf = mf.density_fit(auxbasis=p["auxbasis"])
+                if p["disp"]:
+                    try:
+                        import pyscf.dispersion  # noqa: F401
+                    except ImportError as exc:
+                        raise MissingDependencyError("pyscf-dispersion") from exc
+                    mf.disp = p["disp"]
+                if is_dft:
+                    for name in ("grids", "nlcgrids"):
+                        for key, value in p[name].items():
+                            setattr(getattr(mf, name), key, tuple(value) if key == "atom_grid" else value)
+                mf.conv_tol, mf.max_cycle = p["conv_tol"], p["max_cycle"]
+                if p["solvent"]:
+                    s = p["solvent"]
+                    if s["model"] == "smd":
+                        mf = mf.SMD()
+                        mf.with_solvent.solvent = s["solvent"]
+                    else:
+                        mf = mf.PCM()
+                        mf.with_solvent.eps = s["eps"]
+                        mf.with_solvent.method = s.get("method", "IEF-PCM")
+                if self.gpu:
+                    mf = mf.to_gpu()
+                    if not type(mf).__module__.startswith("gpu4pyscf"):
+                        raise RuntimeError("GPU4PySCF did not produce a GPU SCF object.")
+                energy = float(mf.kernel())
+                if not mf.converged or not np.isfinite(energy):
+                    raise CalculationFailed("PySCF SCF did not converge to a finite energy.")
+                self._scf, self._scf_energy = mf, energy
+                self._scf_log.flush()
             results = {"energy": energy * Hartree}
             if "forces" in properties:
                 grad = mf.nuc_grad_method().kernel()
@@ -271,12 +304,22 @@ class PySCFCalculator(Calculator):
                 if grad.shape != (len(self.atoms), 3) or not np.isfinite(grad).all():
                     raise CalculationFailed("PySCF returned invalid analytic gradients.")
                 results["forces"] = -grad * Hartree / Bohr
+            mol = mf.mol
             self.results = results
             self._state_key = state_key
             self.metadata = {"converged": True, "method": method, "gpu": self.gpu,
                              "charge": mol.charge, "spin": mol.spin,
                              "multiplicity": mol.spin + 1, "energy_hartree": energy,
                              "state_sources": sources}
+
+            # Both ASE properties are now cached; no need to retain GPU memory or a file.
+            if "forces" in results:
+                self._discard_scf()
+        except Exception:
+            self.results = {}
+            self.metadata = {}
+            self._discard_scf()
+            raise
 
 
 class PySCFBackend(BaseBackend):

@@ -5,8 +5,8 @@ the calculator, and asserts ``get_potential_energy()`` returns a finite float.
 
 These are marked ``slow`` because they download model weights on first run::
 
-    pytest                 # runs them
-    pytest -m "not slow"   # skips them
+    pytest -m slow         # runs them
+    pytest                 # skips them
 
 A case is *skipped* (not failed) when the failure is environmental — a missing
 backend install, a model-weight download problem, or Hugging Face gating for the
@@ -15,8 +15,12 @@ UMA checkpoints. A genuine API/usage error still fails the test.
 
 from __future__ import annotations
 
+import importlib
 import math
 import numbers
+import socket
+import ssl
+from urllib.error import HTTPError, URLError
 
 import pytest
 from ase import Atoms
@@ -27,14 +31,42 @@ from ase_calculator_kit.errors import MissingDependencyError
 
 pytestmark = pytest.mark.slow
 
-# Substrings that mark an environmental problem -> skip rather than fail.
-_ENV_HINTS = (
-    "huggingface", "hugging face", "401", "403", "gated", "unauthorized",
-    "access", "token", "login", "connection", "could not", "download",
-    "max retries", "timed out", "timeout", "offline", "http", "url",
-    "name or service not known", "no such file", "checkpoint", "resolve",
-    "ssl", "certificate", "proxy",
-)
+def _is_environment_error(exc, seen=None):
+    """Skip identified transport/auth failures, never guess from model error text."""
+    seen = set() if seen is None else seen
+    if id(exc) in seen:
+        return False
+    seen.add(id(exc))
+    http_types = [HTTPError]
+    network_types = [ConnectionError, TimeoutError, socket.gaierror, ssl.SSLError]
+    offline_types = []
+    for module_name, http_names, network_names, offline_names in (
+        ("requests.exceptions", ("HTTPError",), ("ConnectionError", "Timeout"), ()),
+        ("httpx", ("HTTPStatusError",), ("NetworkError", "TimeoutException"), ()),
+        ("huggingface_hub.errors", ("HfHubHTTPError",), (),
+         ("GatedRepoError", "LocalEntryNotFoundError", "OfflineModeIsEnabled")),
+    ):
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:
+            continue
+        for target, names in ((http_types, http_names), (network_types, network_names),
+                              (offline_types, offline_names)):
+            target.extend(getattr(module, name) for name in names if hasattr(module, name))
+    if isinstance(exc, tuple(offline_types)):
+        return True
+    if isinstance(exc, tuple(http_types)):
+        response = getattr(exc, "response", None)
+        status = getattr(response, "status_code", getattr(exc, "code", None))
+        return status in {401, 403, 408, 429} or (isinstance(status, int) and status >= 500)
+    if isinstance(exc, URLError):
+        return isinstance(exc.reason, tuple(network_types))
+    if isinstance(exc, tuple(network_types)):
+        return True
+    # MACE wraps download failures in RuntimeError; classify the explicit cause,
+    # so a wrapped invalid-model ValueError still fails.
+    return (isinstance(exc, RuntimeError) and exc.__cause__ is not None
+            and _is_environment_error(exc.__cause__, seen))
 
 
 def _bulk() -> Atoms:
@@ -136,8 +168,7 @@ def test_cpu_single_point(model, kwargs, make_system, singlepoint_progress):
     except MissingDependencyError as exc:
         pytest.skip(f"backend not installed: {exc}")
     except Exception as exc:  # noqa: BLE001 - classify env vs real failure
-        text = str(exc).lower()
-        if any(hint in text for hint in _ENV_HINTS):
+        if _is_environment_error(exc):
             pytest.skip(f"environmental (weights/network/HF): {type(exc).__name__}: {exc}")
         raise
 
@@ -164,8 +195,7 @@ def test_dispersion_changes_energy(model, kwargs, singlepoint_progress):
     except MissingDependencyError as exc:
         pytest.skip(f"backend not installed: {exc}")
     except Exception as exc:  # noqa: BLE001 - classify env vs real failure
-        text = str(exc).lower()
-        if any(hint in text for hint in _ENV_HINTS):
+        if _is_environment_error(exc):
             pytest.skip(f"environmental (weights/network/HF): {type(exc).__name__}: {exc}")
         raise
 

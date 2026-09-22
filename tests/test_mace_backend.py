@@ -77,6 +77,7 @@ def _install_fake_mace(
     calculators = types.ModuleType("mace.calculators")
     calculators.mace_mp = _fake_loader("mace_mp")
     calculators.mace_polar = _fake_loader("mace_polar")
+    calculators.mace_omol = _fake_loader("mace_omol")
     monkeypatch.setitem(sys.modules, "mace", mace)
     monkeypatch.setitem(sys.modules, "mace.calculators", calculators)
     monkeypatch.setitem(
@@ -522,3 +523,23 @@ def test_graph_longrange_is_only_required_by_the_polar_path(monkeypatch):
     get_calculator("mace", device="cpu", model="mh-1")
 
     assert seen["loader"] == "mace_mp"
+
+
+def test_omol_and_polar_public_names(monkeypatch):
+    seen = {}
+    _install_fake_mace(monkeypatch, seen)
+    for name in ("omol-0", "MACE-OMOL-0"):
+        get_calculator("mace", model=name, device="cpu", accelerator="none")
+        assert seen["loader"] == "mace_omol"
+        assert seen["kwargs"]["model"] == "extra_large"
+        assert "head" not in seen["kwargs"]
+        with pytest.raises(DispersionError):
+            get_calculator("mace", model=name, dispersion=True)
+    with pytest.raises(ValueError, match="Unknown MACE head"):
+        get_calculator("mace", model="omol-0", head="omat_pbe")
+    for name, selected in (("MACE-POLAR-1", "polar-1-m"),
+                           ("MACE-POLAR-1-S", "polar-1-s"),
+                           ("MACE-POLAR-1-L", "polar-1-l")):
+        get_calculator("mace", model=name, device="cpu", accelerator="none")
+        assert seen["loader"] == "mace_polar"
+        assert seen["kwargs"]["model"] == selected

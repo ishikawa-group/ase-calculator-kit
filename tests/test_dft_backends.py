@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from ase_calculator_kit import get_calculator
 
 
@@ -112,3 +114,33 @@ def test_qe_backend_requires_pseudo_settings():
         assert "profile.pseudo_dir" in str(exc)
     else:
         raise AssertionError("Expected ValueError")
+
+
+@pytest.mark.parametrize("name", ["vasp", "qe"])
+def test_dft_rejects_misspelled_config_before_writing(name, tmp_path):
+    config = {"calculator": name, "directory": str(tmp_path / "unused"),
+              "profile": {"command": "not-executed"}}
+    if name == "qe":
+        config.update(pseudopotentials={"H": "H.UPF"})
+        config["profile"]["pseudo_dir"] = str(tmp_path)
+    for bad in (
+        config | {"paramters": {"encut": 520}},
+        config | {"profile": config["profile"] | {"commmand": "typo"}},
+        config | {"profile": config["profile"] | {"command": ""}},
+        config | {"parameters": None},
+    ):
+        with pytest.raises(ValueError):
+            get_calculator(name, config=bad, write_resolved_config=True)
+        assert not (tmp_path / "unused").exists()
+
+
+def test_qe_validates_input_data_and_preserves_indexed_keys():
+    cfg = {"calculator": "qe", "profile": {"command": "not-executed", "pseudo_dir": "/tmp"},
+           "pseudopotentials": {"H": "H.UPF"}}
+    for parameters in ({"kptz": [1, 1, 1]}, {"input_data": {"systm": {"ecutwfc": 40}}},
+                       {"input_data": {"system": {"ecutwfcc": 40}}}):
+        with pytest.raises(ValueError, match="Unknown QE"):
+            get_calculator("qe", config=cfg | {"parameters": parameters})
+    data = {"SYSTEM": {"ecutwfc": 40, "starting_magnetization(1)": .5}, "conv_thr": 1e-8}
+    calc = get_calculator("qe", config=cfg | {"parameters": {"input_data": data}})
+    assert calc.parameters["input_data"] == data

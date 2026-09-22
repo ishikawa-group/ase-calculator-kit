@@ -503,6 +503,8 @@ fixed across a campaign.
 | `model` | Heads | Trained on |
 |---|---|---|
 | `mh-1` (default) | 6, see below | Multi-head cross-learning |
+| `omol-0` / `MACE-OMOL-0` | `omol` | OMol25, ωB97M-V |
+| `polar-1-s/m/l` / `MACE-POLAR-1` | single | OMol25 with electrostatics; family name selects medium |
 | `medium-omat-0` | single | **OMat24, PBE(+U)** — MACE-OMAT-0 |
 | `small-omat-0` | single | OMat24, smaller |
 | `medium-mpa-0` | single | MPtrj + sAlex, PBE(+U) |
@@ -514,8 +516,9 @@ atoms.calc = get_calculator("mace")                            # mh-1 / omat_pbe
 atoms.calc = get_calculator("mace", model="medium-omat-0")     # no head needed
 ```
 
-`head` defaults to `"auto"`: `omat_pbe` for `mh-1`, and no head at all for the
-single-head checkpoints above (they carry one head named `Default`, and handing
+`head` defaults to `"auto"`: `omat_pbe` for `mh-1`, the loader-owned `omol` head
+for `omol-0`, and no head argument for the other single-head checkpoints above
+(they carry one head named `Default`, and handing
 them a head name from another model makes MACE quietly compute with the head it
 does have). The omat-0 and matpes checkpoints are released under the **ASL**
 license, not MIT — MACE prints a notice when it downloads one.
@@ -730,6 +733,7 @@ whether they read them at all.
 | `pyscf` / `gpu4pyscf` | Molecular HF/DFT | ✅ `atoms.info` or YAML; mismatches raise |
 | `uma` | `task="omol"` | ✅ `atoms.info["charge"]`, `atoms.info["spin"]` |
 | `sevennet` | `modal="omol25_low"` / `"omol25_high"` / `"spice"` / `"qcml"` | ❌ not supported by sevenn |
+| `mace` | `model="omol-0"` / `"MACE-OMOL-0"` | ✅ explicit `atoms.info` charge/multiplicity |
 | `mace` | `head="omol"` / `"spice_wB97M"` | ❌ the MH-1 molecular heads are fitted to neutral closed-shell data |
 | `mace` | `model="polar-1-s"` / `"polar-1-m"` / `"polar-1-l"` | ✅ `atoms.info["charge"]`, `atoms.info["spin"]`, `atoms.info["external_field"]` |
 | `orb` | `model="orbmol-v2"` (the default) | ✅ `atoms.info["charge"]`, `atoms.info["spin"]` — **required**, not defaulted |
@@ -761,13 +765,14 @@ oh_radical.info["spin"] = 2    # doublet — one unpaired electron
 oh_radical.calc = get_calculator("uma", task="omol")
 ```
 
-> **Do not rely on the defaults.** fairchem does *not* raise when `charge` or
-> `spin` is missing. It logs a warning, writes `charge=0` / `spin=1` into the
+> **Set both fields explicitly.** Since 0.5.10, kit-created UMA/eSEN `omol`
+> calculators reject missing or inconsistent states before inference or cache use.
+> Upstream fairchem alone still defaults `charge=0` / `spin=1` in the
 > `atoms.info` dict you passed in, and returns a neutral closed-shell result.
 > An ion or an open-shell species then comes back **silently wrong**. Set both
 > keys on every molecular structure, including the ones you think are obvious.
 
-Both keys are integers. `charge` may range from -100 to 100 and `spin` from 0 to
+Both keys are integers. `charge` may range from -100 to 100 and `spin` from 1 to
 100; they are read only by the `omol` head, and other UMA tasks ignore them.
 
 ### SevenNet: no charge or spin input
@@ -832,10 +837,9 @@ accessors do not see them and `atoms.get_dipole_moment()` raises
 Partial charges are also **not a uniquely defined quantity** — read them as a
 decomposition of the model's electrostatics, not as a measurement.
 
-> **The same silent-default trap as UMA's `omol`.** MACE substitutes
-> `charge=0`, `spin=1` and a zero field when the keys are absent, without a
-> warning. An ion, a radical, or a field-on calculation then comes back
-> **silently** neutral, closed-shell and unpolarised. Set the keys you mean.
+> **Set charge and multiplicity explicitly.** Since 0.5.10 the kit rejects
+> missing or inconsistent electronic states for molecular MACE. An omitted
+> `external_field` still means zero field; set it explicitly for field-on runs.
 
 `dispersion=True` is refused for all three: OMol25's ωB97M-V reference already
 carries the nonlocal VV10 term, so a D3 correction would double-count it.
@@ -848,8 +852,7 @@ is the conversion and not a failure.
 
 ### OrbMol-v2: charge and spin, enforced
 
-OrbMol-v2 reads the same two `atoms.info` keys, with one difference that makes
-it the safest of the group: it **raises** when they are missing.
+OrbMol-v2 reads the same two `atoms.info` keys and **raises** when they are missing.
 
 ```python
 oh_minus = molecule("OH")
@@ -864,8 +867,7 @@ forgot.get_potential_energy()
 # ValueError: atoms.info must contain both 'charge' and 'spin'
 ```
 
-UMA and MACE-Polar substitute a neutral closed-shell system and compute on;
-orb-models stops.
+Since 0.5.10, kit-created UMA/eSEN omol and molecular MACE also require both keys.
 
 The two agree closely where both are defined. On eight small molecules and ions
 — neutral, anionic and open-shell, isolated — `get_calculator("orb")` and
@@ -1274,8 +1276,8 @@ They use fairchem-core 2.22+, with `inference_settings="batch"` by default,
 CPU/CUDA devices, and Hugging Face `facebook/OMol25` access. No MPS support is
 claimed. `[esen]` is an alias for the same dependency as `[uma]`, already in
 `[all]`; it adds no conflicting stack. Legacy eSEN-30M-OMat remains unsupported.
-Set charge/multiplicity explicitly: the upstream FAIRChemCalculator otherwise
-warns and supplies neutral-singlet values, just as it does for UMA omol.
+Set charge/multiplicity explicitly: since 0.5.10 the kit rejects missing or
+inconsistent electronic states for both eSEN and UMA omol before inference.
 
 ### Sharing electronic states between MLIP and PySCF
 
@@ -1317,3 +1319,53 @@ The checked Hugging Face snapshot is
 checkpoint SHA256 hashes matched the official file pages. No weights or tokens
 are included in this repository. Model access is granted per Hugging Face
 account and repository: UMA access does not automatically grant OMol25 access.
+
+### 0.5.10: input checks, SCF reuse, and molecular MACE
+
+VASP/QE reject unknown config/profile keys before execution. VASP calculation
+keywords are checked by ASE; QE checks writer parameters and flat/nested/indexed
+`pw.x` namelist keys against the installed ASE vocabulary. Invalid settings do
+not produce a resolved-config file. Correct existing YAML remains valid.
+
+UMA/eSEN `omol`, MACE-OMOL-0 and MACE-POLAR-1 require integer total charge and
+positive spin multiplicity in `atoms.info`; electron counts must be consistent.
+No neutral-singlet values are inserted. Missing/invalid state is also rejected
+before cached results are returned. For MACE, custom `info_keys` mappings are
+respected. This input requirement is stricter than 0.5.9; existing scripts must
+set both values. OrbMol and PySCF already require explicit electronic states.
+
+```python
+from ase.build import molecule
+from ase_calculator_kit import get_calculator
+
+atoms = molecule("H2O")
+atoms.info.update(charge=0, spin=1)  # multiplicity, not PySCF's 2S
+atoms.calc = get_calculator("mace", model="MACE-OMOL-0", device="cpu")
+# MACE-POLAR-1 defaults to medium; polar-1-s/m/l remain selectable.
+atoms.info["external_field"] = [0.0, 0.0, 0.0]
+atoms.calc = get_calculator("mace", model="MACE-POLAR-1", device="cpu")
+```
+
+MACE-OMOL-0 uses the published extra-large checkpoint through `mace_omol`, not
+MACE-MH-1's omol head. Additional D3 is refused for both OMOL-0 and POLAR-1
+because their reference includes VV10. Use the existing separate `[mace]`
+environment. POLAR-1 additionally needs the documented `graph_longrange`
+installation from graph_electrostatics v0.4.0. No weights are bundled.
+
+PySCF now reuses a converged SCF when forces are requested after energy at the
+same geometry/electronic state. Changes or `calc.reset()` discard it. Once both
+properties are cached, the SCF object and its log stream are released. This does
+not add density-matrix reuse between geometries or checkpoint-based restart.
+
+The PySCF execution example reads inputs before creating its output directory;
+a missing/unreadable XYZ leaves that path available for a corrected retry.
+Failures after output creation, including backend setup, produce a failure
+`results.json`. Use a new output path for retrying a recorded calculation
+failure; existing results are never overwritten automatically.
+
+Molecular MACE was verified on Mac CPU with mace-torch 0.3.16 and
+`graph_longrange` 0.4.0: H2O singlet, OH doublet, and OH-minus singlet returned
+finite energies/forces, and missing electronic state was rejected. H2O energies
+were -2079.863496759 eV (OMOL-0) and -2079.862579249 eV (POLAR-1 medium).
+These are API checks, not a model-accuracy benchmark. Small/large POLAR loader
+routing is covered by unit tests; the new numerical check used medium.

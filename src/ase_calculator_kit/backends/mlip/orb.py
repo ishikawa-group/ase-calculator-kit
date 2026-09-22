@@ -108,9 +108,9 @@ class OrbBackend(BaseBackend):
             atoms.info["spin"] = 2      # multiplicity, 2S+1
             atoms.calc = get_calculator("orb")
 
-        Unlike UMA's ``omol`` task, which quietly substitutes a neutral
-        closed-shell system, ``ORBCalculator`` raises ``ValueError: atoms.info
-        must contain both 'charge' and 'spin'`` when either is absent.
+        ``ORBCalculator`` raises ``ValueError: atoms.info must contain both
+        'charge' and 'spin'`` when either is absent. Kit-created UMA/eSEN
+        omol calculators also require both fields since 0.5.10.
 
         Energy, forces and stress all come from autograd — OrbMol-v2 is a
         conservative model, and orb-models enables the stress derivative when

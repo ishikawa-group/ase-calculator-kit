@@ -46,7 +46,10 @@ def test_upstream_units_cache_and_scf_failure(monkeypatch, tmp_path, converged):
     mf = SimpleNamespace(converged=converged, kernel=lambda: calls.append(1) or -1.,
                          nuc_grad_method=lambda: SimpleNamespace(kernel=lambda: gradient))
     gto = SimpleNamespace(Mole=lambda: SimpleNamespace(build=lambda: None, nelectron=2))
-    dft = SimpleNamespace(RKS=lambda mol: mf)
+    def make_scf(mol):
+        mf.mol = mol
+        return mf
+    dft = SimpleNamespace(RKS=make_scf)
     monkeypatch.setitem(sys.modules, "pyscf", SimpleNamespace(gto=gto, dft=dft, scf=None))
     a = Atoms("H2", positions=[[0, 0, 0], [0, 0, .75]])
     a.calc = PySCFCalculator(parameters=BASE, directory=tmp_path)
@@ -55,7 +58,11 @@ def test_upstream_units_cache_and_scf_failure(monkeypatch, tmp_path, converged):
             a.get_forces()
         assert not a.calc.results
         return
+    assert a.get_potential_energy() == -Hartree
+    retained_log = a.calc._scf_log
     np.testing.assert_allclose(a.get_forces(), -gradient * Hartree / Bohr)
+    assert retained_log.closed
+    assert a.calc._scf is None
     assert a.get_potential_energy() == -Hartree
     assert len(calls) == 1
     a.positions[1, 2] += .01
@@ -83,3 +90,26 @@ def test_upstream_units_cache_and_scf_failure(monkeypatch, tmp_path, converged):
                              directory=tmp_path)
     with pytest.raises(DispersionError):
         a.get_forces()
+
+
+def test_reset_and_failed_gradient_discard_scf(monkeypatch, tmp_path):
+    mf = SimpleNamespace(converged=True, kernel=lambda: -1.)
+    def make(mol):
+        mf.mol = mol
+        return mf
+    monkeypatch.setitem(sys.modules, "pyscf", SimpleNamespace(
+        gto=SimpleNamespace(Mole=lambda: SimpleNamespace(build=lambda: None, nelectron=2)),
+        dft=SimpleNamespace(RKS=make), scf=None,
+    ))
+    a = Atoms("H2", positions=[[0, 0, 0], [0, 0, .75]])
+    a.calc = PySCFCalculator(parameters=BASE, directory=tmp_path)
+    a.get_potential_energy()
+    log = a.calc._scf_log
+    a.calc.reset()
+    assert log.closed and a.calc._scf is None
+    a.get_potential_energy()
+    log = a.calc._scf_log
+    mf.nuc_grad_method = lambda: SimpleNamespace(kernel=lambda: np.full((2, 3), np.nan))
+    with pytest.raises(CalculationFailed, match="invalid analytic"):
+        a.get_forces()
+    assert log.closed and not a.calc.results and a.calc._scf is None

@@ -96,3 +96,29 @@ def write_resolved_config_file(
 def _canonical_calculator_name(name: str) -> str:
     key = name.lower()
     return _CALCULATOR_ALIASES.get(key, key)
+
+
+def validate_mapping_keys(value: Any, allowed: set[str], location: str) -> None:
+    """Reject misspelled config keys before an upstream default can replace them."""
+    if not isinstance(value, dict):
+        raise ValueError(f"{location} must be a mapping.")
+    unknown = set(value) - allowed
+    if unknown:
+        raise ValueError(f"Unknown {location} keys: {sorted(unknown, key=str)}")
+
+
+def validate_external_dft_config(resolved: dict[str, Any], name: str) -> None:
+    """Validate the kit-owned envelope; upstream validates calculator parameters."""
+    top = {"calculator", "profile", "directory", "parameters"}
+    if name == "qe":
+        top.add("pseudopotentials")
+    validate_mapping_keys(resolved, top, f"{name} config")
+    profile = resolved.get("profile", {})
+    allowed = {"command", "txt"} if name == "vasp" else {"command", "pseudo_dir"}
+    validate_mapping_keys(profile, allowed, f"{name} profile")
+    for key in ({"command"} if name == "vasp" else {"command", "pseudo_dir"}):
+        types = (str, Path) if key == "pseudo_dir" else (str,)
+        if not isinstance(profile.get(key), types) or not str(profile[key]).strip():
+            raise ValueError(f"{name} config requires a nonempty profile.{key}.")
+    if not isinstance(resolved.get("parameters", {}), dict):
+        raise ValueError(f"{name} parameters must be a mapping.")
