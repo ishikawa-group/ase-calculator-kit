@@ -11,6 +11,7 @@ import json
 from numbers import Integral
 import os
 from pathlib import Path
+import tempfile
 from typing import Any
 
 import numpy as np
@@ -144,7 +145,7 @@ def validate_pyscf_parameters(raw: dict[str, Any]) -> dict[str, Any]:
     if p["scf_algorithm"] not in {"cdiis", "newton"}:
         raise ValueError("scf_algorithm must be 'cdiis' or 'newton'.")
     if p["scf_algorithm"] == "newton":
-        for diis_key in ("diis_space", "diis_start_cycle", "damp"):
+        for diis_key in ("diis_space", "diis_start_cycle", "damp", "level_shift"):
             if p.get(diis_key) is not None:
                 raise ValueError(f"scf_algorithm 'newton' does not accept {diis_key}.")
 
@@ -161,12 +162,12 @@ def validate_pyscf_parameters(raw: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("diis_space must be a positive integer.")
     if p["diis_start_cycle"] is not None:
         v = p["diis_start_cycle"]
-        if type(v) is not int or v < 1:
-            raise ValueError("diis_start_cycle must be a positive integer.")
+        if type(v) is not int or v < 0:
+            raise ValueError("diis_start_cycle must be a nonnegative integer.")
     if p["damp"] is not None:
         v = p["damp"]
-        if isinstance(v, bool) or not isinstance(v, (int, float)) or not np.isfinite(v) or v < 0:
-            raise ValueError("damp must be a finite nonnegative number.")
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not np.isfinite(v) or not 0 <= v < 1:
+            raise ValueError("damp must be finite and satisfy 0 <= damp < 1.")
     if p["level_shift"] is not None:
         v = p["level_shift"]
         if isinstance(v, bool) or not isinstance(v, (int, float)) or not np.isfinite(v) or v < 0:
@@ -192,9 +193,10 @@ def validate_pyscf_parameters(raw: dict[str, Any]) -> dict[str, Any]:
                 raise ValueError(f"SMD only accepts {allowed_smd}.")
         elif s.get("model") == "pcm":
             eps = s.get("eps")
-            if eps is not None:
-                if isinstance(eps, bool) or not isinstance(eps, (int, float)) or not np.isfinite(eps) or eps <= 1:
-                    raise ValueError("PCM requires eps > 1.")
+            if isinstance(eps, bool) or not isinstance(eps, (int, float)) or not np.isfinite(eps) or eps <= 1:
+                raise ValueError("PCM requires eps > 1.")
+            if "solvent" in s:
+                raise ValueError("PCM uses eps, not solvent names.")
             if s.get("method", "IEF-PCM") not in {"C-PCM", "COSMO", "IEF-PCM", "SS(V)PE"}:
                 raise ValueError("Unsupported PCM method.")
             if "equilibrium_solvation" in s and type(s["equilibrium_solvation"]) is not bool:
@@ -214,10 +216,11 @@ def validate_pyscf_parameters(raw: dict[str, Any]) -> dict[str, Any]:
                 if not isinstance(r_dict, dict):
                     raise ValueError("solvent.radii must be a mapping of element symbols to radii in Angstrom.")
                 for elem, val in r_dict.items():
-                    if not isinstance(elem, str) or isinstance(val, bool) or not isinstance(val, (int, float)) or not np.isfinite(val) or val <= 0:
+                    from ase.data import atomic_numbers
+                    if elem not in atomic_numbers or elem == "X" or isinstance(val, bool) or not isinstance(val, (int, float)) or not np.isfinite(val) or val <= 0:
                         raise ValueError(f"Invalid radius for element {elem!r}: must be a positive float in Angstrom.")
-            if "surface_method" in s and not isinstance(s["surface_method"], str):
-                raise ValueError("solvent.surface_method must be a string.")
+            if s.get("surface_method", "SWIG") not in {"SWIG", "ISWIG"}:
+                raise ValueError("solvent.surface_method must be SWIG or ISWIG.")
         else:
             raise ValueError("solvent.model must be smd or pcm.")
 
@@ -226,7 +229,7 @@ def validate_pyscf_parameters(raw: dict[str, Any]) -> dict[str, Any]:
         c = p["checkpoint"]
         _mapping(c, {"read", "write", "allow_unconverged"}, "checkpoint")
         for k in ("read", "write"):
-            if k in c and c[k] is not None and not isinstance(c[k], (str, Path)):
+            if k in c and (not isinstance(c[k], (str, Path)) or not str(c[k]).strip()):
                 raise ValueError(f"checkpoint.{k} must be a file path.")
         if "allow_unconverged" in c and type(c["allow_unconverged"]) is not bool:
             raise ValueError("checkpoint.allow_unconverged must be true or false.")
@@ -240,6 +243,9 @@ def validate_pyscf_parameters(raw: dict[str, Any]) -> dict[str, Any]:
         for k in ("save", "iterations"):
             if k in d and type(d[k]) is not bool:
                 raise ValueError(f"diagnostics.{k} must be true or false.")
+        for k in ("summary_file", "iteration_file"):
+            if k in d and (not isinstance(d[k], (str, Path)) or not str(d[k]).strip()):
+                raise ValueError(f"diagnostics.{k} must be a nonempty file path.")
 
     # Hessian settings
     if p["hessian"] is not None:
@@ -252,9 +258,9 @@ def validate_pyscf_parameters(raw: dict[str, Any]) -> dict[str, Any]:
         if "grid_response" in h and type(h["grid_response"]) is not bool:
             raise ValueError("hessian.grid_response must be true or false.")
         if "auxbasis_response" in h:
-            if type(h["auxbasis_response"]) is not bool:
-                raise ValueError("hessian.auxbasis_response must be true or false.")
-            if h["auxbasis_response"] and not p["density_fit"]:
+            if type(h["auxbasis_response"]) is not int or h["auxbasis_response"] not in {0, 1, 2}:
+                raise ValueError("hessian.auxbasis_response must be 0, 1, or 2 (full response).")
+            if not p["density_fit"]:
                 raise ValueError("hessian.auxbasis_response requires density_fit=true.")
 
     return p
@@ -271,165 +277,168 @@ def _get_atom_symbols(mol) -> list[str]:
     return []
 
 
-def build_pcm_radii_table(mol, solvent_settings: dict[str, Any]) -> tuple[np.ndarray, dict[str, float]]:
-    """Build a PySCF-compatible Bondi radii table in Bohr, absorbing CPU/GPU differences.
+def to_numpy(value):
+    """Handle both CuPy arrays and unrestricted lists of arrays."""
+    if isinstance(value, (list, tuple)):
+        return np.asarray([to_numpy(v) for v in value])
+    return np.asarray(value.get() if hasattr(value, "get") else value)
 
-    All user length inputs (vdw_scale, r_probe, element radii) are in Angstrom.
-    Element-specific radii are treated as final values (no vdw_scale applied).
-    Returns (radii_table_bohr, effective_radii_angstrom).
-    """
+
+def json_value(value):
+    if isinstance(value, dict):
+        return {str(k): json_value(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, np.ndarray)):
+        return [json_value(v) for v in value]
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, Path):
+        return str(value)
+    return value
+
+
+def build_pcm_radii_table(mol, solvent_settings):
+    """Final cavity radii: Angstrom input, upstream modified Bondi table in Bohr."""
     from ase.data import atomic_numbers
+    from pyscf.solvent.pcm import modified_Bondi
+    from pyscf.data.radii import BOHR
 
-    try:
-        from pyscf.data import radii
-    except ImportError:
-        radii_vdw = np.full(120, 2.0)
-        radii_bohr_val = Bohr
-    else:
-        radii_vdw = radii.VDW.copy()
-        radii_vdw[1] = 1.1 / radii.BOHR
-        radii_bohr_val = radii.BOHR
+    scale = solvent_settings.get("vdw_scale", 1.2)
+    probe = solvent_settings.get("r_probe", 0.0)
+    table = modified_Bondi.copy() * scale + probe / BOHR
+    for symbol, radius in solvent_settings.get("radii", {}).items():
+        table[atomic_numbers[symbol]] = radius / BOHR
+    effective = {symbol: float(table[atomic_numbers[symbol]] * BOHR)
+                 for symbol in _get_atom_symbols(mol)}
+    return table, effective
 
-    vdw_scale = float(solvent_settings.get("vdw_scale", 1.2))
-    r_probe_ang = float(solvent_settings.get("r_probe", 0.0))
-    user_radii = solvent_settings.get("radii") or {}
 
-    max_z = max(len(radii_vdw), 120)
-    radii_table_bohr = np.zeros(max_z, dtype=float)
-    effective_radii_ang = {}
-
-    unique_symbols = set(_get_atom_symbols(mol))
-    for symb in unique_symbols:
-        z = atomic_numbers.get(symb, 1)
-        if symb in user_radii:
-            final_r_ang = float(user_radii[symb])
-        else:
-            base_bondi_bohr = float(radii_vdw[z]) if z < len(radii_vdw) else 2.0
-            base_bondi_ang = base_bondi_bohr * radii_bohr_val
-            final_r_ang = vdw_scale * base_bondi_ang + r_probe_ang
-
-        effective_radii_ang[symb] = final_r_ang
-        if z < max_z:
-            radii_table_bohr[z] = final_r_ang / radii_bohr_val
-
-    return radii_table_bohr, effective_radii_ang
+_PHYSICS_KEYS = ("xc", "nlc", "disp", "density_fit", "auxbasis", "grids", "nlcgrids", "solvent")
 
 
 class CheckpointManager:
-    """Read, write, and verify PySCF-compatible HDF5 checkpoints."""
+    """PySCF HDF5 with required provenance; atomic snapshots of completed iterations."""
 
     @staticmethod
-    def verify_compatibility(meta: dict[str, Any], mol, settings: dict[str, Any]) -> str | None:
-        """Verify that checkpoint metadata matches current mol and settings.
+    def metadata(mol, settings):
+        method = settings["method"]
+        if method == "auto":
+            method = "uks" if mol.spin else "rks"
+        return json_value({
+            "schema_version": 1, "atom_symbols": _get_atom_symbols(mol),
+            "basis": settings["basis"], "basis_definition": mol._basis,
+            "ecp": settings.get("ecp") or {}, "ecp_definition": mol._ecp,
+            "charge": int(mol.charge), "spin": int(mol.spin), "method": method,
+            "cart": bool(mol.cart), "nao": int(mol.nao),
+            "physics": {key: settings.get(key) for key in _PHYSICS_KEYS},
+        })
 
-        Returns None if compatible, or an explanation string if incompatible.
-        """
-        current_symbols = _get_atom_symbols(mol)
-        chk_symbols = meta.get("atom_symbols")
-        if chk_symbols is not None and chk_symbols != current_symbols:
-            return f"Atom symbols mismatch: current={current_symbols}, checkpoint={chk_symbols}"
-
-        if meta.get("basis") is not None and meta["basis"] != settings.get("basis"):
-            return f"Basis mismatch: current={settings.get('basis')}, checkpoint={meta['basis']}"
-
-        current_ecp = settings.get("ecp") or {}
-        chk_ecp = meta.get("ecp") or {}
-        if current_ecp != chk_ecp:
-            return f"ECP mismatch: current={settings.get('ecp')}, checkpoint={meta.get('ecp')}"
-
-        if meta.get("charge") is not None and meta["charge"] != mol.charge:
-            return f"Charge mismatch: current={mol.charge}, checkpoint={meta['charge']}"
-
-        if meta.get("spin") is not None and meta["spin"] != mol.spin:
-            return f"Spin mismatch: current={mol.spin}, checkpoint={meta['spin']}"
-
-        current_method = settings.get("method")
-        chk_method = meta.get("method")
-        if chk_method and current_method not in {"auto", chk_method}:
-            return f"Method mismatch: current={current_method}, checkpoint={chk_method}"
-
-        if settings.get("xc") and meta.get("xc") and settings["xc"].lower() != meta["xc"].lower():
-            return f"XC functional mismatch: current={settings['xc']}, checkpoint={meta['xc']}"
-
+    @staticmethod
+    def verify_compatibility(meta, mol, settings):
+        current = CheckpointManager.metadata(mol, settings)
+        for key, value in current.items():
+            if key not in meta:
+                return f"Missing checkpoint metadata: {key}"
+            if meta[key] != value:
+                return f"{key} mismatch between checkpoint and current calculation"
         return None
 
     @staticmethod
-    def save(filepath: str | Path, mf, mol, converged: bool, extra_meta: dict[str, Any] | None = None) -> None:
-        """Save PySCF checkpoint safely using temporary file and atomic replace."""
-        target = Path(filepath).resolve()
+    def save(filepath, mf, mol, converged, metadata, orbitals=None):
+        from pyscf.scf import chkfile
+        import h5py
+
+        values = orbitals or {key: getattr(mf, key, None)
+                              for key in ("e_tot", "mo_coeff", "mo_occ", "mo_energy")}
+        arrays = {key: to_numpy(values[key]) for key in ("mo_coeff", "mo_occ", "mo_energy")}
+        CheckpointManager.validate_orbitals(arrays, mol, metadata["method"])
+        energy = float(values["e_tot"])
+        if not np.isfinite(energy):
+            raise ValueError("Cannot checkpoint a nonfinite SCF energy.")
+        target = Path(filepath)
         target.parent.mkdir(parents=True, exist_ok=True)
-        tmp = target.with_suffix(target.suffix + f".tmp.{os.getpid()}")
-
+        fd, temporary = tempfile.mkstemp(prefix=target.name + ".tmp.", dir=target.parent)
+        os.close(fd)
+        tmp = Path(temporary)
         try:
-            import h5py
-            from pyscf.scf import chkfile
-
-            # Extract arrays from GPU or CPU
-            def _to_numpy(val):
-                if val is None:
-                    return None
-                if hasattr(val, "get"):
-                    return val.get()
-                return np.asarray(val)
-
-            mo_energy = _to_numpy(getattr(mf, "mo_energy", None))
-            mo_coeff = _to_numpy(getattr(mf, "mo_coeff", None))
-            mo_occ = _to_numpy(getattr(mf, "mo_occ", None))
-            e_tot = float(getattr(mf, "e_tot", 0.0))
-
-            chkfile.dump_scf(mol, str(tmp), e_tot, mo_energy, mo_coeff, mo_occ)
-
-            meta = {
-                "converged": bool(converged),
-                "atom_symbols": _get_atom_symbols(mol),
-                "charge": int(getattr(mol, "charge", 0)),
-                "spin": int(getattr(mol, "spin", 0)),
-                "basis": getattr(mol, "basis", None),
-                "ecp": getattr(mol, "ecp", None),
-            }
-            if extra_meta:
-                meta.update(extra_meta)
-
-            with h5py.File(str(tmp), "a") as f:
-                grp = f.require_group("ase_calculator_kit")
-                grp.attrs["metadata_json"] = json.dumps(meta, default=str)
-
+            chkfile.dump_scf(mol, str(tmp), energy, arrays["mo_energy"],
+                             arrays["mo_coeff"], arrays["mo_occ"], overwrite_mol=True)
+            with h5py.File(tmp, "a") as f:
+                group = f.require_group("ase_calculator_kit")
+                group.attrs["metadata_json"] = json.dumps(metadata | {"converged": bool(converged)})
+            with tmp.open("rb") as f:
+                os.fsync(f.fileno())
             os.replace(tmp, target)
-        except Exception:
-            if tmp.exists():
-                tmp.unlink()
-            raise
+        finally:
+            tmp.unlink(missing_ok=True)
 
     @staticmethod
-    def load(filepath: str | Path, allow_unconverged: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
-        """Load PySCF checkpoint and kit metadata.
+    def validate_orbitals(scf_dict, mol, method):
+        unrestricted = method in {"uks", "uhf"}
+        prefix = (2,) if unrestricted else ()
+        coeff = np.asarray(scf_dict.get("mo_coeff"))
+        if (coeff.ndim != len(prefix) + 2 or coeff.shape[:-1] != prefix + (mol.nao,)
+                or not 0 < coeff.shape[-1] <= mol.nao):
+            raise ValueError("Invalid checkpoint mo_coeff dimensions.")
+        nmo = coeff.shape[-1]
+        for key, shape in (("mo_coeff", prefix + (mol.nao, nmo)),
+                           ("mo_occ", prefix + (nmo,)),
+                           ("mo_energy", prefix + (nmo,))):
+            array = np.asarray(scf_dict.get(key))
+            if array.shape != shape or not np.issubdtype(array.dtype, np.number) or not np.isfinite(array).all():
+                raise ValueError(f"Invalid checkpoint {key}: expected finite shape {shape}.")
+        occupations = np.asarray(scf_dict["mo_occ"])
+        if np.any(occupations < 0) or np.any(occupations > (1 if unrestricted else 2)):
+            raise ValueError("Invalid checkpoint occupations.")
+        expected = np.asarray(mol.nelec if unrestricted else mol.nelectron)
+        if not np.allclose(occupations.sum(axis=-1), expected, atol=1e-8, rtol=0):
+            raise ValueError("Checkpoint occupations do not match the electron count.")
 
-        Returns (scf_dict, meta_dict).
-        """
-        path = Path(filepath).resolve()
-        if not path.exists():
-            raise FileNotFoundError(f"Checkpoint file not found: {path}")
+    @staticmethod
+    def load(filepath, allow_unconverged=False):
+        from pyscf.scf import chkfile
+        import h5py
 
-        try:
-            import h5py
-            from pyscf.scf import chkfile
-        except ImportError as exc:
-            raise RuntimeError("Loading checkpoints requires pyscf and h5py.") from exc
-
-        meta: dict[str, Any] = {}
-        with h5py.File(str(path), "r") as f:
-            if "ase_calculator_kit" in f and "metadata_json" in f["ase_calculator_kit"].attrs:
+        path = Path(filepath)
+        with h5py.File(path, "r") as f:
+            try:
                 meta = json.loads(f["ase_calculator_kit"].attrs["metadata_json"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError("Checkpoint has no valid kit provenance; cannot verify compatibility.") from exc
+        if meta.get("schema_version") != 1 or type(meta.get("converged")) is not bool:
+            raise ValueError("Checkpoint has incomplete or unsupported kit metadata.")
+        if not meta["converged"] and not allow_unconverged:
+            raise ValueError("Checkpoint is unconverged; set checkpoint.allow_unconverged: true to resume.")
+        mol, orbitals = chkfile.load_scf(str(path))
+        for key, actual in {"atom_symbols": _get_atom_symbols(mol), "charge": mol.charge,
+                            "spin": mol.spin, "basis_definition": json_value(mol._basis),
+                            "ecp_definition": json_value(mol._ecp), "nao": mol.nao}.items():
+            if meta.get(key) != actual:
+                raise ValueError(f"Checkpoint molecule disagrees with metadata: {key}.")
+        CheckpointManager.validate_orbitals(orbitals, mol, meta.get("method"))
+        if not np.isfinite(orbitals.get("e_tot", np.nan)):
+            raise ValueError("Checkpoint has no finite energy.")
+        orbitals["mol"] = mol
+        return orbitals, meta
 
-        converged = meta.get("converged", True)
-        if not converged and not allow_unconverged:
-            raise ValueError(
-                f"Checkpoint {path} contains unconverged SCF results. "
-                "Set checkpoint.allow_unconverged: true to resume from an unconverged checkpoint."
-            )
 
-        _, scf_dict = chkfile.load_scf(str(path))
-        return scf_dict, meta
+def projected_density(mf, old_mol, mo_coeff, mo_occ, gpu):
+    """Follow PySCF's checkpoint guess: project MOs and normalize in the new AO metric."""
+    from pyscf.scf.addons import project_mo_nr2nr
+
+    overlap = to_numpy(mf.get_ovlp())
+    def project(coeff):
+        projected = project_mo_nr2nr(old_mol, coeff, mf.mol)
+        norms = np.einsum("pi,pi->i", projected.conj(), overlap @ projected).real
+        if not np.isfinite(norms).all() or np.any(norms <= 0):
+            raise ValueError("Invalid projected orbital norms.")
+        return projected / np.sqrt(norms)
+    coeff = to_numpy(mo_coeff)
+    projected = np.asarray([project(c) for c in coeff]) if coeff.ndim == 3 else project(coeff)
+    occ = to_numpy(mo_occ)
+    if gpu:
+        import cupy
+        projected, occ = cupy.asarray(projected), cupy.asarray(occ)
+    return mf.make_rdm1(projected, occ)
 
 
 class DiagnosticsCollector:
@@ -440,10 +449,12 @@ class DiagnosticsCollector:
         self.directory = Path(directory)
         self.iterations: list[dict[str, Any]] = []
         self.last_cycle_info: dict[str, Any] = {}
+        self.evaluation = os.urandom(8).hex()
+        self.details: dict[str, Any] = {}
 
     def callback(self, envs: dict[str, Any]) -> None:
         """Callback attached to mf.callback to record per-iteration progress."""
-        cycle = int(envs.get("cycle", len(self.iterations)))
+        cycle = int(envs.get("cycle", envs.get("imacro", len(self.iterations))))
         e_tot = float(envs.get("e_tot", np.nan))
         last_e = float(envs.get("last_hf_e", np.nan))
         delta_e = float(e_tot - last_e) if np.isfinite(e_tot) and np.isfinite(last_e) else None
@@ -463,6 +474,7 @@ class DiagnosticsCollector:
                 norm_ddm = None
 
         iter_data = {
+            "evaluation": self.evaluation,
             "cycle": cycle,
             "energy_hartree": e_tot,
             "delta_energy_hartree": delta_e,
@@ -471,6 +483,13 @@ class DiagnosticsCollector:
         }
         self.iterations.append(iter_data)
         self.last_cycle_info = iter_data
+        cfg = self.parameters.get("diagnostics") or {}
+        if cfg.get("save") and cfg.get("iterations"):
+            path = self.directory / cfg.get("iteration_file", "scf_iterations.jsonl")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps(iter_data, allow_nan=False) + "\n")
+                stream.flush()
 
     def collect(self, mf, mol, converged: bool, init_guess_source: str, failure_stage: str | None = None) -> dict[str, Any]:
         """Compile complete structured metadata["scf"] dictionary."""
@@ -481,8 +500,10 @@ class DiagnosticsCollector:
         if hasattr(nao, "__call__"):
             nao = nao()
         diag: dict[str, Any] = {
+            "evaluation": self.evaluation,
             "converged": bool(converged),
-            "cycles": len(self.iterations),
+            "cycles": max((row["cycle"] + 1 for row in self.iterations), default=0),
+            "callback_count": len(self.iterations),
             "scf_algorithm": self.parameters.get("scf_algorithm", "cdiis"),
             "init_guess_source": init_guess_source,
             "failure_stage": failure_stage,
@@ -504,6 +525,13 @@ class DiagnosticsCollector:
             except Exception:
                 pass
         diag["energy_components"] = components
+        diag["energy_components_unit"] = "Hartree"
+        diag["effective_settings"] = {
+            key: json_value(getattr(mf, key, None))
+            for key in ("conv_tol", "conv_tol_grad", "max_cycle", "init_guess",
+                        "diis_space", "diis_start_cycle", "damp", "level_shift")
+        }
+        diag["checkpoint"] = json_value(self.parameters.get("checkpoint"))
 
         # Final cycle metrics
         diag["final_cycle"] = self.last_cycle_info
@@ -539,14 +567,10 @@ class DiagnosticsCollector:
                 pass
 
         # Mulliken spin population for open-shell
-        if mol_spin > 0 and hasattr(mf, "mulliken_pop"):
+        if hasattr(mf, "make_rdm1"):
             try:
-                dm = mf.make_rdm1()
-                if hasattr(dm, "get"):
-                    dm = dm.get()
-                s_ovlp = mf.get_ovlp()
-                if hasattr(s_ovlp, "get"):
-                    s_ovlp = s_ovlp.get()
+                dm = to_numpy(mf.make_rdm1())
+                s_ovlp = to_numpy(mf.get_ovlp())
                 if isinstance(dm, np.ndarray) and dm.ndim == 3 and dm.shape[0] == 2:
                     pop_a = np.einsum("ij,ji->i", dm[0], s_ovlp).real
                     pop_b = np.einsum("ij,ji->i", dm[1], s_ovlp).real
@@ -562,23 +586,39 @@ class DiagnosticsCollector:
             except Exception:
                 pass
 
-        # GPU memory if available
+        # Re-evaluate the physical, unshifted orbital gradient at the final MOs;
+        # the last callback can precede the final convergence verification.
         try:
-            import cupy
-            free_b, total_b = cupy.cuda.Device().mem_info
-            diag["memory"]["gpu_vram_free_mb"] = float(free_b / 1024**2)
-            diag["memory"]["gpu_vram_total_mb"] = float(total_b / 1024**2)
-        except Exception:
-            pass
+            dm_native = mf.make_rdm1()
+            # The fourth argument is dm on CPU and dm_or_wfn in GPU solvent
+            # wrappers; their positional API agrees. Outside a cycle no shift applies.
+            fock = mf.get_fock(None, None, None, dm_native)
+            diag["final_orbital_gradient_norm"] = float(np.linalg.norm(
+                to_numpy(mf.get_grad(mf.mo_coeff, mf.mo_occ, fock))))
+        except Exception as exc:
+            diag["final_orbital_gradient_unavailable"] = str(exc)
+
+        # Inspect VRAM only for an actual GPU calculation, without starting a
+        # CUDA context merely to report diagnostics for CPU work.
+        if type(mf).__module__.startswith("gpu4pyscf"):
+            try:
+                import cupy
+                free_b, total_b = cupy.cuda.Device().mem_info
+                diag["memory"]["gpu_vram_free_mb"] = float(free_b / 1024**2)
+                diag["memory"]["gpu_vram_total_mb"] = float(total_b / 1024**2)
+            except Exception:
+                pass
 
         # Newton notes on NLC response
-        if self.parameters.get("scf_algorithm") == "newton" and self.parameters.get("nlc"):
+        if self.parameters.get("scf_algorithm") == "newton" and (
+            getattr(mf, "do_nlc", lambda: False)()
+        ):
             diag["newton_notes"] = (
                 "Newton AH second-order response does not include NLC (VV10) response "
                 "per upstream PySCF implementation."
             )
 
-        return diag
+        return diag | self.details
 
     def write_reports(self, scf_diag: dict[str, Any]) -> None:
         """Write summary JSON and/or iteration JSONL if configured in diagnostics settings."""
@@ -589,6 +629,7 @@ class DiagnosticsCollector:
         self.directory.mkdir(parents=True, exist_ok=True)
         summary_name = d_cfg.get("summary_file") or "scf_diagnostics.json"
         summary_path = self.directory / summary_name
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
 
         def _serialize(v):
             if isinstance(v, float) and not np.isfinite(v):
@@ -601,12 +642,6 @@ class DiagnosticsCollector:
 
         summary_path.write_text(json.dumps(_serialize(scf_diag), indent=2) + "\n", encoding="utf-8")
 
-        if d_cfg.get("iterations", False):
-            iter_name = d_cfg.get("iteration_file") or "scf_iterations.jsonl"
-            iter_path = self.directory / iter_name
-            with iter_path.open("w", encoding="utf-8") as f:
-                for line in self.iterations:
-                    f.write(json.dumps(_serialize(line)) + "\n")
 
 
 def format_hessian(h_raw: Any, natm: int) -> tuple[np.ndarray, dict[str, Any]]:
@@ -621,6 +656,8 @@ def format_hessian(h_raw: Any, natm: int) -> tuple[np.ndarray, dict[str, Any]]:
 
     if h_arr.shape != (natm, natm, 3, 3):
         raise ValueError(f"Unexpected Hessian shape from PySCF: expected {(natm, natm, 3, 3)}, got {h_arr.shape}")
+    if not np.isfinite(h_arr).all():
+        raise ValueError("PySCF returned a nonfinite Hessian.")
 
     # Transpose from (atom1, atom2, coord1, coord2) to (atom1, coord1, atom2, coord2)
     # and reshape into (3*natm, 3*natm)

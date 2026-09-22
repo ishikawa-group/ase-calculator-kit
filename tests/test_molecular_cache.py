@@ -177,3 +177,30 @@ def test_custom_info_keys():
     e = atoms.get_potential_energy()
     assert len(calc.calculate_calls) == 1
     assert e is not None
+
+
+def test_upstream_info_comparison_cannot_override_effective_state():
+    class DictComparingCalc(MockMolecularCalc):
+        def check_state(self, atoms, tol=1e-15):
+            changes = super().check_state(atoms, tol)
+            if self.atoms is not None and self.atoms.info != atoms.info:
+                changes.append("info")
+            return changes
+
+    atoms = Atoms("OH", positions=[[0, 0, 0], [0, 0, 0.96]])
+    atoms.info.update(charge=0, spin=2, external_field=np.zeros(3))
+    calc = molecular_calculator_type(DictComparingCalc)()
+    atoms.calc = calc
+    atoms.get_potential_energy()
+    # NumPy dictionary comparison would raise; missing/zero fields are equivalent.
+    atoms.info.pop("external_field")
+    atoms.get_potential_energy()
+    assert len(calc.calculate_calls) == 1
+    atoms.info["external_field"] = np.array([1e-13, 0, 0])
+    assert calc.get_property("energy", atoms, allow_calculation=False) is None
+    atoms.get_potential_energy()
+    assert len(calc.calculate_calls) == 2
+    atoms.info.pop("charge")
+    with pytest.raises(ValueError):
+        calc.calculate(atoms)
+    assert not calc.results

@@ -171,14 +171,13 @@ atoms.info["spin"] = 2      # スピン多重度 2S+1
 atoms.calc = get_calculator("uma", task="omol")
 ```
 
-UMAで特に注意が要るのは、**未設定でもエラーにならない**ことである。fairchemは警告を
-logに出したうえで、呼び出し側が渡した`atoms.info`へ`charge=0`/`spin=1`を書き込み、
-中性閉殻として計算を続ける。したがってアニオンやラジカルは**無警告で誤った値**が返る。
-分子系では毎回明示的に設定する。
+kitで生成したUMA/eSEN omol、分子用MACE、OrbMolは両キーを必須にする。
+`atoms.info["spin"]`は多重度で、整数・電子数との整合性も検証する。
+上流単独の中性一重項への補完は利用しない。
 
-OrbMol-v2は同じ2つのkeyを読むが、**未設定なら`ValueError`を投げる**点だけが違う。
-UMAやMACE-Polarのように中性閉殻で代用して計算を続けたりはしない。分子系で
-両方のmodelを比べたい場合、この差は実験としてはUMA側の落とし穴になる。
+0.6.0の共通ラッパーは計算時の電子状態と実効電場を独立して保存する。
+OrbMol 0.7.0が見落とすcharge/spin変更と、MACEの配列形式の電場変更を検出し、
+キャッシュ使用前に再計算要否を判定する。元のAtomsは変更しない。
 
 SevenNetにはcharge/spinの入力が無いため、イオンや任意の開殻状態は表現できない。
 `omol25_high`は高スピン配置で学習されたmodelを選ぶだけで、構造ごとに指定する
@@ -275,3 +274,14 @@ YAMLと異なるときはキャッシュを返す前にもエラーにし、info
 解決済みYAMLは計算時の電子状態まで記録し、metadataは取得元も保持する。
 `esen` はfairchemを共有する独立バックエンドで、OMol25の3 checkpointのみを許可する。
 既定はsmall conservingで、directモデルの力はエネルギー勾配とは限らない。
+
+## 0.6.0のPySCF実行状態
+
+同一構造のenergy→forcesは同じ収束済みSCFを使う。`retain_scf: true`では
+そのSCFをHessianにも利用し、`reset()`で解放する。既定では力の取得後に解放し、
+後からHessianを要求した場合はSCFを作り直す。
+`reuse_density`は明示的に有効化した場合だけ、互換な過去の軌道を投影して初期密度にする。
+チェックポイントの物理条件・基底の内容・電子状態は計算時のスナップショットと照合する。
+未収束の再開は明示的に許可する必要があり、失敗診断と有効な計算結果を混同しない。
+設定検証と保存・診断の補助処理は`_pyscf_support.py`、実行順序は`pyscf.py`に置く。
+詳しい契約と検証範囲は[pyscf.md](pyscf.md)と[validation-records.md](validation-records.md)。

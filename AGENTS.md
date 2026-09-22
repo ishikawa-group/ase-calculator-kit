@@ -50,7 +50,7 @@ src/ase_calculator_kit/
                      matgl_chgnet.py, _matgl_pbc.py (MatGL compatibility adapters)
                      orb.py (OrbMol-v2; outside `all` — invariant 11)
                      mace.py (separate environment — invariant 7)
-  backends/dft/      vasp.py espresso.py
+  backends/dft/      vasp.py espresso.py pyscf.py _pyscf_support.py
   py.typed           PEP 561 marker; keep it listed in [tool.setuptools.package-data]
 tests/               fast unit tests + test_singlepoint_cpu.py (marked slow)
 constraints.txt      exact tested versions behind the pyproject ranges
@@ -141,7 +141,7 @@ These are deliberate design decisions, not oversights.
     plain resolve is happy to plan a source build). Do not paper over this with
     an environment marker — invariant 10 applies. When upstream relaxes the pin
     (orbital-materials/orb-models#168), the CI step fails, and *that* is when
-    the README table and this invariant get revisited.
+    the installation guide and this invariant get revisited.
 12. **The MACE backend selects upstream loaders by model name.** Since
     0.5.4, `POLAR_MODELS` (`polar-1-s/m/l`) load through `mace_polar`;
     since 0.5.10, `omol-0` loads through `mace_omol(model="extra_large")`. Other
@@ -397,3 +397,21 @@ Three things make this go wrong, and all three have happened here:
   All structure/state changes invalidate it; failures must close the stream.
 - External DFT configs reject unknown envelope/profile keys; QE namelists use
   ASE's supported-key table. Do not silently drop an unknown YAML field.
+
+## 0.6.0 review invariants
+
+- Root README is an entry point; detailed usage belongs under docs/. MLIP uses
+  keyword arguments; only DFT takes config=. Do not invent model defaults or
+  dispersion policies when moving text: backend code and docs/models.md are authoritative.
+- Molecular cache snapshots must be independent of Atoms.info's mutable arrays.
+  Compare numeric effective states before returning cached properties; preserve
+  scalar multiplicity semantics, NumPy integers and MACE custom info_keys.
+- Checkpoint callbacks save the current callback orbitals, not mf.mo_* (which
+  can still hold the previous iteration). Never suppress checkpoint write errors.
+  Physics/basis metadata is captured at computation time, never synthesized from
+  a later state's settings. Density projection uses the new AO overlap metric.
+- Diagnostics survive SCF/derivative errors; results and live SCF resources do not.
+  GPU Newton needs target-device initial MOs and upstream orthogonalization.
+- Hessian auxbasis_response is an integer 0/1/2, not a Boolean. Record upstream
+  hybrid correction steps and grid-response differences. Direct-upstream agreement
+  is separate from CPU/GPU parity and finite-difference convergence tests.

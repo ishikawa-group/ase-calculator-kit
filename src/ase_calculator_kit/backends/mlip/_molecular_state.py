@@ -6,7 +6,7 @@ from numbers import Integral
 from typing import Any
 
 import numpy as np
-from ase.calculators.calculator import all_changes
+from ase.calculators.calculator import Calculator, all_changes
 
 
 def _extract_molecular_state(atoms, info_keys=None) -> dict[str, Any]:
@@ -69,7 +69,7 @@ def _states_equal(s1: dict[str, Any] | None, s2: dict[str, Any] | None) -> bool:
         return False
     if s1["charge"] != s2["charge"] or s1["spin"] != s2["spin"]:
         return False
-    return bool(np.allclose(s1["external_field"], s2["external_field"], atol=1e-12, rtol=1e-12))
+    return bool(np.array_equal(s1["external_field"], s2["external_field"]))
 
 
 def molecular_calculator_type(upstream):
@@ -83,7 +83,9 @@ def molecular_calculator_type(upstream):
             self._last_molecular_state = None
 
         def check_state(self, atoms, tol=1e-15):
-            changes = super().check_state(atoms, tol)
+            # Upstream implementations either ignore info arrays or compare them
+            # as dict scalars. Compare ASE structure and our numeric snapshot.
+            changes = Calculator.check_state(self, atoms, tol)
             if atoms is not None:
                 try:
                     curr = _extract_molecular_state(atoms, getattr(self, "info_keys", None))
@@ -108,16 +110,18 @@ def molecular_calculator_type(upstream):
 
         def calculate(self, atoms=None, properties=("energy",), system_changes=all_changes):
             target = atoms if atoms is not None else self.atoms
-            state = _extract_molecular_state(target, getattr(self, "info_keys", None))
-
             self.results = {}
+            self._last_molecular_state = None
+            state = _extract_molecular_state(target, getattr(self, "info_keys", None))
 
             # Prepare computation copy: ensure Python int for charge/spin, independent copy of field
             calc_atoms = target.copy()
             calc_atoms.info[state["charge_key"]] = state["charge"]
             calc_atoms.info[state["spin_key"]] = state["spin"]
             if state["has_field"]:
-                calc_atoms.info[state["field_key"]] = state["external_field"].copy()
+                calc_atoms.info[state["field_key"]] = state["external_field"].tolist()
+            elif state["field_key"] in calc_atoms.info:
+                calc_atoms.info.pop(state["field_key"])
 
             try:
                 super().calculate(calc_atoms, properties, system_changes)

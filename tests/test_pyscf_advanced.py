@@ -5,6 +5,7 @@ SCF control, checkpoints, diagnostics, PCM radii, D3zero, and Hessian API.
 
 from __future__ import annotations
 
+import sys
 from types import SimpleNamespace
 
 import numpy as np
@@ -14,6 +15,7 @@ from ase.units import Bohr, Hartree
 
 from ase_calculator_kit.backends.dft._pyscf_support import (
     CheckpointManager,
+    DiagnosticsCollector,
     build_pcm_radii_table,
     format_hessian,
     validate_pyscf_parameters,
@@ -97,21 +99,24 @@ def test_parameter_validation_hessian():
     # Valid hessian options
     p = validate_pyscf_parameters(BASE_CONFIG | {
         "density_fit": True,
-        "hessian": {"conv_tol_cpscf": 1e-8, "grid_response": True, "auxbasis_response": True}
+        "hessian": {"conv_tol_cpscf": 1e-8, "grid_response": True, "auxbasis_response": 2}
     })
     assert p["hessian"]["conv_tol_cpscf"] == 1e-8
     assert p["hessian"]["grid_response"] is True
-    assert p["hessian"]["auxbasis_response"] is True
+    assert p["hessian"]["auxbasis_response"] == 2
 
     # auxbasis_response without density_fit must be rejected
     with pytest.raises(ValueError, match="auxbasis_response requires density_fit=true"):
         validate_pyscf_parameters(BASE_CONFIG | {
             "density_fit": False,
-            "hessian": {"auxbasis_response": True}
+            "hessian": {"auxbasis_response": 2}
         })
 
 
-def test_build_pcm_radii_table():
+def test_build_pcm_radii_table(monkeypatch):
+    monkeypatch.setitem(sys.modules, "pyscf.solvent.pcm", SimpleNamespace(
+        modified_Bondi=np.full(120, 2.0)))
+    monkeypatch.setitem(sys.modules, "pyscf.data.radii", SimpleNamespace(BOHR=Bohr))
     mol = SimpleNamespace(atom_symbols=lambda: ["H", "O"])
     solvent_cfg = {
         "vdw_scale": 1.2,
@@ -140,31 +145,15 @@ def test_format_hessian():
 
 
 def test_checkpoint_compatibility_verification():
-    mol = SimpleNamespace(atom_symbols=lambda: ["H", "H"], charge=0, spin=0)
-    meta = {
-        "atom_symbols": ["H", "H"],
-        "charge": 0,
-        "spin": 0,
-        "basis": "sto-3g",
-        "method": "rks",
-        "xc": "pbe",
-    }
-    settings = {"basis": "sto-3g", "method": "rks", "xc": "pbe", "ecp": None}
-
-    # Compatible
+    mol = SimpleNamespace(atom_symbols=lambda: ["H", "H"], charge=0, spin=0,
+                          _basis={"H": [[0, [1.0, 1.0]]]}, _ecp={}, cart=False, nao=2)
+    settings = validate_pyscf_parameters(BASE_CONFIG)
+    meta = CheckpointManager.metadata(mol, settings)
     assert CheckpointManager.verify_compatibility(meta, mol, settings) is None
-
-    # Incompatible atom symbols
-    bad_symbols_meta = meta | {"atom_symbols": ["H", "O"]}
-    assert "Atom symbols mismatch" in CheckpointManager.verify_compatibility(bad_symbols_meta, mol, settings)
-
-    # Incompatible basis
-    bad_basis_meta = meta | {"basis": "def2-svp"}
-    assert "Basis mismatch" in CheckpointManager.verify_compatibility(bad_basis_meta, mol, settings)
-
-    # Incompatible spin
-    bad_spin_meta = meta | {"spin": 2}
-    assert "Spin mismatch" in CheckpointManager.verify_compatibility(bad_spin_meta, mol, settings)
+    for key, value in (("atom_symbols", ["H", "O"]), ("basis", "def2-svp"),
+                       ("spin", 2), ("basis_definition", {}), ("physics", {})):
+        assert key in CheckpointManager.verify_compatibility(meta | {key: value}, mol, settings)
+    assert "Missing" in CheckpointManager.verify_compatibility({}, mol, settings)
 
 
 def test_get_hessian_calculator_method(tmp_path):
@@ -186,6 +175,9 @@ def test_get_hessian_calculator_method(tmp_path):
             self._scf = mf_mock
             self._scf_energy = -1.0
             self._scf_mol = mf_mock.mol
+            self._state_key = self._state(atoms)[2]
+            self._collector = DiagnosticsCollector(self.settings, self.directory)
+            self.metadata = {"scf": {}}
 
     atoms = Atoms("H2", positions=[[0, 0, 0], [0, 0, 0.74]])
     calc = MockPySCFCalc(parameters=BASE_CONFIG | {"retain_scf": True}, directory=tmp_path)

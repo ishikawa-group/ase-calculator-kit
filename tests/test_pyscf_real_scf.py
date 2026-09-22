@@ -6,12 +6,16 @@ Skipped if pyscf is not installed (e.g. In standard lightweight environment).
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 
 import numpy as np
 import pytest
 from ase import Atoms
 
 from ase_calculator_kit import get_calculator
+from ase_calculator_kit.backends.dft.pyscf import PySCFCalculator
+from ase_calculator_kit.backends.dft._pyscf_support import CheckpointManager
 
 try:
     import pyscf  # noqa: F401
@@ -201,3 +205,123 @@ def test_real_pcm_cosmo_and_radii(tmp_path):
     e = h2o.get_potential_energy()
     assert np.isfinite(e)
     assert calc.metadata["converged"] is True
+    assert np.isfinite(calc.metadata["scf"]["final_orbital_gradient_norm"])
+
+
+def test_unconverged_checkpoint_and_failure_diagnostics(tmp_path):
+    from ase.build import molecule
+    atoms = molecule("H2O")
+    parameters = {"basis": "sto-3g", "charge": 0, "spin": 0, "max_cycle": 1,
+                  "checkpoint": {"write": "state.chk"},
+                  "diagnostics": {"save": True, "iterations": True}}
+    calc = PySCFCalculator(parameters=parameters, directory=tmp_path)
+    atoms.calc = calc
+    with pytest.raises(Exception, match="did not converge"):
+        atoms.get_potential_energy()
+    assert not calc.results and calc._scf_log is None
+    assert calc.metadata["scf"]["failure_stage"] == "scf_convergence"
+    assert json.loads((tmp_path / "scf_diagnostics.json").read_text())["converged"] is False
+    checkpoint = tmp_path / "state.chk"
+    with pytest.raises(ValueError, match="unconverged"):
+        CheckpointManager.load(checkpoint)
+    values, meta = CheckpointManager.load(checkpoint, allow_unconverged=True)
+    assert not meta["converged"]
+    assert values["e_tot"] < -70  # the completed iteration, not mf.e_tot's initial zero
+    assert values["mo_coeff"].shape == (7, 7)
+    assert len((tmp_path / "scf_iterations.jsonl").read_text().splitlines()) == 1
+
+    # Resume a partial checkpoint through Newton in a different Python process.
+    code = '''
+from ase.build import molecule
+from ase_calculator_kit.backends.dft.pyscf import PySCFCalculator
+import sys
+atoms=molecule("H2O")
+atoms.calc=PySCFCalculator(parameters={"basis":"sto-3g", "charge":0, "spin":0,
+    "scf_algorithm":"newton", "checkpoint":{"read":sys.argv[1], "allow_unconverged":True}},
+    directory=sys.argv[2])
+assert atoms.get_potential_energy() < -1900
+assert atoms.calc.metadata["scf"]["init_guess_source"] == "checkpoint"
+'''
+    subprocess.run([sys.executable, "-c", code, str(checkpoint), str(tmp_path / "resume")], check=True)
+
+
+def test_checkpoint_physics_and_projection(tmp_path):
+    atoms = Atoms("H2", positions=[[0, 0, 0], [0, 0, 0.74]])
+    p = {"basis": "sto-3g", "charge": 0, "spin": 0, "checkpoint": {"write": "a.chk"}}
+    atoms.calc = PySCFCalculator(parameters=p, directory=tmp_path)
+    atoms.get_potential_energy()
+    checkpoint = tmp_path / "a.chk"
+    original_bytes = checkpoint.read_bytes()
+    for change in ({"density_fit": True}, {"solvent": {"model": "pcm", "eps": 10.}},
+                   {"grids": {"level": 1}}, {"method": "uks"}):
+        atoms.calc = PySCFCalculator(parameters=p | change | {"checkpoint": {"read": str(checkpoint)}},
+                                     directory=tmp_path / "invalid")
+        with pytest.raises(ValueError, match="Incompatible checkpoint"):
+            atoms.get_potential_energy()
+    atoms.positions[1, 2] = 0.8
+    atoms.calc = PySCFCalculator(parameters=p | {"checkpoint": {"read": str(checkpoint)}},
+                                 directory=tmp_path / "projected")
+    energy = atoms.get_potential_energy()
+    assert atoms.calc.metadata["scf"]["init_guess_source"] == "checkpoint"
+    atoms.calc = PySCFCalculator(parameters=p | {"checkpoint": None}, directory=tmp_path / "fresh")
+    assert atoms.get_potential_energy() == pytest.approx(energy, abs=1e-7)
+    assert checkpoint.read_bytes() == original_bytes
+
+
+def test_density_reuse_rejects_changed_electronic_state(tmp_path):
+    atoms = Atoms("OH", positions=[[0, 0, 0], [0, 0, 0.97]])
+    atoms.info.update(charge=0, spin=2)
+    calc = PySCFCalculator(parameters={"basis": "sto-3g", "reuse_density": True}, directory=tmp_path)
+    atoms.calc = calc
+    atoms.get_potential_energy()
+    atoms.info.update(charge=-1, spin=1)
+    changed_energy = atoms.get_potential_energy()
+    assert calc.metadata["scf"]["init_guess_source"] == "default"
+    assert "charge mismatch" in calc.metadata["scf"]["density_reuse_fallback"]
+    atoms.calc = PySCFCalculator(parameters={"basis": "sto-3g"}, directory=tmp_path / "fresh")
+    assert atoms.get_potential_energy() == pytest.approx(changed_energy, abs=1e-7)
+
+
+def test_hessian_after_forces_and_failure_cleanup(tmp_path, monkeypatch):
+    atoms = Atoms("H2", positions=[[0, 0, 0], [0, 0, 0.74]])
+    calc = PySCFCalculator(parameters={"basis": "sto-3g", "method": "rhf", "charge": 0,
+                                      "spin": 0}, directory=tmp_path)
+    atoms.calc = calc
+    atoms.get_forces()
+    hessian = calc.get_hessian(atoms)
+    np.testing.assert_allclose(calc.get_hessian(atoms), hessian, atol=1e-7)
+    step = 1e-3
+    atoms.positions[1, 2] += step
+    plus = atoms.get_forces().copy()
+    atoms.positions[1, 2] -= 2 * step
+    minus = atoms.get_forces().copy()
+    np.testing.assert_allclose(-(plus-minus).ravel() / (2*step), hessian[:, 5], atol=1e-3)
+
+    calc.settings["retain_scf"] = True
+    atoms.get_potential_energy()
+    if calc._scf is None:
+        calc.calculate(atoms)
+    from types import SimpleNamespace
+    stream = calc._scf_log
+    monkeypatch.setattr(calc._scf, "Hessian", lambda: SimpleNamespace(
+        kernel=lambda: np.full((2, 2, 3, 3), np.nan)))
+    with pytest.raises(ValueError, match="nonfinite Hessian"):
+        calc.get_hessian(atoms)
+    assert stream.closed and calc._scf is None and not calc.results
+    assert calc.metadata["scf"]["failure_stage"] == "hessian"
+
+
+def test_checkpoint_write_errors_are_not_hidden(tmp_path, monkeypatch):
+    from ase.build import molecule
+    def fail(*args, **kwargs):
+        raise PermissionError("checkpoint write denied")
+    monkeypatch.setattr(CheckpointManager, "save", fail)
+    calc = PySCFCalculator(parameters={"basis": "sto-3g", "charge": 0, "spin": 0,
+        "checkpoint": {"write": "state.chk"}}, directory=tmp_path)
+    atoms = molecule("H2O")
+    atoms.calc = calc
+    with pytest.raises(PermissionError, match="checkpoint write denied"):
+        atoms.get_potential_energy()
+    assert not calc.results and calc._scf_log is None
+    assert calc.metadata["scf"]["failure_stage"] == "checkpoint"
+    assert calc.metadata["scf"]["cycles"] == 1

@@ -5,149 +5,160 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21807793.svg)](https://doi.org/10.5281/zenodo.21807793)
 
-A thin, unified [ASE](https://wiki.fysik.dtu.dk/ase/) calculator factory for foundation machine-learning interatomic potentials (MLIPs) and molecular DFT engines. Every call returns a standard `ase.Calculator`, keeping the rest of your ASE simulation workflow intact.
+A thin ASE calculator factory for machine-learning interatomic potentials,
+VASP, Quantum ESPRESSO, and molecular PySCF/GPU4PySCF. It selects upstream
+calculators, validates inputs, and records calculation conditions.
 
----
+**MLIP settings are Python keyword arguments. DFT settings use YAML or a
+configuration dictionary.** No heavy backend is imported until requested.
 
-## Key Features
-
-- **Unified Factory API**: Seamlessly instantiate calculators via `get_calculator(name, config=...)` using dictionaries or YAML files.
-- **Accurate State & Cache Management**: Automatically detects changes to molecular electronic states (`charge`, `spin`) and external electric fields (`external_field`), preventing stale cache reuse across spin/charge switches.
-- **Comprehensive Foundation MLIP Suite**: Supports SevenNet, CHGNet, MatGL (TensorNet & MatPES), MatterSim, NequIP OAM, OrbMol, UMA, eSEN, and MACE.
-- **Automated Dispersion Protection**: Enforces model-specific dispersion policies to prevent double-counting empirical DFT-D3/D4 corrections.
-- **Production Molecular DFT (PySCF & GPU4PySCF)**: Energy, analytical forces, Cartesian Hessians, density reuse (`reuse_density`), CDIIS/Newton solvers, atomic checkpointing, and continuum solvation (PCM, SMD).
-
----
-
-## Installation
-
-The core library is intentionally lightweight and does not install PyTorch or heavy dependencies by default:
+## Install
 
 ```bash
-pip install ase-calculator-kit
+pip install ase-calculator-kit                 # ASE + PyYAML core
+pip install 'ase-calculator-kit[sevennet]'      # choose a backend
+pip install 'ase-calculator-kit[orb]'           # OrbMol-v2; Python 3.12
+pip install 'ase-calculator-kit[uma]'           # UMA (Hugging Face access)
+pip install 'ase-calculator-kit[esen]'          # eSEN OMol25
+pip install 'ase-calculator-kit[pyscf]'         # CPU molecular HF/DFT
 ```
 
-Install backend dependencies as optional extras depending on your workflow:
+For Linux x86_64 with NVIDIA CUDA 12:
 
 ```bash
-# Specific backends
-pip install "ase-calculator-kit[sevennet]"
-pip install "ase-calculator-kit[chgnet]"
-pip install "ase-calculator-kit[matgl]"       # TensorNet and MatGL CHGNet
-pip install "ase-calculator-kit[mattersim]"
-pip install "ase-calculator-kit[nequip]"
-pip install "ase-calculator-kit[orb]"          # Molecular OrbMol (Python 3.12)
-pip install "ase-calculator-kit[uma]"
-pip install "ase-calculator-kit[esen]"
-
-# Co-installable MLIP suite and DFT-D3 correction
-pip install "ase-calculator-kit[all]"
-
-# Molecular DFT backends
-pip install "ase-calculator-kit[pyscf,pyscf-dispersion]"      # CPU
-pip install "ase-calculator-kit[gpu4pyscf-cuda12x]"           # GPU (CUDA 12)
+pip install 'ase-calculator-kit[gpu4pyscf-cuda12x]'
 ```
 
-> [!WARNING]
-> **MACE requires an isolated virtual environment**: `mace-torch` pins `e3nn==0.4.4`, whereas other modern MLIPs require `e3nn>=0.5`. Install MACE in its own virtual environment (`pip install "ase-calculator-kit[mace]"`). See [Getting Started](docs/getting-started.md).
+`[all]` installs the co-installable MLIP extras and D3. MACE, Orb, and PySCF
+extras are separate. MACE requires its own environment because its e3nn pin
+conflicts with several other backends:
 
----
-
-## Quickstart
-
-### 1. Machine Learning Potential (OrbMol / SevenNet)
-
-```python
-from ase.build import molecule
-from ase_calculator_kit import get_calculator
-
-mol = molecule("H2O")
-mol.info["charge"] = 0
-mol.info["spin"] = 0  # 2S (singlet)
-
-calc = get_calculator("orb", config={"model_name": "orb-d3-v2", "device": "cpu"})
-mol.calc = calc
-
-print("Energy (eV):", mol.get_potential_energy())
-print("Forces (eV/Å):\n", mol.get_forces())
+```bash
+python -m venv .venv-mace
+.venv-mace/bin/pip install 'ase-calculator-kit[mace]'
 ```
 
-### 2. Molecular DFT (PySCF / GPU4PySCF)
+MACE-POLAR additionally needs graph_longrange; Orb has a documented dm-tree
+override on Python 3.13+. Follow [installation instructions](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/getting-started.md).
+
+## Quickstart: molecular MLIP
 
 ```python
 from ase.build import molecule
 from ase_calculator_kit import get_calculator
 
 atoms = molecule("H2O")
-calc = get_calculator(
-    "pyscf",  # or "gpu4pyscf"
-    config={
-        "parameters": {
-            "basis": "def2-svp",
-            "xc": "pbe",
-            "disp": "d3bj",
-            "charge": 0,
-            "spin": 0,
-        }
-    }
-)
-atoms.calc = calc
-
-print("DFT Energy (eV):", atoms.get_potential_energy())
-hessian = calc.get_hessian(atoms)  # Shape (3N, 3N) in eV/Å^2
+atoms.info.update(charge=0, spin=1)  # spin is MULTIPLICITY: 2S+1
+atoms.calc = get_calculator("orb", model="orbmol-v2", device="cpu")
+print(atoms.get_potential_energy())  # eV
+print(atoms.get_forces())            # eV/Angstrom
 ```
 
----
+UMA/eSEN OMol, OrbMol, MACE-OMOL-0 and MACE-POLAR require explicit electronic
+states. MACE-POLAR also reads `atoms.info["external_field"]` in V/Angstrom.
+See [molecular inputs and cache behavior](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/molecular.md).
 
-## Supported Backends
+For a material, the same ASE interface accepts other backends:
 
-| Backend Key | Model / Engine | Target Domain | Key Capabilities | Documentation |
-|---|---|---|---|:---:|
-| `sevennet` | SevenNet (`7net-0`, `7net-meta`) | Materials / Bulk | Fast bulk screening, zero-shot MD | [Guide](docs/backends.md#sevennet-sevennet) |
-| `chgnet` | CHGNet (original) | Materials / Batteries | Charge-informed crystal stability | [Guide](docs/backends.md#chgnet-chgnet--matgl-matgl) |
-| `matgl` / `tensornet` | MatGL (TensorNet, MatPES) | Materials / Molecules | Tensor embeddings, D3-compatible | [Guide](docs/backends.md#chgnet-chgnet--matgl-matgl) |
-| `mattersim` | MatterSim | Materials / Crystals | High-precision multi-property models | [Guide](docs/backends.md#mattersim-mattersim) |
-| `nequip` | NequIP OAM | Catalysis / Surfaces | Strict E(3)-equivariance | [Guide](docs/backends.md#nequip-oam-nequip) |
-| `orb` | OrbMol (`orb-d3-v2`) | Molecules / Radicals | Electronic state & electric field tracking | [Guide](docs/backends.md#orbmol-orb) |
-| `uma` | UMA 1.x / Fairchem | Catalysis / Surfaces | Multi-domain foundation model | [Guide](docs/backends.md#uma--esen-uma-esen) |
-| `esen` | eSEN OMol25 | Molecules | Conserving/direct-force checkpoints | [Guide](docs/backends.md#uma--esen-uma-esen) |
-| `mace` | MACE-MP-0 / MACE-OFF | Materials / Molecules | Higher-order message passing | [Guide](docs/backends.md#mace-mace) |
-| `vasp` | VASP | Solid-State DFT | Standard periodic plane-wave DFT | [Guide](docs/backends.md#vasp-vasp) |
-| `qe` | Quantum ESPRESSO | Solid-State DFT | Open-source plane-wave DFT | [Guide](docs/backends.md#quantum-espresso-qe-espresso-quantum-espresso) |
-| `pyscf` / `gpu4pyscf` | PySCF / GPU4PySCF | Molecular DFT & HF | Hessians, CDIIS, density reuse, PCM/SMD | [Guide](docs/pyscf.md) |
+```python
+from ase.build import bulk
 
----
+atoms = bulk("Cu", "fcc", a=3.6)
+atoms.calc = get_calculator("sevennet", model="7net-omni", modal="mpa")
+print(atoms.get_potential_energy())
+```
+
+## Quickstart: molecular DFT
+
+```python
+from ase.build import molecule
+from ase_calculator_kit import get_calculator
+
+atoms = molecule("H2O")
+atoms.info.update(charge=0, spin=1)
+calc = get_calculator("pyscf", config={
+    "calculator": "pyscf",  # use gpu4pyscf in both places for GPU
+    "directory": "runs/water",
+    "parameters": {
+        "basis": "def2-svp",
+        "xc": "pbe",
+        "density_fit": True,
+        "retain_scf": True,
+    },
+})
+atoms.calc = calc
+print(atoms.get_potential_energy())
+print(atoms.get_forces())
+hessian = calc.get_hessian(atoms)  # (3N, 3N), eV/Angstrom^2
+print(calc.metadata["scf"])
+calc.reset()  # release retained SCF/log resources
+```
+
+YAML `spin` is 2S; `atoms.info["spin"]` is multiplicity. Conflicts raise an
+error. Density fitting defaults to false on both CPU and GPU; the GPU examples
+explicitly enable it. Density reuse between geometries is opt-in too.
+
+See [PySCF settings, checkpoints and Hessians](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/pyscf.md) and
+[complete DFT examples](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/examples/dft/README.md). VASP/QE require explicit
+execution commands and QE requires explicit pseudopotential settings.
+
+## Supported backends
+
+| Backend | Models / methods | Details |
+|---|---|---|
+| `sevennet` | SevenNet, including selectable multi-fidelity modals | [Models](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/backends.md) |
+| `chgnet` | Original CHGNet | [API](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/api.md) |
+| `matgl`, `tensornet` | TensorNet MatPES | [Models](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/backends.md) |
+| `matgl-chgnet` | Provisional corrected MatGL CHGNet MatPES | [Validation](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/matgl-validation.md) |
+| `mattersim` | MatterSim 1M / 5M | [Models](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/backends.md) |
+| `nequip` | NequIP OAM L / XL | [Models](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/backends.md) |
+| `orb` | OrbMol-v2 | [Molecules](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/molecular.md) |
+| `uma` | UMA with task selection | [Models](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/backends.md) |
+| `esen` | OMol25 conserving / direct-force checkpoints | [Models](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/backends.md) |
+| `mace` | MH-1, OMAT/MatPES, OMOL-0, POLAR-1 | [Models](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/backends.md) |
+| `vasp`, `qe` | ASE VASP / Quantum ESPRESSO | [Examples](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/examples/dft/README.md) |
+| `pyscf`, `gpu4pyscf` | Molecular HF/DFT, gradients and Hessians | [Guide](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/pyscf.md) |
+
+Dispersion is model-dependent; the kit rejects double-counting.
+See the [training levels and dispersion policy](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/models.md).
 
 ## Documentation
 
-For full guides and references, please visit the **[Documentation Portal](docs/README.md)**:
+Start at the [documentation index](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/README.md).
 
-- **[Getting Started](docs/getting-started.md)**: Installation, virtual environments, and configuration.
-- **[Backends Reference](docs/backends.md)**: Detailed configuration and parameters for all MLIP/DFT engines.
-- **[PySCF & GPU4PySCF Guide](docs/pyscf.md)**: Complete guide to molecular DFT, Hessian calculations, and SCF control.
-- **[Dispersion Policies](docs/models.md)**: DFT-D3/D4 dispersion compatibility across foundation MLIPs.
-- **[Validation Records](docs/validation-records.md)**: Hardware benchmarks and CPU/GPU parity results (TSUBAME4 H100).
-- **[Developer & Release Guide](docs/releasing.md)**: Instructions for development and releases.
-- **[Architecture Guide (Japanese)](docs/code-guide_ja.md)**: Implementation design and lifecycle details.
-
----
+- [Installation and compatibility](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/getting-started.md)
+- [Factory API](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/api.md) and [model selection](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/backends.md)
+- [Charge, spin and electric fields](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/molecular.md)
+- [D3 settings](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/dispersion.md) and [Apple Silicon](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/devices.md)
+- [PySCF/GPU4PySCF](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/pyscf.md)
+- [Validation records](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/validation-records.md)
+- [Development](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/development.md), [Japanese implementation guide](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/code-guide_ja.md), and [releases](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/releasing.md)
+- [Changes by version](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/CHANGELOG.md)
 
 ## Citation
 
-If you use `ase-calculator-kit` in your research, please cite:
+
+If this package contributed to published work, please cite the archived
+release. [`CITATION.cff`](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/CITATION.cff) holds the machine-readable metadata —
+GitHub renders it under "Cite this repository", and Zenodo reads it when
+minting the DOI.
 
 ```bibtex
 @software{ase_calculator_kit,
-  author = {Taishiro Wakamiya and Naoki Ishikawa},
-  title = {ase-calculator-kit: A unified ASE calculator factory for MLIPs and DFT engines},
-  url = {https://github.com/ishikawa-group/ase-calculator-kit},
-  year = {2026},
-  doi = {10.5281/zenodo.21807793}
+  title  = {ase-calculator-kit: a unified ASE calculator factory for MLIP and DFT calculators},
+  author = {Wakamiya, Taishiro and Ishikawa, Atsushi},
+  year   = {2026},
+  doi    = {10.5281/zenodo.21807793},
+  url    = {https://github.com/ishikawa-group/ase-calculator-kit}
 }
 ```
 
----
+`10.5281/zenodo.21807793` is the *concept* DOI: it always resolves to the newest
+archived version. To cite one specific release instead, use its version DOI from
+the [Zenodo record](https://doi.org/10.5281/zenodo.21807793) — 0.3.4 is
+`10.5281/zenodo.21807794`.
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+[MIT](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/LICENSE). Upstream software and model weights retain their own licenses;
+consult the backend documentation before selecting a checkpoint.

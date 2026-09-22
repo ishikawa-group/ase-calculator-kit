@@ -1,0 +1,231 @@
+{
+  "host": "r4n11",
+  "versions": {
+    "ase": "3.28.0",
+    "pyscf": "2.14.0",
+    "gpu4pyscf-cuda12x": "1.8.1",
+    "cupy-cuda12x": "13.4.1",
+    "pyscf-dispersion": "1.5.0"
+  },
+  "source_sha256": {
+    "backends/dft/__init__.py": "5859fa16b3895f2ef530246d8756ada6757afa2d446578d561fd152952bb77df",
+    "backends/dft/vasp.py": "8cd9b609155d1259d1eb87fbad78fabe79ae0caca0f3b23309fc77a37fdf966e",
+    "backends/dft/pyscf.py": "c032b1787a4405e97e15469a477e386e4bebbd27c0a6aa0e5a12ef67dea8f757",
+    "backends/dft/espresso.py": "7317659c24fe5e9535fa348841ac231bfa69e99a4f73e9b71e98db26ce2919e1",
+    "backends/dft/_pyscf_support.py": "57dcdfe336cf38265c5fe7220e404fefd804ce43f10fb08561c22b6b59bd4359"
+  },
+  "all_passed": true,
+  "criteria": {
+    "same_scf_force_eV_A": 1e-08,
+    "same_scf_hessian_eV_A2": 1e-07,
+    "cpu_gpu_energy_eV": 3e-05,
+    "cpu_gpu_force_eV_A": 0.0006,
+    "cpu_gpu_hessian_eV_A2": 0.01,
+    "hessian_symmetry_eV_A2": 0.001
+  },
+  "checks": {
+    "water_pbe": {
+      "passed": true,
+      "energy_delta_eV": 3.637978807091713e-11,
+      "force_delta_eV_A": 8.078681211776129e-07,
+      "hessian_delta_eV_A2": 0.0003463233797162957,
+      "cpu": {
+        "energy_eV": -2075.4797726259485,
+        "symmetry_error": 0.00037896100873879845,
+        "same_scf_force_delta": 0.0,
+        "same_scf_hessian_delta": 7.105427357601002e-15,
+        "hessian_status": "supported"
+      },
+      "gpu": {
+        "energy_eV": -2075.479772625985,
+        "symmetry_error": 0.0,
+        "same_scf_force_delta": 5.937472735695337e-13,
+        "same_scf_hessian_delta": 1.325730636381195e-10,
+        "hessian_status": "supported"
+      }
+    },
+    "oh_vv10": {
+      "passed": true,
+      "energy_delta_eV": 3.2752195693319663e-06,
+      "force_delta_eV_A": 1.4513091955520308e-05,
+      "hessian_delta_eV_A2": null,
+      "cpu": {
+        "energy_eV": -2058.2359389333346,
+        "symmetry_error": null,
+        "same_scf_force_delta": 0.0,
+        "same_scf_hessian_delta": null,
+        "hessian_status": "CPU UKS NLC unsupported (expected error)"
+      },
+      "gpu": {
+        "energy_eV": -2058.235942208554,
+        "symmetry_error": 0.0,
+        "same_scf_force_delta": 9.134359935103475e-14,
+        "same_scf_hessian_delta": 5.468834274324763e-10,
+        "hessian_status": "supported"
+      }
+    },
+    "water_d3zero": {
+      "passed": true,
+      "energy_delta_eV": 3.501554601825774e-11,
+      "force_delta_eV_A": 8.078679841760916e-07,
+      "hessian_delta_eV_A2": 0.0003463233002705124,
+      "cpu": {
+        "energy_eV": -2075.4798783375095,
+        "symmetry_error": 0.0003789610087281403,
+        "same_scf_force_delta": 0.0,
+        "same_scf_hessian_delta": 7.105427357601002e-15,
+        "hessian_status": "supported"
+      },
+      "gpu": {
+        "energy_eV": -2075.4798783375445,
+        "symmetry_error": 2.4868995751603507e-14,
+        "same_scf_force_delta": 9.137135492665038e-14,
+        "same_scf_hessian_delta": 1.7675771957215147e-10,
+        "hessian_status": "supported"
+      }
+    },
+    "water_d4": {
+      "passed": true,
+      "energy_delta_eV": 3.54702933691442e-11,
+      "force_delta_eV_A": 8.078678014333818e-07,
+      "hessian_delta_eV_A2": 0.0003463233975153912,
+      "cpu": {
+        "energy_eV": -2075.4851311013754,
+        "symmetry_error": 0.0003789610087210349,
+        "same_scf_force_delta": 0.0,
+        "same_scf_hessian_delta": 7.105427357601002e-15,
+        "hessian_status": "supported"
+      },
+      "gpu": {
+        "energy_eV": -2075.485131101411,
+        "symmetry_error": 4.263256414560601e-13,
+        "same_scf_force_delta": 2.283728761653947e-13,
+        "same_scf_hessian_delta": 1.8780355048875208e-10,
+        "hessian_status": "supported"
+      }
+    },
+    "water_cosmo": {
+      "passed": true,
+      "energy_delta_eV": 4.4565240386873484e-11,
+      "force_delta_eV_A": 3.405782731724649e-06,
+      "hessian_delta_eV_A2": 0.0002530016898525389,
+      "cpu": {
+        "energy_eV": -2075.705828762886,
+        "symmetry_error": 0.0002388383413460815,
+        "same_scf_force_delta": 0.0,
+        "same_scf_hessian_delta": 7.105427357601002e-15,
+        "hessian_status": "supported"
+      },
+      "gpu": {
+        "energy_eV": -2075.7058287629307,
+        "symmetry_error": 1.524177007407986e-15,
+        "same_scf_force_delta": 5.024869409453459e-13,
+        "same_scf_hessian_delta": 2.5556090577083523e-10,
+        "hessian_status": "supported"
+      }
+    },
+    "water_newton_cosmo": {
+      "passed": true,
+      "energy_delta_eV": 1.6052581486292183e-10,
+      "force_delta_eV_A": 4.671904089370571e-05,
+      "hessian_delta_eV_A2": 0.00023412164139102742,
+      "cpu": {
+        "energy_eV": -2075.721778455786,
+        "symmetry_error": 0.0001532871149230175,
+        "same_scf_force_delta": 0.0,
+        "same_scf_hessian_delta": 3.552713678800501e-15,
+        "hessian_status": "supported"
+      },
+      "gpu": {
+        "energy_eV": -2075.7217784559466,
+        "symmetry_error": 3.552713678800501e-15,
+        "same_scf_force_delta": 1.366129431801255e-13,
+        "same_scf_hessian_delta": 1.5712231515863095e-10,
+        "hessian_status": "supported"
+      }
+    },
+    "oh_newton_vv10": {
+      "passed": true,
+      "energy_delta_eV": 5.022611730964854e-07,
+      "force_delta_eV_A": 3.0199640123532157e-05,
+      "hessian_delta_eV_A2": null,
+      "cpu": {
+        "energy_eV": -2058.2359360795353,
+        "symmetry_error": null,
+        "same_scf_force_delta": 0.0,
+        "same_scf_hessian_delta": null,
+        "hessian_status": "CPU UKS NLC unsupported (expected error)"
+      },
+      "gpu": {
+        "energy_eV": -2058.235935577274,
+        "symmetry_error": 0.0,
+        "same_scf_force_delta": 5.169878828456423e-24,
+        "same_scf_hessian_delta": 4.032071204695953e-10,
+        "hessian_status": "supported"
+      }
+    },
+    "water_smd": {
+      "passed": true,
+      "energy_delta_eV": 4.092726157978177e-11,
+      "force_delta_eV_A": 6.7838967309219456e-06,
+      "hessian_delta_eV_A2": 0.0001928123929388903,
+      "cpu": {
+        "energy_eV": -2075.783084679271,
+        "symmetry_error": 3.0808454638986404e-05,
+        "same_scf_force_delta": 0.0,
+        "same_scf_hessian_delta": 3.552713678800501e-15,
+        "hessian_status": "supported"
+      },
+      "gpu": {
+        "energy_eV": -2075.7830846793117,
+        "symmetry_error": 2.1317347886906646e-09,
+        "same_scf_force_delta": 1.354472090042691e-13,
+        "same_scf_hessian_delta": 1.893809553621395e-10,
+        "hessian_status": "supported"
+      }
+    },
+    "rbh_ecp": {
+      "passed": true,
+      "energy_delta_eV": 1.3642420526593924e-12,
+      "force_delta_eV_A": 1.0181012921606225e-08,
+      "hessian_delta_eV_A2": 1.0659183340422373e-05,
+      "cpu": {
+        "energy_eV": -670.4670886438905,
+        "symmetry_error": 4.141735625001487e-15,
+        "same_scf_force_delta": 0.0,
+        "same_scf_hessian_delta": 8.881784197001252e-16,
+        "hessian_status": "supported"
+      },
+      "gpu": {
+        "energy_eV": -670.4670886438892,
+        "symmetry_error": 0.0,
+        "same_scf_force_delta": 3.425038030968608e-14,
+        "same_scf_hessian_delta": 4.3156589413229085e-12,
+        "hessian_status": "supported"
+      }
+    },
+    "restart_newton": {
+      "passed": true
+    },
+    "reuse_open_shell": {
+      "passed": true
+    }
+  },
+  "mac": {
+    "orb": {
+      "backend": "orb",
+      "OH_eV": -2061.0550026893616,
+      "OHminus_eV": -2062.792480945587,
+      "fresh_delta_eV": 0.0
+    },
+    "mace": {
+      "backend": "mace",
+      "OH_eV": -2061.0680712413864,
+      "OHminus_eV": -2062.799623232855,
+      "fresh_delta_eV": 0.0,
+      "field_eV": -2061.086745760219,
+      "zero_field_eV": -2061.0680712413864,
+      "fresh_field_delta": 0.0
+    }
+  }
+}

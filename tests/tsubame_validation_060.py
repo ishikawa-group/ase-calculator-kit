@@ -1,402 +1,203 @@
-#!/usr/bin/env python3
-"""Validation suite for ase-calculator-kit 0.6.0 features on TSUBAME4 (GPU4PySCF)."""
+"""Manual CPU/H100 release checks; run only on a scheduled compute node.
 
+Usage: python tests/tsubame_validation_060.py --output /absolute/temp/review
+Every claimed check has an assertion. JSON is saved even on failure; failures exit 1.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+from importlib.metadata import version
 import json
-import time
-import traceback
 from pathlib import Path
+import platform
+import traceback
 
-import h5py
 import numpy as np
+from ase import Atoms
 from ase.build import molecule
 from ase.units import Bohr, Hartree
-from ase_calculator_kit import get_calculator
-from pyscf import lib
 
-lib.num_threads(2)
-root = Path.cwd()
-log_dir = root / "log"
-log_dir.mkdir(exist_ok=True, parents=True)
+import ase_calculator_kit
+from ase_calculator_kit.backends.dft.pyscf import PySCFCalculator
+from ase_calculator_kit.backends.dft._pyscf_support import CheckpointManager, to_numpy
 
-report = {
-    "system_info": {},
-    "basic_parity": {},
-    "new_features": {},
-    "all_passed": True,
-}
 
-print("=== Starting TSUBAME4 Validation for ase-calculator-kit 0.6.0 ===", flush=True)
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--cases", nargs="*")
+    args = parser.parse_args()
+    root = args.output
+    root.mkdir(parents=True, exist_ok=True)
+    common = {"basis": "def2-svp", "density_fit": True, "auxbasis": "def2-universal-jkfit",
+              "xc": "pbe", "grids": {"level": 3}, "nlcgrids": {"atom_grid": [50, 194], "prune": None},
+              "conv_tol": 1e-10, "conv_tol_grad": 1e-5, "verbose": 0,
+              "retain_scf": True, "hessian": {"grid_response": False, "auxbasis_response": 2,
+                                               "conv_tol_cpscf": 1e-9}}
+    cases = {
+        "water_pbe": (molecule("H2O"), 0, 1, {}),
+        "oh_vv10": (molecule("OH"), 0, 2, {"xc": "wb97m_v", "nlc": "vv10"}),
+        "water_d3zero": (molecule("H2O"), 0, 1, {"disp": "d3zero:pbe"}),
+        "water_d4": (molecule("H2O"), 0, 1, {"disp": "d4:pbe"}),
+        "water_cosmo": (molecule("H2O"), 0, 1, {"solvent": {"model": "pcm", "method": "COSMO",
+            "eps": 78.4, "equilibrium_solvation": True, "r_probe": 0.4,
+            "vdw_scale": 1.1, "radii": {"O": 1.6}, "lebedev_order": 17}}),
+        "water_newton_cosmo": (molecule("H2O"), 0, 1, {"scf_algorithm": "newton",
+            "solvent": {"model": "pcm", "method": "COSMO", "eps": 78.4,
+                        "equilibrium_solvation": True}}),
+        "oh_newton_vv10": (molecule("OH"), 0, 2,
+            {"scf_algorithm": "newton", "xc": "wb97m_v", "nlc": "vv10"}),
+        "water_smd": (molecule("H2O"), 0, 1, {"solvent": {"model": "smd", "solvent": "water"}}),
+        "rbh_ecp": (Atoms("RbH", positions=[[0, 0, 0], [0, 0, 2.3]]), 0, 1,
+                    {"ecp": {"Rb": "def2-svp"}}),
+    }
+    package = Path(ase_calculator_kit.__file__).parent
+    report = {"host": platform.node(), "versions": {n: version(n) for n in
+              ("ase", "pyscf", "gpu4pyscf-cuda12x", "cupy-cuda12x", "pyscf-dispersion")},
+              "source_sha256": {str(f.relative_to(package)): hashlib.sha256(f.read_bytes()).hexdigest()
+                                for f in (package / "backends/dft").glob("*.py")}, "checks": {}}
 
-# ---------------------------------------------------------
-# Test cases for basic energy & force parity (CPU vs GPU)
-# ---------------------------------------------------------
-wb_common = {
-    "basis": "def2-tzvpd",
-    "xc": "wb97m_v",
-    "nlc": "vv10",
-    "density_fit": True,
-    "auxbasis": "def2-universal-jkfit",
-    "grids": {"atom_grid": [99, 590], "prune": None},
-    "nlcgrids": {"atom_grid": [50, 194]},
-    "conv_tol": 1e-9,
-    "max_cycle": 200,
-    "verbose": 0,
-}
-
-parity_cases = [
-    ("water_wb", molecule("H2O"), dict(wb_common, charge=0, multiplicity=1)),
-    ("oh_wb", molecule("OH"), dict(wb_common, charge=0, multiplicity=2)),
-    (
-        "water_d3bj",
-        molecule("H2O"),
-        {"basis": "def2-svp", "xc": "pbe", "density_fit": True, "charge": 0, "spin": 0, "disp": "d3bj", "verbose": 0},
-    ),
-    (
-        "water_d3zero",
-        molecule("H2O"),
-        {"basis": "def2-svp", "xc": "pbe", "density_fit": True, "charge": 0, "spin": 0, "disp": "d3zero", "verbose": 0},
-    ),
-    (
-        "water_pcm_custom",
-        molecule("H2O"),
-        {
-            "basis": "def2-svp",
-            "xc": "pbe",
-            "density_fit": True,
-            "charge": 0,
-            "spin": 0,
-            "solvent": {
-                "model": "pcm",
-                "vdw_scale": 1.1,
-                "r_probe": 0.4,
-                "radii": {"H": 1.2, "O": 1.52},
-                "eps": 78.3553,
-            },
-            "verbose": 0,
-        },
-    ),
-]
-
-for label, atoms, p in parity_cases:
-    print(f"\n--- Parity Test: {label} ---", flush=True)
-    records = {}
-    for backend in ("pyscf", "gpu4pyscf"):
-        t0 = time.monotonic()
+    def check(name, callback):
+        print(name, flush=True)
         try:
-            calc = get_calculator(
-                backend,
-                config={
-                    "calculator": backend,
-                    "directory": str(root / label / backend),
-                    "parameters": p,
-                },
-            )
-            atoms.calc = calc
-            f = atoms.get_forces()
-            e = atoms.get_potential_energy()
-            scf_meta = calc.metadata.get("scf", {})
-            records[backend] = {
-                "energy_hartree": e / Hartree,
-                "forces_au": (f / (Hartree / Bohr)).tolist(),
-                "seconds": time.monotonic() - t0,
-                "converged": scf_meta.get("converged"),
-                "cycles": scf_meta.get("cycles"),
-                "spin_s2": scf_meta.get("spin_analysis", {}).get("s2"),
-            }
-            print(f"  {backend}: E = {e/Hartree:.8f} Ha, time = {records[backend]['seconds']:.2f}s, conv = {records[backend]['converged']}", flush=True)
-        except Exception as ex:
+            report["checks"][name] = {"passed": True, **callback()}
+        except Exception as exc:
             traceback.print_exc()
-            records[backend] = {"error": str(ex)}
-            report["all_passed"] = False
+            report["checks"][name] = {"passed": False, "error": f"{type(exc).__name__}: {exc}"}
+        (root / "validation.json").write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
 
-    if "energy_hartree" in records.get("pyscf", {}) and "energy_hartree" in records.get("gpu4pyscf", {}):
-        de = abs(records["pyscf"]["energy_hartree"] - records["gpu4pyscf"]["energy_hartree"])
-        df = float(np.max(np.abs(np.array(records["pyscf"]["forces_au"]) - np.array(records["gpu4pyscf"]["forces_au"]))))
-        passed = (de <= 1e-6) and (df <= 1e-5)
-        records["delta_energy_hartree"] = de
-        records["max_delta_force_au"] = df
-        records["passed"] = passed
-        if not passed:
-            report["all_passed"] = False
-        print(f"  Result: ΔE = {de:.2e} Ha, ΔF = {df:.2e} au, passed = {passed}", flush=True)
-    else:
-        records["passed"] = False
-        report["all_passed"] = False
+    def parity(name):
+        atoms, charge, mult, extra = cases[name]
+        atoms.info.update(charge=charge, spin=mult)
+        p = common | extra
+        output = {}
+        for gpu in (False, True):
+            label = "gpu" if gpu else "cpu"
+            calc = PySCFCalculator(parameters=p, gpu=gpu, directory=root / name / label)
+            atoms.calc = calc
+            try:
+                energy = atoms.get_potential_energy()
+            except Exception:
+                (root / name / label / "failure.json").write_text(json.dumps(calc.metadata, indent=2))
+                raise
+            mf = calc._scf
+            stream = calc._scf_log
+            forces = atoms.get_forces()
+            assert calc._scf is mf and not stream.closed
+            direct_force = -to_numpy(mf.nuc_grad_method().kernel()) * Hartree / Bohr
+            np.testing.assert_allclose(forces, direct_force, atol=1e-8, rtol=0)
+            try:
+                hessian = calc.get_hessian(atoms)
+            except NotImplementedError as exc:
+                assert not gpu and mult == 2 and extra.get("nlc") == "vv10"
+                assert "CPU UKS Hessians with NLC" in str(exc)
+                hessian = reference = None
+                symmetry_error = None
+            else:
+                direct_hess = mf.Hessian()
+                direct_hess.grid_response = False
+                direct_hess.auxbasis_response = 2
+                reference = to_numpy(direct_hess.kernel()).transpose(0, 2, 1, 3).reshape(hessian.shape) * Hartree / Bohr**2
+                np.testing.assert_allclose(hessian, reference, atol=1e-7, rtol=0)
+                symmetry_error = float(np.max(abs(hessian-hessian.T)))
+                assert np.isfinite(hessian).all()
+            assert calc.metadata["scf"].get("final_orbital_gradient_norm") is not None
+            if mult == 2:
+                spin = calc.metadata["scf"]["spin_analysis"]
+                assert abs(sum(spin["mulliken_spin_populations"]) - 1) < 1e-7
+            output[label] = {"energy_eV": energy, "forces": forces.tolist(), "hessian": hessian.tolist() if hessian is not None else None,
+                             "hessian_status": "supported" if hessian is not None else "CPU UKS NLC unsupported (expected error)",
+                             "symmetry_error": symmetry_error, "same_scf_force_delta": float(np.max(abs(forces-direct_force))),
+                             "same_scf_hessian_delta": float(np.max(abs(hessian-reference))) if hessian is not None else None,
+                             "diagnostics": calc.metadata}
+            (root / name / "observations.json").write_text(json.dumps(output, indent=2))
+            calc.reset()
+            assert stream.closed
+        e_delta = abs(output["gpu"]["energy_eV"] - output["cpu"]["energy_eV"])
+        f_delta = float(np.max(abs(np.array(output["gpu"]["forces"]) - output["cpu"]["forces"])))
+        h_delta = (float(np.max(abs(np.array(output["gpu"]["hessian"]) - output["cpu"]["hessian"])))
+                   if output["cpu"]["hessian"] is not None else None)
+        assert e_delta < 3e-5 and f_delta < 6e-4, (e_delta, f_delta)
+        assert max(v["symmetry_error"] for v in output.values() if v["symmetry_error"] is not None) < 1e-3
+        assert h_delta is None or h_delta < 0.01, h_delta  # Cross-device/grid implementation comparison, not adapter tolerance.
+        output.update(energy_delta_eV=e_delta, force_delta_eV_A=f_delta, hessian_delta_eV_A2=h_delta)
+        return output
 
-    report["basic_parity"][label] = records
+    def restart_and_newton():
+        atoms = molecule("H2O")
+        atoms.info.update(charge=0, spin=1)
+        p = common | {"checkpoint": {"write": str((root / "cpu.chk").resolve())}}
+        cpu = PySCFCalculator(parameters=p, directory=root / "checkpoint_cpu")
+        atoms.calc = cpu
+        baseline = atoms.get_potential_energy()
+        cpu.reset()
+        answers = {}
+        for gpu in (False, True):
+            label = "gpu" if gpu else "cpu"
+            # Save a completed but unaccepted first iteration; then use GPU/CPU Newton.
+            checkpoint = (root / f"{label}_partial.chk").resolve()
+            partial = PySCFCalculator(parameters=common | {"max_cycle": 1,
+                "checkpoint": {"write": str(checkpoint)}}, gpu=gpu, directory=root / (label + "_partial"))
+            atoms.calc = partial
+            try:
+                atoms.get_potential_energy()
+            except Exception:
+                assert partial.metadata["scf"]["failure_stage"] == "scf_convergence"
+            else:
+                raise AssertionError("One-cycle water should not converge")
+            values, meta = CheckpointManager.load(checkpoint, True)
+            assert not meta["converged"] and values["e_tot"] < -70
+            restart = PySCFCalculator(parameters=common | {"scf_algorithm": "newton",
+                "checkpoint": {"read": str(checkpoint), "allow_unconverged": True}},
+                gpu=gpu, directory=root / (label + "_newton"))
+            atoms.calc = restart
+            energy = atoms.get_potential_energy()
+            assert abs(energy-baseline) < 3e-5
+            assert restart.metadata["scf"]["init_guess_source"] == "checkpoint"
+            assert np.isfinite(atoms.get_forces()).all()
+            assert np.isfinite(restart.get_hessian(atoms)).all()
+            answers[label] = restart.metadata
+            restart.reset()
+        cross = PySCFCalculator(parameters=common | {"checkpoint": {"read": str((root / "cpu.chk").resolve())}},
+                                gpu=True, directory=root / "cross_device")
+        atoms.calc = cross
+        assert abs(atoms.get_potential_energy()-baseline) < 3e-5
+        cross.reset()
+        return answers
 
-# ---------------------------------------------------------
-# Test 0.6.0 New Features on GPU4PySCF
-# ---------------------------------------------------------
-print("\n=== Feature Tests: 0.6.0 specific on GPU4PySCF ===", flush=True)
+    def reuse_open_shell():
+        atoms = molecule("OH")
+        atoms.info.update(charge=0, spin=2)
+        calc = PySCFCalculator(parameters=common | {"reuse_density": True, "scf_algorithm": "newton"},
+                               gpu=True, directory=root / "reuse_newton")
+        atoms.calc = calc
+        atoms.get_potential_energy()
+        atoms.positions[1, 2] += 0.01
+        atoms.get_potential_energy()
+        assert calc.metadata["scf"]["init_guess_source"] == "projected_mo"
+        np.testing.assert_allclose(sum(calc.metadata["scf"]["spin_analysis"]["mulliken_spin_populations"]), 1, atol=1e-7)
+        atoms.info.update(charge=-1, spin=1)
+        atoms.get_potential_energy()
+        assert calc.metadata["scf"]["init_guess_source"] == "default"
+        assert "charge mismatch" in calc.metadata["scf"]["density_reuse_fallback"]
+        meta = calc.metadata
+        calc.reset()
+        return meta
 
-# 1. Hessian API (analytical and finite difference fallback)
-print("\n--- Feature 1: Hessian API (GPU4PySCF) ---", flush=True)
-try:
-    atoms_h2o = molecule("H2O")
-    # Analytical Hessian (DFT without dispersion)
-    calc_h_ana = get_calculator(
-        "gpu4pyscf",
-        config={
-            "calculator": "gpu4pyscf",
-            "directory": str(root / "feat_hessian_ana"),
-            "parameters": {"basis": "def2-svp", "xc": "pbe", "density_fit": True, "charge": 0, "spin": 0, "verbose": 0},
-        },
-    )
-    atoms_h2o.calc = calc_h_ana
-    hess_ana = calc_h_ana.get_hessian(atoms_h2o)
-    n_atoms = len(atoms_h2o)
-    assert hess_ana.shape == (3 * n_atoms, 3 * n_atoms), f"Expected shape {(3*n_atoms, 3*n_atoms)}, got {hess_ana.shape}"
-    # Check symmetry H = H^T
-    symm_err = np.max(np.abs(hess_ana - hess_ana.T))
-    assert symm_err < 1e-5, f"Hessian not symmetric: max err {symm_err}"
+    names = args.cases or list(cases) + ["restart_newton", "reuse_open_shell"]
+    for name in names:
+        if name == "restart_newton":
+            check(name, restart_and_newton)
+        elif name == "reuse_open_shell":
+            check(name, reuse_open_shell)
+        else:
+            check(name, lambda name=name: parity(name))
+    report["all_passed"] = all(item["passed"] for item in report["checks"].values())
+    (root / "validation.json").write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
+    print("All passed:", report["all_passed"], flush=True)
+    raise SystemExit(0 if report["all_passed"] else 1)
 
-    # Also compare with CPU analytical Hessian
-    calc_h_cpu = get_calculator(
-        "pyscf",
-        config={
-            "calculator": "pyscf",
-            "directory": str(root / "feat_hessian_cpu"),
-            "parameters": {"basis": "def2-svp", "xc": "pbe", "density_fit": True, "charge": 0, "spin": 0, "verbose": 0},
-        },
-    )
-    atoms_h2o.calc = calc_h_cpu
-    hess_cpu = calc_h_cpu.get_hessian(atoms_h2o)
-    delta_hess = np.max(np.abs(hess_ana - hess_cpu))
 
-    # Analytical Hessian with D3 dispersion (which falls back to finite difference of D3)
-    calc_h_d3 = get_calculator(
-        "gpu4pyscf",
-        config={
-            "calculator": "gpu4pyscf",
-            "directory": str(root / "feat_hessian_d3"),
-            "parameters": {"basis": "def2-svp", "xc": "pbe", "disp": "d3bj", "density_fit": True, "charge": 0, "spin": 0, "verbose": 0},
-        },
-    )
-    atoms_h2o.calc = calc_h_d3
-    hess_d3 = calc_h_d3.get_hessian(atoms_h2o)
-    assert hess_d3.shape == (3 * n_atoms, 3 * n_atoms)
-
-    report["new_features"]["hessian"] = {
-        "passed": True,
-        "shape": list(hess_ana.shape),
-        "symmetry_error": float(symm_err),
-        "delta_gpu_cpu_max": float(delta_hess),
-        "d3_hessian_shape": list(hess_d3.shape),
-    }
-    print(f"  Hessian test passed: shape={hess_ana.shape}, symm_err={symm_err:.2e}, delta_gpu_cpu={delta_hess:.2e}", flush=True)
-except Exception as ex:
-    traceback.print_exc()
-    report["new_features"]["hessian"] = {"passed": False, "error": str(ex)}
-    report["all_passed"] = False
-
-# 2. Checkpoint Save & Resume with kit metadata
-print("\n--- Feature 2: Checkpoint write and read ---", flush=True)
-try:
-    chk_file = root / "chk_test.h5"
-    if chk_file.exists():
-        chk_file.unlink()
-
-    atoms_h2o = molecule("H2O")
-    # Step A: write checkpoint
-    calc_chk_write = get_calculator(
-        "gpu4pyscf",
-        config={
-            "calculator": "gpu4pyscf",
-            "directory": str(root / "feat_chk_write"),
-            "parameters": {
-                "basis": "def2-svp",
-                "xc": "pbe",
-                "density_fit": True,
-                "charge": 0,
-                "spin": 0,
-                "checkpoint": {"write": str(chk_file)},
-                "verbose": 0,
-            },
-        },
-    )
-    atoms_h2o.calc = calc_chk_write
-    e_chk1 = atoms_h2o.get_potential_energy()
-
-    assert chk_file.exists(), "Checkpoint file was not created"
-
-    # Verify kit metadata inside HDF5
-    with h5py.File(chk_file, "r") as f:
-        assert "ase_calculator_kit" in f, "Missing kit group in HDF5"
-        meta_grp = f["ase_calculator_kit"]
-        assert "metadata_json" in meta_grp.attrs, "Missing metadata_json in HDF5"
-        meta = json.loads(meta_grp.attrs["metadata_json"])
-        assert meta["converged"] is True, "Checkpoint not marked converged"
-        assert meta["basis"] == "def2-svp", f"Basis mismatch in chk: {meta.get('basis')}"
-        assert meta["xc"] == "pbe", f"XC mismatch in chk: {meta.get('xc')}"
-        print("  Kit metadata verified in HDF5 checkpoint", flush=True)
-
-    # Step B: read checkpoint
-    calc_chk_read = get_calculator(
-        "gpu4pyscf",
-        config={
-            "calculator": "gpu4pyscf",
-            "directory": str(root / "feat_chk_read"),
-            "parameters": {
-                "basis": "def2-svp",
-                "xc": "pbe",
-                "density_fit": True,
-                "charge": 0,
-                "spin": 0,
-                "checkpoint": {"read": str(chk_file)},
-                "verbose": 0,
-            },
-        },
-    )
-    atoms_h2o.calc = calc_chk_read
-    e_chk2 = atoms_h2o.get_potential_energy()
-    diff_e = abs(e_chk1 - e_chk2)
-    assert diff_e < 1e-9, f"Energy mismatch after checkpoint read: {diff_e}"
-
-    report["new_features"]["checkpoint"] = {
-        "passed": True,
-        "energy_step1": float(e_chk1),
-        "energy_step2": float(e_chk2),
-        "delta_energy": float(diff_e),
-        "metadata_verified": True,
-    }
-    print(f"  Checkpoint test passed: delta_E = {diff_e:.2e} eV", flush=True)
-except Exception as ex:
-    traceback.print_exc()
-    report["new_features"]["checkpoint"] = {"passed": False, "error": str(ex)}
-    report["all_passed"] = False
-
-# 3. Density Reuse (reuse_density)
-print("\n--- Feature 3: Density reuse (reuse_density) ---", flush=True)
-try:
-    atoms_h2o = molecule("H2O")
-    calc_reuse = get_calculator(
-        "gpu4pyscf",
-        config={
-            "calculator": "gpu4pyscf",
-            "directory": str(root / "feat_reuse"),
-            "parameters": {
-                "basis": "def2-svp",
-                "xc": "pbe",
-                "density_fit": True,
-                "charge": 0,
-                "spin": 0,
-                "reuse_density": True,
-                "verbose": 0,
-            },
-        },
-    )
-    atoms_h2o.calc = calc_reuse
-    e1 = atoms_h2o.get_potential_energy()
-    cycles1 = calc_reuse.metadata.get("scf", {}).get("cycles")
-
-    # Small displacement
-    atoms_h2o.positions[0, 0] += 0.01
-    e2 = atoms_h2o.get_potential_energy()
-    cycles2 = calc_reuse.metadata.get("scf", {}).get("cycles")
-    converged2 = calc_reuse.metadata.get("scf", {}).get("converged")
-
-    assert converged2, "Second step did not converge with reused density"
-
-    report["new_features"]["reuse_density"] = {
-        "passed": True,
-        "step1_cycles": cycles1,
-        "step2_cycles": cycles2,
-        "step2_converged": converged2,
-    }
-    print(f"  Reuse density test passed: step1_cycles={cycles1}, step2_cycles={cycles2}, converged={converged2}", flush=True)
-except Exception as ex:
-    traceback.print_exc()
-    report["new_features"]["reuse_density"] = {"passed": False, "error": str(ex)}
-    report["all_passed"] = False
-
-# 4. SCF Algorithm Control (cdiis)
-print("\n--- Feature 4: SCF Algorithm (CDIIS) ---", flush=True)
-try:
-    atoms_h2o = molecule("H2O")
-    calc_cdiis = get_calculator(
-        "gpu4pyscf",
-        config={
-            "calculator": "gpu4pyscf",
-            "directory": str(root / "feat_cdiis"),
-            "parameters": {
-                "basis": "def2-svp",
-                "xc": "pbe",
-                "density_fit": True,
-                "charge": 0,
-                "spin": 0,
-                "scf_algorithm": "cdiis",
-                "diis_space": 10,
-                "verbose": 0,
-            },
-        },
-    )
-    atoms_h2o.calc = calc_cdiis
-    e_cdiis = atoms_h2o.get_potential_energy()
-    meta_cdiis = calc_cdiis.metadata.get("scf", {})
-    assert meta_cdiis.get("converged"), "CDIIS did not converge"
-    assert meta_cdiis.get("scf_algorithm") == "cdiis"
-
-    report["new_features"]["scf_algorithm_cdiis"] = {
-        "passed": True,
-        "cycles": meta_cdiis.get("cycles"),
-        "converged": True,
-        "scf_algorithm": meta_cdiis.get("scf_algorithm"),
-    }
-    print(f"  CDIIS test passed: cycles={meta_cdiis.get('cycles')}, conv={meta_cdiis.get('converged')}", flush=True)
-except Exception as ex:
-    traceback.print_exc()
-    report["new_features"]["scf_algorithm_cdiis"] = {"passed": False, "error": str(ex)}
-    report["all_passed"] = False
-
-# 5. Open-shell Diagnostics (S^2 and Mulliken Spin Population)
-print("\n--- Feature 5: Open-shell Diagnostics (OH doublet) ---", flush=True)
-try:
-    atoms_oh = molecule("OH")
-    calc_diag = get_calculator(
-        "gpu4pyscf",
-        config={
-            "calculator": "gpu4pyscf",
-            "directory": str(root / "feat_diag"),
-            "parameters": {
-                "basis": "def2-svp",
-                "xc": "pbe",
-                "density_fit": True,
-                "charge": 0,
-                "multiplicity": 2,
-                "verbose": 0,
-            },
-        },
-    )
-    atoms_oh.calc = calc_diag
-    atoms_oh.get_potential_energy()
-    meta_diag = calc_diag.metadata.get("scf", {})
-    spin_analysis = meta_diag.get("spin_analysis", {})
-    mulliken_spin = spin_analysis.get("mulliken_spin_populations")
-
-    assert spin_analysis.get("s2") is not None, "Missing S^2"
-    assert spin_analysis.get("ideal_s2") == 0.75, f"Expected ideal S^2 = 0.75, got {spin_analysis.get('ideal_s2')}"
-    assert mulliken_spin is not None and len(mulliken_spin) == 2, f"Missing Mulliken spin population: {mulliken_spin}"
-
-    report["new_features"]["open_shell_diagnostics"] = {
-        "passed": True,
-        "s2_total": spin_analysis.get("s2"),
-        "s2_ideal": spin_analysis.get("ideal_s2"),
-        "s2_deviation": spin_analysis.get("s2_deviation"),
-        "mulliken_spin": mulliken_spin,
-    }
-    print(f"  Open-shell diagnostics passed: S^2={spin_analysis.get('s2'):.4f} (ideal {spin_analysis.get('ideal_s2')}), Mulliken={mulliken_spin}", flush=True)
-except Exception as ex:
-    traceback.print_exc()
-    report["new_features"]["open_shell_diagnostics"] = {"passed": False, "error": str(ex)}
-    report["all_passed"] = False
-
-# Write summary JSON
-out_path = root / "validation_060.json"
-out_path.write_text(json.dumps(report, indent=2))
-log_out = log_dir / "validation_060.json"
-log_out.write_text(json.dumps(report, indent=2))
-
-print("\n=== Validation Complete ===")
-print(f"All passed: {report['all_passed']}")
-print(f"Report written to: {out_path} and {log_out}")
+if __name__ == "__main__":
+    main()

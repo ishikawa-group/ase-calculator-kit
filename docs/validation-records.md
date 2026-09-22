@@ -1,58 +1,111 @@
-# Validation Records
+# Reviewed 0.6.0 validation
 
-This document summarizes hardware-level validation records, parity benchmarks between CPU and GPU backends, and numerical consistency checks conducted on supercomputing infrastructure.
+Validated on 2026-09-22 after review of the release preparation. The source
+hashes in the [machine-readable summary](validation-0.6.0.json) match the shipped
+DFT source. Reproduce the CPU/GPU checks with
+[tsubame_validation_060.py](../tests/tsubame_validation_060.py) on a scheduled
+compute node. Earlier results remain in [validation history](validation-history.md).
 
----
+## Review corrections
 
-## TSUBAME4 (Tokyo Tech / Science Tokyo ISCT)
+The review reproduced and fixed:
 
-### Hardware & Software Environment
-- **Node**: TSUBAME4 Compute Node (`r4n11`)
-- **GPU**: NVIDIA H100 PCIe (MIG 3g.47gb / 4g.47gb partitioned)
-- **CUDA Toolkit**: 12.8.0
-- **Environment**: Python 3.12.11, PySCF 2.14.0, GPU4PySCF 1.8.1, CuPy 13.4.1, cuTENSOR 2.2.0, pyscf-dispersion 1.5.0, ASE 3.28.0
+- Failure diagnostics were erased by an incorrect metadata-key check.
+- Iteration checkpoints read stale/uninitialized mf.mo_* instead of callback
+  orbitals; write failures were silently suppressed. Files now contain complete
+  iteration data, and I/O failures propagate with their stage recorded.
+- Restart lacked full physics/basis provenance and did not project across
+  changed geometries. Density reuse compared current settings against themselves,
+  so an electronic-state change could inherit the wrong old density.
+- Forces followed by Hessian failed without retention. Hessian failures and
+  nonfinite data now clear results and close the SCF log even with retention.
+- DF auxiliary Hessian response was incorrectly Boolean; full response is
+  integer 2. Unsupported options are rejected instead of being ignored.
+- GPU Newton initialization needed native orthogonalization and device arrays;
+  GPU solvent Fock APIs use dm_or_wfn instead of the CPU dm keyword.
+- Molecular wrappers delegated to upstream info comparison that could miss or
+  mishandle NumPy arrays. Effective snapshots now control the state cache.
+- Reorganized documentation contained incorrect model names, MLIP config calls,
+  spin conventions and a citation author. Correct prior material was moved to
+  dedicated pages and new examples checked against the implemented API.
 
----
+## Regression suite and real molecular models
 
-### 1. Parity Benchmarks: PySCF (CPU) vs GPU4PySCF (NVIDIA H100)
+- Lightweight environment: **360 passed, 10 skipped**, with 40 slow cases
+  deselected. The skips are the explicitly optional real-PySCF tests.
+- PySCF environment: **370 passed**, 40 slow cases deselected. This includes
+  10 real CPU tests: failed-SCF diagnostics, atomic partial checkpoints,
+  separate-process Newton restart, incompatible-physics rejection, projection,
+  state changes, derivative cleanup and RHF Hessian/force finite differences.
+- Ruff and documentation file/anchor checks passed.
+- On Mac CPU, actual OrbMol and MACE-POLAR models were reused through
+  OH doublet → OH-minus singlet → OH doublet. Each result matched a newly constructed
+  calculator, including forces. OrbMol used orb-models 0.7.0, Python
+  3.12.13, Torch 2.14.0; MACE used mace-torch 0.3.16, graph_longrange 0.4.0,
+  Python 3.13.14 and Torch 2.13.0.
+- OrbMol OH / OH-minus energies: **-2061.055002689 / -2062.792480946 eV**.
+- MACE-POLAR OH energy changed from **-2061.068071241** to **-2061.086745760 eV**
+  when a NumPy field was changed in place from zero to 0.05 V/Angstrom in z.
+  The changed-field result matched a fresh calculation exactly in this test.
 
-| System | Method / Functional | Basis / Grids / Dispersion | $\Delta E$ (Hartree) | $\text{Max } \Delta F$ (au) | Status |
-|---|---|---|:---:|:---:|:---:|
-| $\text{H}_2\text{O}$ | RKS $\omega\text{B97M-V}$ + VV10 | def2-TZVPD / (99,590) / RI-JK | $3.13 \times 10^{-8}$ | $2.10 \times 10^{-7}$ | ✅ Passed |
-| $\text{OH}^\bullet$ | UKS $\omega\text{B97M-V}$ + VV10 (doublet) | def2-TZVPD / (99,590) / RI-JK | $2.93 \times 10^{-8}$ | $5.35 \times 10^{-8}$ | ✅ Passed |
-| $\text{H}_2\text{O}$ | RKS PBE-D3(BJ) | def2-SVP / RI-J | $2.37 \times 10^{-12}$ | $2.01 \times 10^{-7}$ | ✅ Passed |
-| $\text{H}_2\text{O}$ | RKS PBE-D3(0) | def2-SVP / RI-J | $2.37 \times 10^{-12}$ | $2.01 \times 10^{-7}$ | ✅ Passed |
-| $\text{H}_2\text{O}$ | RKS PBE + PCM (UFF radii, $r_{\text{probe}}=0.4$ Å) | def2-SVP / RI-J / $\varepsilon=78.3553$ | $1.59 \times 10^{-12}$ | $1.25 \times 10^{-7}$ | ✅ Passed |
+## TSUBAME4 CPU / H100 checks
 
-- **Tolerance Criteria**: Energy difference $\Delta E \le 1 \times 10^{-6}\,\text{Ha}$, Force difference $\Delta F \le 1 \times 10^{-5}\,\text{au}$.
-- **Observations**: Both closed-shell and open-shell systems match within sub-microhartree precision across CPU and GPU implementations.
+The final sequential compute-node run on **r4n11** passed all **11 checks**.
+Environment: ASE 3.28.0, PySCF 2.14.0, GPU4PySCF 1.8.1,
+CuPy 13.4.1, pyscf-dispersion 1.5.0, CUDA module 12.8.0.
+Tests run under a 15-minute iqrsh allocation, with two CPU threads.
 
----
+Common settings: def2-SVP, density fitting with def2-universal-jkfit,
+DFT grid level 3, NLC atom grid (50,194) without pruning,
+SCF energy tolerance 1e-10 Hartree and orbital-gradient tolerance 1e-5.
+Hessian settings: grid_response=false, auxbasis_response=2,
+conv_tol_cpscf=1e-9. Exact case overrides are in the committed script.
 
-### 2. 0.6.0 Feature Verification on GPU4PySCF
+| Case | CPU/GPU energy difference (eV) | Max force difference (eV/Angstrom) | Max Hessian difference (eV/Angstrom²) |
+|---|---:|---:|---|
+| `water_pbe` | 3.638e-11 | 8.079e-07 | 3.463e-04 |
+| `oh_vv10` | 3.275e-06 | 1.451e-05 | CPU unsupported; GPU direct check passed |
+| `water_d3zero` | 3.502e-11 | 8.079e-07 | 3.463e-04 |
+| `water_d4` | 3.547e-11 | 8.079e-07 | 3.463e-04 |
+| `water_cosmo` | 4.457e-11 | 3.406e-06 | 2.530e-04 |
+| `water_newton_cosmo` | 1.605e-10 | 4.672e-05 | 2.341e-04 |
+| `oh_newton_vv10` | 5.023e-07 | 3.020e-05 | CPU unsupported; GPU direct check passed |
+| `water_smd` | 4.093e-11 | 6.784e-06 | 1.928e-04 |
+| `rbh_ecp` | 1.364e-12 | 1.018e-08 | 1.066e-05 |
 
-#### Cartesian Hessian API (`calc.get_hessian(atoms)`)
-- **Matrix Dimension**: $(9, 9)$ for $\text{H}_2\text{O}$ ($(3N, 3N)$ Cartesian coordinates in $x, y, z$).
-- **Symmetry Error**: $\|H - H^T\|_{\infty} = 0.00\,\text{eV/Å}^2$ (exact matrix symmetry).
-- **GPU vs CPU Analytical Hessian Deviation**: $\|H_{\text{GPU}} - H_{\text{CPU}}\|_{\infty} = 3.76 \times 10^{-3}\,\text{eV/Å}^2$.
-- **Hybrid Finite-Difference**: Dispersion (D3BJ / D3zero) and implicit solvation (SMD) contributions successfully combined via finite-difference gradient steps.
+Every supported Hessian was also compared with a direct call on the **same
+converged upstream SCF**, separately from cross-device comparisons. The maximum
+same-SCF Hessian difference was **5.47e-10 eV/Angstrom²**, below 1e-7; force
+comparisons used 1e-8 eV/Angstrom. Supported CPU/GPU Hessian differences were
+below 3.47e-4 eV/Angstrom². The cross-device gates were 3e-5 eV for energy,
+6e-4 eV/Angstrom for forces and 1e-2 eV/Angstrom² for Hessians.
 
-#### Checkpoint Management (`checkpoint: {write: ..., read: ...}`)
-- **Atomic File Serialization**: Written to temporary PID-stamped files and atomically committed.
-- **Kit Metadata Embedding**: Embedded directly into the PySCF HDF5 root group `/ase_calculator_kit/attrs/metadata_json`.
-- **Restart Verification**: Restarting an identical geometry from checkpoint reproduced the potential energy with $\Delta E = 3.59 \times 10^{-11}\,\text{eV}$.
+Additional checks verified CPU→GPU checkpoint transfer, CPU/GPU Newton restart
+from an explicitly permitted one-iteration checkpoint, and GPU open-shell
+Newton density projection followed by charge-change rejection of the old guess.
+Checkpoint write/read errors, source-file preservation and changed-geometry
+restart are additionally covered by the local regression tests.
 
-#### Wavefunction & Density Reuse (`reuse_density: true`)
-- **First Step**: Initial SCF converged from scratch in 7 iterations.
-- **Coordinate Perturbation**: Geometry perturbed by $\Delta x = +0.01$ Å.
-- **Second Step**: Projected molecular orbitals via `project_mo_nr2nr` reached full convergence in 6 iterations without SCF oscillations.
+## Limits and numerical interpretation
 
-#### SCF Convergence Algorithm Control (`scf_algorithm: "cdiis"`)
-- CDIIS subspace dimension control (`diis_space: 10`) validated on GPU4PySCF, reaching target convergence in 7 cycles.
-
-#### Open-Shell Spin Diagnostics
-- Evaluated on doublet $\text{OH}^\bullet$ molecule:
-  - $\langle S^2 \rangle_{\text{calculated}} = 0.7516$
-  - $\langle S^2 \rangle_{\text{ideal}} = 0.7500$
-  - Spin Contamination: $\Delta \langle S^2 \rangle = 0.0016$
-  - Net Mulliken Spin Population: $\text{O} = +1.025$, $\text{H} = -0.025$ (total spin = $1.000$).
+- **CPU PySCF 2.14 UKS + NLC/VV10 Hessians are unsupported**, with or without
+  DF. Tests require the explicit error; they do not call this CPU Hessian a
+  successful calculation. Energy/forces and the GPU Hessian are verified.
+- D3zero/D4 and SMD retain upstream finite-difference correction terms, with
+  their step sizes recorded in metadata. There is no whole-system numerical
+  Hessian implementation or implicit CPU fallback in the kit.
+- Symmetry is not exact for every upstream Hessian. The symmetry gate is
+  1e-3 eV/Angstrom²; no automatic symmetrization hides an upstream discrepancy.
+- An additional water/PBE test with **grid_response=true** matched each
+  upstream call, but CPU/GPU Hessians differed by **0.04062 eV/Angstrom²**.
+  The upstream grid-response implementations differ; the primary comparison
+  table uses false explicitly. Do not infer identical vibrational frequencies
+  from matching energies or equal option names. Converge grids and SCF/response
+  thresholds for the intended research calculation.
+- An initially tighter OH/VV10 SCF test did not converge and correctly failed.
+  The final benchmark uses the stated 1e-10 / 1e-5 thresholds; no kit default
+  was relaxed to make that test pass.
+- These tests establish API behavior and numerical agreement under the stated
+  conditions, not convergence of Co/Ru research structures or absence of
+  imaginary modes. Previous research OrbMol states affected by stale caching
+  still require their own recalculation.

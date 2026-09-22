@@ -1,13 +1,13 @@
-# ase-calculator-kit Documentation
+# Documentation
 
-Welcome to the documentation for **ase-calculator-kit**. This kit provides a thin, unified ASE calculator factory for machine-learning interatomic potentials (MLIPs) and molecular DFT backends.
+- [Getting started](getting-started.md): installation, extras, Python versions and separate environments
+- [API and complete examples](api.md): MLIP keywords and DFT configuration
+- [Backends](backends.md): model, head, task and accelerator selection
+- [Molecular inputs](molecular.md): charge, multiplicity, field and state caches
+- [Dispersion](dispersion.md) and [per-model policy](models.md)
+- [Devices](devices.md): measured Apple Silicon support
+- [PySCF / GPU4PySCF](pyscf.md): SCF settings, restart, diagnostics, solvent and Hessians
+- [Validation records](validation-records.md), [earlier validations](validation-history.md), [MatGL validation](matgl-validation.md)
+- [Development](development.md), [implementation guide in Japanese](code-guide_ja.md), [release procedure](releasing.md)
 
-## Documentation Index
-
-- **[Getting Started](getting-started.md)**: Installation options, Python version support, isolated environment instructions (e.g. MACE), and basic usage.
-- **[Backends Reference](backends.md)**: Detailed configuration, parameter tables, and examples for all supported MLIP and DFT engines (SevenNet, CHGNet, MatGL, MatterSim, NequIP, OrbMol, UMA, eSEN, MACE, VASP, Quantum ESPRESSO).
-- **[PySCF & GPU4PySCF Guide](pyscf.md)**: Complete guide to molecular DFT and Hartree-Fock calculations, SCF algorithms (CDIIS, Newton), density reuse, checkpoints, diagnostics, implicit solvation (PCM, SMD), dispersion corrections, and Hessian computation.
-- **[Dispersion Policies](models.md)**: Ground-truth reference for DFT-D3/D4 dispersion compatibility across foundation MLIP models.
-- **[Validation Records](validation-records.md)**: Benchmarks and parity verification results across CPU and GPU hardware (including TSUBAME4 supercomputer records).
-- **[Developer & Release Guide](releasing.md)**: Release checklists and packaging instructions.
-- **[Architecture Guide (Japanese)](code-guide_ja.md)**: Deep dive into design philosophy, state tracking, and lifecycle management.
+[Project overview](../README.md) · [Changelog](../CHANGELOG.md)
