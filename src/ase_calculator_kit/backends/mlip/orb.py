@@ -8,6 +8,7 @@ from ...device import resolve_device
 from ...dispersion import precheck_dispersion_xc
 from ...errors import MissingDependencyError
 from ..base import BaseBackend
+from ._molecular_state import molecular_calculator_type
 
 #: Accepted spellings of the one OrbMol checkpoint this backend loads.
 #:
@@ -157,6 +158,8 @@ class OrbBackend(BaseBackend):
         potential, atoms_adapter = orbmol_v2(
             device=resolved_device, precision=precision, compile=compile
         )
-        return ORBCalculator(
+        bare = ORBCalculator(
             potential, atoms_adapter=atoms_adapter, device=resolved_device, **kwargs
         )
+        bare.__class__ = molecular_calculator_type(type(bare))
+        return bare
