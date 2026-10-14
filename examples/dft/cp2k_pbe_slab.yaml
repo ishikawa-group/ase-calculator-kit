@@ -1,0 +1,44 @@
+calculator: cp2k
+
+profile:
+  command: "env OMP_NUM_THREADS=4 mpirun -np 2 /path/to/cp2k_shell.psmp"
+  data_dir: /path/to/cp2k/data
+
+directory: runs/cp2k/slab
+
+# For atoms.pbc = (True, True, False). Converge the vacuum, grid, basis,
+# k-point mesh and occupations for the chosen material before production use.
+# xc/cutoff are supplied here, so their parameters below must be null.
+inp: |
+  &FORCE_EVAL
+    &DFT
+      &POISSON
+        PERIODIC XY
+        POISSON_SOLVER MT
+      &END POISSON
+      &MGRID
+        CUTOFF [Ry] 400
+      &END MGRID
+      &XC
+        &XC_FUNCTIONAL PBE
+        &END XC_FUNCTIONAL
+      &END XC
+      &SCF
+        EPS_SCF 1.0E-7
+      &END SCF
+    &END DFT
+  &END FORCE_EVAL
+
+parameters:
+  xc: null
+  basis_set: DZVP-MOLOPT-SR-GTH
+  pseudo_potential: GTH-PBE
+  cutoff: null
+  basis_set_file: BASIS_MOLOPT
+  potential_file: POTENTIAL
+  charge: 0
+  multiplicity: 1
+  uks: false
+  poisson_solver: null
+  max_scf: 100
+  stress_tensor: true

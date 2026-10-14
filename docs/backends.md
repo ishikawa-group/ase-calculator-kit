@@ -453,6 +453,16 @@ QE additionally requires `profile.pseudo_dir` and top-level `pseudopotentials`.
 Unknown YAML keys are rejected before execution. See the
 [DFT examples](../examples/dft/README.md) for complete configurations.
 
+## CP2K
+
+`cp2k` requires YAML `profile.command` and `profile.data_dir`; XC, basis,
+pseudopotential and cutoff (eV) must be explicit. Data filenames become absolute.
+Charge/multiplicity are YAML-only and info mismatches raise before cache reuse.
+Construction starts the CP2K shell: use `with` or `close()`. ASE reports
+`free_energy == energy`, disabled stress can return zeros or fail, and slabs
+need explicit Poisson settings in `inp`. See [the CP2K guide](cp2k.md) for
+templates, lifecycle, source checks and limitations.
+
 ## PySCF and GPU4PySCF
 
 See [the molecular DFT guide](pyscf.md) for SCF controls, restart and Hessians.

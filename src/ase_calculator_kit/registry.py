@@ -5,6 +5,7 @@ from __future__ import annotations
 from .backends import (
     BaseBackend,
     CHGNetBackend,
+    Cp2kBackend,
     ESENBackend,
     EspressoBackend,
     FairChemBackend,
@@ -42,6 +43,7 @@ MLIP_BACKENDS: dict[str, type[BaseBackend]] = {
 
 #: Public DFT names accepted by :func:`ase_calculator_kit.get_calculator`.
 DFT_BACKENDS: dict[str, type[BaseBackend]] = {
+    "cp2k": Cp2kBackend,
     "pyscf": PySCFBackend,
     "gpu4pyscf": GPU4PySCFBackend,
     "vasp": VaspBackend,

@@ -12,7 +12,7 @@ say so explicitly instead of silently changing the behavior.
 
 A thin factory layer. It does **not** implement any physics: it maps a name
 plus keywords onto an upstream ASE calculator (`chgnet`, `matgl`, `sevenn`, `mattersim`,
-`nequip`, `fairchem-core`, `ase.calculators.vasp`, `ase.calculators.espresso`)
+`nequip`, `fairchem-core`, `ase.calculators.vasp`, `ase.calculators.espresso`, `ase.calculators.cp2k`)
 and returns an ASE calculator. `orb-models` is in that list too. New behavior
 belongs upstream unless it is about *selection*, *validation*, or
 *reproducibility*.
@@ -50,7 +50,7 @@ src/ase_calculator_kit/
                      matgl_chgnet.py, _matgl_pbc.py (MatGL compatibility adapters)
                      orb.py (OrbMol-v2; outside `all` — invariant 11)
                      mace.py (separate environment — invariant 7)
-  backends/dft/      vasp.py espresso.py pyscf.py _pyscf_support.py
+  backends/dft/      vasp.py espresso.py cp2k.py pyscf.py _pyscf_support.py
   py.typed           PEP 561 marker; keep it listed in [tool.setuptools.package-data]
 tests/               fast unit tests + test_singlepoint_cpu.py (marked slow)
 constraints.txt      exact tested versions behind the pyproject ranges
@@ -64,6 +64,9 @@ Adding a backend touches, in order: `backends/mlip/<name>.py`,
 `pyproject.toml` (extra + `all`), `constraints.txt` (exact tested version),
 `errors.py` (extra mapping), tests, README, `docs/models.md`, and the
 `extras-resolve` expectations in `.github/workflows/ci.yml`.
+For external DFT backends use `backends/dft/<name>.py`, its `__init__.py`,
+config envelope validation and DFT examples/docs. CP2K is already part of ASE:
+it needs no extra, dispersion policy row, constraint or extras-resolve change.
 
 ## Invariants
 
@@ -76,6 +79,9 @@ These are deliberate design decisions, not oversights.
    file, not in scattered Python call sites.
 2. **DFT execution is explicit.** VASP configs require `profile.command`; QE
    requires `profile.command`, `profile.pseudo_dir`, and `pseudopotentials`.
+   CP2K requires `profile.command`, `profile.data_dir` and explicit parameters
+   `xc`, `basis_set`, `pseudo_potential`, `cutoff` (eV); null delegates to inp.
+   Reject auto pseudopotentials; resolve data filenames to absolute paths.
    Never fall back to environment variables (`VASP_COMMAND`, `ASE_*`) — a run
    must be reproducible from the config alone.
 3. **Missing NNP packages surface as `MissingDependencyError`,** naming the
@@ -415,3 +421,24 @@ Three things make this go wrong, and all three have happened here:
 - Hessian auxbasis_response is an integer 0/1/2, not a Boolean. Record upstream
   hybrid correction steps and grid-response differences. Direct-upstream agreement
   is separate from CPU/GPU parity and finite-difference convergence tests.
+
+
+## CP2K invariants
+
+- CP2K construction starts a shell. Use close() or with; never imply that factory
+  creation is side-effect-free. Keep CP2K import inside create_calculator().
+- Charge/multiplicity/uks are YAML-only (option b). Optional atoms.info charge/spin
+  must match explicit non-null YAML values; info spin is multiplicity. Check
+  before cached properties and direct calculate, not only inside calculate.
+  Multiplicity > 1 enables unspecified/null uks; explicit False is an error.
+  ASE 3.28 calculate releases force env on numbers changes only (293–297).
+- ASE 3.28 requires cp2k_shell in the command (cp2k.py:536); downloaded PyPI
+  3.29.0 removes the assert (533–539). Gate the check at 3.29.0.
+- Use absolute directory and slash-free label cp2k. ASE combines them for
+  .inp/.out and GLOBAL/PROJECT. Data paths must be absolute because the shell
+  inherits Python cwd. Templates must handle any additional file references.
+- ASE equates free_energy and energy even with smearing, always requests stress
+  (disabled analytical stress can yield zeros/errors), and auto Poisson handles
+  nonperiodic inputs only. Partial PBC needs explicit template Poisson settings.
+  Do not duplicate ASE-generated keywords; GLOBAL/PROJECT is always generated.
+  See docs/cp2k.md for source evidence and examples. Real CP2K validation is pending.

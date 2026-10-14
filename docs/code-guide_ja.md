@@ -17,7 +17,7 @@ get_calculator("sevennet", modal="matpes_pbe")
               └─ 必要な場合だけD3 Calculatorと加算
 ```
 
-VASPとQuantum ESPRESSOも同じ入口を使いますが、計算条件はPythonの任意キーワードではなく
+VASP・Quantum ESPRESSO・CP2Kも同じ入口を使いますが、計算条件はPythonの任意キーワードではなく
 YAMLで明示します。最終的に使われた条件は`write_resolved_config=True`で保存できます。
 
 ## 各モジュールの責務
@@ -25,7 +25,7 @@ YAMLで明示します。最終的に使われた条件は`write_resolved_config
 - `factory.py`: 公開API。calculator名の検証とbackend呼び出しだけを行う。
 - `registry.py`: 名前とbackendの対応。新しいbackendを追加する際の索引。
 - `backends/mlip/`: MLIPごとのmodel/task/modal/headと上流APIの違いを明示する。
-- `backends/dft/`: YAML条件をASEのVASP/QE Calculatorへ変換する。
+- `backends/dft/`: YAML条件をASEのVASP/QE/CP2K Calculatorへ変換する。
 - `device.py`: `auto`をcpu/cuda/mpsのいずれかへ解決する。
 - `dispersion.py`: 学習参照汎関数とD3二重計上防止の唯一の実装。
 - `docs/models.md`: `dispersion.py`の化学的根拠を人が確認する表。
@@ -285,3 +285,37 @@ YAMLと異なるときはキャッシュを返す前にもエラーにし、info
 未収束の再開は明示的に許可する必要があり、失敗診断と有効な計算結果を混同しない。
 設定検証と保存・診断の補助処理は`_pyscf_support.py`、実行順序は`pyscf.py`に置く。
 詳しい契約と検証範囲は[pyscf.md](pyscf.md)と[validation-records.md](validation-records.md)。
+
+
+## CP2K backend
+
+`backends/dft/cp2k.py` の `Cp2kBackend` はASE CP2Kの検証用サブクラスを返す。
+DFTのconfig-only規則は同じで、`profile.command`・`profile.data_dir`を必須とし、
+環境変数へのフォールバックを使わない。`config.py`はCP2KをQEと別に検証する。
+`xc`・`basis_set`・`pseudo_potential`・`cutoff`のキーを必須とし、`null`は雛形に
+委ねる。cutoffはeV。`pseudo_potential: auto`は関数に対応する擬ポテンシャルが
+見つからない時のGTH-PBEへの置換を避けるため拒否する。
+parametersはASE `CP2K.default_parameters`のキーだけ許す。データファイルは
+`data_dir`基準の絶対パスへ解決し、存在を確認する。`directory`を絶対パスにし、
+labelは`cp2k`として渡す。ASEが解決したlabelを`.inp`・`.out`・PROJECTに使うため、
+出力接頭辞が作業ディレクトリを指す。
+
+電子状態は方式(b)のYAML限定。`charge`は整数、`multiplicity`は1以上の整数で、
+多重度>1なら未指定/nullの`uks`をTrueにし、明示Falseはエラーにする。
+`atoms.info`のcharge/spinは整合確認専用で、spinは多重度。存在する場合は
+対応する明示的な非null YAML値と一致する必要があり、キャッシュ返却前と
+直接calculate前の両方で確認する。CP2K parametersには`spin`を追加しない。
+PySCF YAMLのspin=2Sとは区別する。ASE 3.28.0の`calculate()`はnumbers変化でだけ
+force envを解放する(cp2k.py:293–297)。infoから状態を更新しない設計で、
+古いforce envの電子状態を黙って再利用することを防ぐ。
+
+ASE 3.28.0のcp2k.py:536はcommandに`cp2k_shell`を要求するが、PyPI最新の
+3.29.0 wheelの同ファイル:533–539ではassertが削除されていた。
+kitは3.29.0未満でだけこの検査を行い、依存範囲・constraintsは維持する。
+生成時点でプロセスが起動するため`with`または`close()`が必要。
+`free_energy`は`energy`と同値で、スメアのE0/自由エネルギーを区別できない。
+ASEは常にGET_STRESSするため、応力を無効にすると0またはshellエラーになりうる。
+部分周期スラブには雛形で`PERIODIC XY`と対応するPoisson solverを指定する。
+詳しい制約と雛形は[CP2Kガイド](cp2k.md)を参照。
+実機CP2K検証はTSUBAMEで別途行う。速いテストは偽の計算機と偽shellを使い、
+slow H2テストは実行ファイル/データのテスト用環境変数が無ければskipする。

@@ -116,7 +116,7 @@ execution commands and QE requires explicit pseudopotential settings.
 | `uma` | UMA with task selection | [Models](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/backends.md) |
 | `esen` | OMol25 conserving / direct-force checkpoints | [Models](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/backends.md) |
 | `mace` | MH-1, OMAT/MatPES, OMOL-0, POLAR-1 | [Models](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/backends.md) |
-| `vasp`, `qe` | ASE VASP / Quantum ESPRESSO | [Examples](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/examples/dft/README.md) |
+| `vasp`, `qe`, `cp2k` | ASE VASP / Quantum ESPRESSO / [CP2K](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/cp2k.md) | [Examples](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/examples/dft/README.md) |
 | `pyscf`, `gpu4pyscf` | Molecular HF/DFT, gradients and Hessians | [Guide](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/docs/pyscf.md) |
 
 Dispersion is model-dependent; the kit rejects double-counting.

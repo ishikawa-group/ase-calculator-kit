@@ -57,8 +57,8 @@ atoms.calc = get_calculator("vasp", config="examples/dft/vasp_pbe_static.yaml")
 atoms.calc = get_calculator("qe", config="examples/dft/qe_pbe_static.yaml")
 ```
 
-For VASP and QE, arbitrary keyword arguments are intentionally rejected to keep
-calculation conditions explicit and reproducible:
+For VASP, QE and CP2K, arbitrary keyword arguments are intentionally rejected
+to keep calculation conditions explicit and reproducible:
 
 ```python
 get_calculator("vasp", encut=520)  # TypeError
@@ -66,7 +66,10 @@ get_calculator("vasp", encut=520)  # TypeError
 
 For reproducibility, VASP configs must explicitly specify `profile.command`
 (QE additionally requires `profile.pseudo_dir` and `pseudopotentials`);
-environment-variable-only execution is intentionally not used by this wrapper.
+CP2K requires `profile.command` and `profile.data_dir`, plus explicit XC,
+basis, pseudopotential and cutoff. It starts a shell during construction: use
+`with` or `close()`. See [CP2K configuration and limitations](cp2k.md).
+Environment-variable-only execution is intentionally not used by this wrapper.
 
 Use `overrides=` for small dynamic changes:
 
@@ -109,6 +112,7 @@ atoms.calc = get_calculator(
 | `uma` | MLIP | `fairchem` |
 | `esen` | MLIP (OMol25) | — |
 | `vasp` | DFT | — |
+| `cp2k` | DFT | — |
 | `qe` | DFT | `espresso`, `quantum-espresso` |
 | `pyscf` | Molecular HF/DFT (CPU) | — |
 | `gpu4pyscf` | Molecular HF/DFT (CUDA) | — |
@@ -160,7 +164,7 @@ from ase_calculator_kit import (
 )
 
 available_mlip_models()     # ['chgnet', 'fairchem', 'mace', 'matgl-chgnet', 'mattersim', 'nequip', 'orb', 'sevennet', 'tensornet', 'uma']
-available_dft_calculators() # ['espresso', 'qe', 'quantum-espresso', 'vasp']
+available_dft_calculators() # ['cp2k', 'espresso', 'gpu4pyscf', 'pyscf', 'qe', 'quantum-espresso', 'vasp']
 available_calculators()     # both of the above; available_models() is an alias
 attach_calculator(atoms, "uma", task="omat")  # sets atoms.calc, returns atoms
 ```

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .base import BaseBackend
-from .dft import EspressoBackend, GPU4PySCFBackend, PySCFBackend, VaspBackend
+from .dft import Cp2kBackend, EspressoBackend, GPU4PySCFBackend, PySCFBackend, VaspBackend
 from .mlip import (
     CHGNetBackend,
     ESENBackend,
@@ -18,6 +18,7 @@ from .mlip import (
 )
 
 __all__ = [
+    "Cp2kBackend",
     "BaseBackend",
     "CHGNetBackend",
     "ESENBackend",

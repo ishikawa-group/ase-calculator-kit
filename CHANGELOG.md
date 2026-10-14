@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.6.1
+
+Add the config-only ASE CP2K DFT backend (release preparation: 2026-10-14).
+
+- Require explicit command/data directory and XC, basis, pseudopotential and
+  cutoff (eV), with null delegation to input templates. Reject auto potentials,
+  unknown YAML/parameter keys and missing data files before starting the shell.
+- Resolve data paths and run directory absolutely; preserve merged config and
+  template text through the existing resolved-config option.
+- Keep electronic state YAML-only: validate optional atoms.info charge/spin
+  against charge/multiplicity before cached results or calculations. Open-shell
+  multiplicity enables UKS unless explicitly disabled, which raises.
+- Check for cp2k_shell on ASE < 3.29.0; the inspected PyPI 3.29.0 source removes
+  the command-name assert. Keep the ASE dependency range and tested pin unchanged.
+- Start the shell inside `directory` with a bare `GLOBAL/PROJECT cp2k`: CP2K aborts
+  on string keywords over 80 characters, which an absolute PROJECT path exceeds.
+- Add H2/slab templates and document shell lifecycle, energy/free_energy aliasing,
+  disabled-stress limitations and explicit partial-PBC Poisson settings.
+- Add shell-free unit coverage and an opt-in real H2 slow test. Numerical CP2K
+  H2 (PBE, DZVP-MOLOPT-SR-GTH, 400 Ry) verified on TSUBAME with CP2K 2026.2
+  (fork 6da3615c3f): -1.161622 Ha with ASE 3.28.0 (cp2k_shell) and 3.29.0 (`-s`).
+
 ## 0.6.0
 
 Fix molecular input caches and expose advanced upstream PySCF/GPU4PySCF controls.

@@ -8,7 +8,7 @@ import ase_calculator_kit as kit
 from ase_calculator_kit.registry import BACKENDS, DFT_BACKENDS
 
 
-@pytest.mark.parametrize("name", ["vasp", "qe", "pyscf", "gpu4pyscf"])
+@pytest.mark.parametrize("name", ["vasp", "qe", "cp2k", "pyscf", "gpu4pyscf"])
 def test_dft_requires_config(name):
     with pytest.raises(TypeError, match="requires config"):
         kit.get_calculator(name)
@@ -18,6 +18,7 @@ def test_dft_requires_config(name):
     ("name", "kwargs"),
     [
         ("vasp", {"encut": 520}),
+        ("cp2k", {"xc": "PBE"}),
         ("qe", {"pseudo_dir": "/path/to/pseudos"}),
     ],
 )
@@ -31,7 +32,7 @@ def test_get_dft_calculator_rejects_mlip_name():
         kit.get_dft_calculator("chgnet")
 
 
-@pytest.mark.parametrize("name", ["vasp", "qe", "espresso", "quantum-espresso"])
+@pytest.mark.parametrize("name", ["vasp", "qe", "cp2k", "espresso", "quantum-espresso"])
 def test_dft_aliases_route_to_backend(monkeypatch, name):
     seen = {}
 

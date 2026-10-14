@@ -11,6 +11,7 @@ from ase_calculator_kit.registry import BACKENDS, DFT_BACKENDS, MLIP_BACKENDS
 def test_available_models():
     expected = [
         "chgnet",
+        "cp2k",
         "esen",
         "espresso",
         "fairchem",
@@ -44,6 +45,7 @@ def test_available_models():
         "uma",
     ]
     assert kit.available_dft_calculators() == [
+        "cp2k",
         "espresso",
         "gpu4pyscf",
         "pyscf",

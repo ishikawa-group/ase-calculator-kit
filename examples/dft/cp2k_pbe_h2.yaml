@@ -1,0 +1,36 @@
+calculator: cp2k
+
+profile:
+  command: "env OMP_NUM_THREADS=4 mpirun -np 2 /path/to/cp2k_shell.psmp"
+  data_dir: /path/to/cp2k/data
+
+directory: runs/cp2k/h2
+
+# ASE supplies coordinates and CELL, including PERIODIC NONE for pbc=False.
+# Disable the automatic Poisson section below to avoid duplicate keywords.
+inp: |
+  &FORCE_EVAL
+    &DFT
+      &POISSON
+        PERIODIC NONE
+        POISSON_SOLVER MT
+      &END POISSON
+      &SCF
+        EPS_SCF 1.0E-7
+      &END SCF
+    &END DFT
+  &END FORCE_EVAL
+
+parameters:
+  xc: PBE
+  basis_set: DZVP-MOLOPT-SR-GTH
+  pseudo_potential: GTH-PBE
+  cutoff: 5442.3  # eV, NOT Ry (400 Ry; 600 eV leaves H2 0.39 Ha unconverged)
+  basis_set_file: BASIS_MOLOPT
+  potential_file: POTENTIAL
+  charge: 0
+  multiplicity: 1
+  uks: false
+  poisson_solver: null
+  max_scf: 100
+  stress_tensor: true

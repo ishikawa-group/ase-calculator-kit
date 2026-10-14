@@ -10,7 +10,7 @@ from ase_calculator_kit import get_calculator
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("calculator", choices=["vasp", "qe", "espresso", "quantum-espresso"])
+    parser.add_argument("calculator", choices=["vasp", "qe", "cp2k", "espresso", "quantum-espresso"])
     parser.add_argument("config")
     parser.add_argument("--directory", help="override the working directory")
     parser.add_argument(
@@ -27,7 +27,11 @@ def main() -> None:
         overrides=overrides,
         write_resolved_config=args.write_resolved_config,
     )
-    print(f"Created {type(calc).__module__}.{type(calc).__name__}")
+    try:
+        print(f"Created {type(calc).__module__}.{type(calc).__name__}")
+    finally:
+        if args.calculator == "cp2k":
+            calc.close()
 
 
 if __name__ == "__main__":

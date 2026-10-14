@@ -13,6 +13,7 @@ _CALCULATOR_ALIASES = {
     "quantum-espresso": "qe",
     "qe": "qe",
     "vasp": "vasp",
+    "cp2k": "cp2k",
 }
 
 
@@ -112,12 +113,21 @@ def validate_external_dft_config(resolved: dict[str, Any], name: str) -> None:
     top = {"calculator", "profile", "directory", "parameters"}
     if name == "qe":
         top.add("pseudopotentials")
+    elif name == "cp2k":
+        top.add("inp")
     validate_mapping_keys(resolved, top, f"{name} config")
     profile = resolved.get("profile", {})
-    allowed = {"command", "txt"} if name == "vasp" else {"command", "pseudo_dir"}
+    if name == "vasp":
+        allowed, required = {"command", "txt"}, {"command"}
+    elif name == "qe":
+        allowed = required = {"command", "pseudo_dir"}
+    elif name == "cp2k":
+        allowed = required = {"command", "data_dir"}
+    else:
+        raise ValueError(f"Unknown external DFT backend: {name}")
     validate_mapping_keys(profile, allowed, f"{name} profile")
-    for key in ({"command"} if name == "vasp" else {"command", "pseudo_dir"}):
-        types = (str, Path) if key == "pseudo_dir" else (str,)
+    for key in required:
+        types = (str, Path) if key in {"pseudo_dir", "data_dir"} else (str,)
         if not isinstance(profile.get(key), types) or not str(profile[key]).strip():
             raise ValueError(f"{name} config requires a nonempty profile.{key}.")
     if not isinstance(resolved.get("parameters", {}), dict):
