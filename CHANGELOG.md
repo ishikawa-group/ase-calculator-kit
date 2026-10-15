@@ -14,6 +14,11 @@ Make SevenNet's FlashTP acceleration a checked option (release preparation: 2026
 - FlashTP composes with `dispersion=True` (the D3 term is unchanged).
 - Add `tests/tsubame_validation_062_flash.py`, an H100 check comparing FlashTP
   and e3nn energies/forces on a 309-atom Pt/Co particle with an O/OH overlayer.
+  Measured on TSUBAME4 (H100 MIG 4g.47gb, sevenn 0.13.0, torch 2.11.0+cu128,
+  FlashTP v0.1.1 built for sm_90; 369 atoms, `7net-omni`/`matpes_pbe`):
+  identical energies (|ΔE| < 2e-11 eV/atom), max |ΔF| = 1.2e-6 eV/Å, and a
+  force call 5.1× faster than e3nn (4.1× with D3(BJ), whose CPU-side setup is
+  unchanged).
 
 ## 0.6.1
 

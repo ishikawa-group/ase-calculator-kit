@@ -175,7 +175,9 @@ with a warning and quietly runs plain e3nn. Here the request is strict instead:
 
 `dispersion=True` wraps the FlashTP model exactly like the plain one; the D3
 term is torch-dftd's and does not use FlashTP. `tests/tsubame_validation_062_flash.py`
-is the GPU check behind the agreement claim.
+is the GPU check behind the agreement claim. On an H100 MIG slice (369 atoms,
+`matpes_pbe`) it measured identical energies, forces within 1.2e-6 eV/Å, and
+a 5.1× faster force call (4.1× with D3).
 
 ### NequIP OAM `model`
 
