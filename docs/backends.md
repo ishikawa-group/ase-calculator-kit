@@ -142,6 +142,41 @@ functional or benchmark protocol.
 
 Single-fidelity models such as `7net-0` do not take `modal`; pass `modal=None`.
 
+### SevenNet FlashTP (`enable_flash=`)
+
+[FlashTP](https://github.com/SNU-ARC/flashTP) replaces SevenNet's channel-wise
+tensor products with fused, sparsity-aware CUDA kernels. It changes the kernels,
+not the model, so energies agree with the plain e3nn path to float32 round-off.
+It is not on PyPI; build it against the torch already in the environment, with
+a CUDA toolkit (nvcc) of 12 or newer that matches that torch:
+
+```bash
+module load cuda/12.8.0          # or any nvcc matching torch.version.cuda
+CUDA_ARCH_LIST="90" pip install --no-build-isolation \
+    git+https://github.com/SNU-ARC/flashTP.git@v0.1.1
+```
+
+```python
+atoms.calc = get_calculator(
+    "sevennet", model="7net-omni", modal="matpes_pbe",
+    device="cuda", enable_flash=True, dispersion=True,
+)
+```
+
+sevenn answers a FlashTP request it cannot honour (package missing, no GPU)
+with a warning and quietly runs plain e3nn. Here the request is strict instead:
+
+| Situation | Result |
+|---|---|
+| `flashTP_e3nn` not importable | `MissingDependencyError` with the install command, before the model loads |
+| `device` is not CUDA | `ValueError`, before the model loads |
+| `enable_cueq=True` or `enable_oeq=True` as well | `ValueError` (sevenn takes exactly one accelerator) |
+| Model built, but no `IrrepsScatterGatterFusedConvolution` layer in it | `RuntimeError` (sevenn fell back) |
+
+`dispersion=True` wraps the FlashTP model exactly like the plain one; the D3
+term is torch-dftd's and does not use FlashTP. `tests/tsubame_validation_062_flash.py`
+is the GPU check behind the agreement claim.
+
 ### NequIP OAM `model`
 
 | `model` | Use for |

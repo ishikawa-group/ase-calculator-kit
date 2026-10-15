@@ -58,6 +58,45 @@ def _resolve_modal(model: str, modal: str | None) -> str | None:
     return None
 
 
+#: Class sevenn swaps in for every ``IrrepsConvolution`` when FlashTP is active
+#: (``sevenn.nn.flash_helper.patch_convolution``). Its presence in the built
+#: model is the only reliable evidence that FlashTP is really in use: sevenn
+#: answers a missing ``flashTP_e3nn`` or a CPU device with a warning and falls
+#: back to plain e3nn, so a run asked to be fast would silently not be.
+_FLASH_CONVOLUTION = "IrrepsScatterGatterFusedConvolution"
+
+
+def _check_flash_request(
+    resolved_device: str, *, enable_cueq: bool, enable_oeq: bool
+) -> None:
+    """Refuse a FlashTP request that sevenn would quietly downgrade."""
+    if enable_cueq or enable_oeq:
+        raise ValueError(
+            "enable_flash=True cannot be combined with enable_cueq or "
+            "enable_oeq: sevenn replaces the tensor products with exactly one "
+            "accelerator."
+        )
+    if not resolved_device.startswith("cuda"):
+        raise ValueError(
+            f"enable_flash=True needs a CUDA device, got device={resolved_device!r}. "
+            "FlashTP is a set of CUDA kernels; on CPU or MPS sevenn would fall "
+            "back to e3nn with only a warning."
+        )
+    try:
+        import flashTP_e3nn  # noqa: F401
+    except ImportError as exc:
+        raise MissingDependencyError("flashTP_e3nn") from exc
+
+
+def _uses_flash(calc: Calculator) -> bool:
+    """Whether the calculator's model actually runs FlashTP convolutions."""
+    model = getattr(calc, "model", None)
+    modules = getattr(model, "modules", None)
+    if modules is None:
+        return False
+    return any(type(m).__name__ == _FLASH_CONVOLUTION for m in modules())
+
+
 def _policy_key(model: str, modal: str | None) -> str:
     """The dispersion-policy key: the effective modal, else the model itself.
 
@@ -163,9 +202,22 @@ class SevenNetBackend(BaseBackend):
             molecular reference data, and ions or open-shell systems cannot be
             specified. Use ``get_calculator("uma", task="omol")`` when the
             charge and spin of the system must be set explicitly.
-        enable_cueq, enable_flash:
-            Acceleration flags; only enable when the local SevenNet/CUDA stack
-            supports them.
+        enable_cueq:
+            Use cuEquivariance tensor products; only enable when the local
+            SevenNet/CUDA stack supports them.
+        enable_flash:
+            Use FlashTP's fused tensor-product kernels (CUDA only). FlashTP is
+            not on PyPI: build it against the installed torch with
+            ``pip install --no-build-isolation
+            git+https://github.com/SNU-ARC/flashTP.git@v0.1.1``. sevenn itself
+            only *warns* and falls back to e3nn when FlashTP is missing or the
+            device is not CUDA, so here the request is checked before the model
+            is loaded (``MissingDependencyError`` / ``ValueError``) and the
+            built model is checked afterwards (``RuntimeError`` if its
+            convolutions were not replaced). Cannot be combined with
+            ``enable_cueq`` or ``enable_oeq``. FlashTP changes the kernels,
+            not the model: energies agree with the e3nn path to float32
+            round-off.
         dispersion, dispersion_xc:
             Add a Grimme-D3(BJ) correction. Allowed for the modals whose
             reference functional excludes dispersion (``mpa``, ``omat24``,
@@ -197,6 +249,12 @@ class SevenNetBackend(BaseBackend):
             dispersion_cutoff_smoothing=dispersion_cutoff_smoothing,
         )
         resolved_device = resolve_device(device, allow_mps=True)
+        if enable_flash:
+            _check_flash_request(
+                resolved_device,
+                enable_cueq=enable_cueq,
+                enable_oeq=bool(kwargs.get("enable_oeq", False)),
+            )
 
         try:
             from sevenn.calculator import SevenNetCalculator
@@ -213,6 +271,12 @@ class SevenNetBackend(BaseBackend):
             params["modal"] = resolved_modal
         params.update(kwargs)
         bare = SevenNetCalculator(**params)
+        if enable_flash and not _uses_flash(bare):
+            raise RuntimeError(
+                "enable_flash=True was requested, but the loaded SevenNet model "
+                f"contains no {_FLASH_CONVOLUTION} layer: sevenn fell back to "
+                "e3nn. Check its warnings (GPU visibility, flashTP_e3nn build)."
+            )
 
         if d3_xc is not None:
             return wrap_with_d3(

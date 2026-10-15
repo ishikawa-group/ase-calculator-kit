@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.2
+
+Make SevenNet's FlashTP acceleration a checked option (release preparation: 2026-10-15).
+
+- `enable_flash=True` is validated before the model loads: a missing
+  `flashTP_e3nn` raises `MissingDependencyError` naming the git install command
+  (FlashTP is not on PyPI), a non-CUDA device raises `ValueError`, and so does
+  combining it with `enable_cueq` / `enable_oeq`.
+- After loading, the model must contain FlashTP's fused convolution layers;
+  sevenn otherwise only warns and falls back to e3nn, which used to return a
+  slow calculator that claimed to be fast. That case now raises `RuntimeError`.
+- FlashTP composes with `dispersion=True` (the D3 term is unchanged).
+- Add `tests/tsubame_validation_062_flash.py`, an H100 check comparing FlashTP
+  and e3nn energies/forces on a 309-atom Pt/Co particle with an O/OH overlayer.
+
 ## 0.6.1
 
 Add the config-only ASE CP2K DFT backend (release preparation: 2026-10-14).

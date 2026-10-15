@@ -47,6 +47,8 @@ _INSTALL_NOTES = {
 #: never be an extra here. It still has to be *nameable* when something needs
 #: it, which is what this table is for.
 #:
+#: ``flashTP_e3nn`` is SevenNet's optional FlashTP accelerator.
+#:
 #: ``graph_longrange`` is the module namespace of WillBaldwin0's
 #: ``graph_electrostatics``, and MACE-Polar's published checkpoints unpickle
 #: classes from it. Note the mismatch: the repository is called
@@ -54,6 +56,14 @@ _INSTALL_NOTES = {
 #: ``graph_longrange``, so pip refuses the ``graph_electrostatics @ git+...``
 #: spelling ("has inconsistent name") and the bare URL is the form that works.
 _DIRECT_INSTALLS = {
+    # FlashTP (SevenNet's fused tensor products) is a CUDA extension compiled
+    # against the torch already installed, hence --no-build-isolation; it needs
+    # a CUDA toolkit (nvcc) >= 12 matching that torch. CUDA_ARCH_LIST="90"
+    # pins the build to H100 when the build host has no GPU.
+    "flashTP_e3nn": (
+        "pip install --no-build-isolation "
+        "git+https://github.com/SNU-ARC/flashTP.git@v0.1.1"
+    ),
     "graph_longrange": (
         "pip install "
         "git+https://github.com/WillBaldwin0/graph_electrostatics.git@v0.4.0"
