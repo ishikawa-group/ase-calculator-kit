@@ -325,62 +325,80 @@ For the molecular task (`omol`), set `atoms.info["charge"]` and
 UMA's speed/precision trade lives. It reaches fairchem's `get_predict_unit()`,
 so it must be set when the calculator is created, not afterwards.
 
-| `inference_settings` | TF32 | `merge_mole` | `compile` | Use for |
-|---|:--:|:--:|:--:|---|
-| `"default"` | ✗ | ✅ | ✅ | MD and relaxation — one system, many steps |
-| `"turbo"` | ✅ | ✅ | ✅ | the same, trading a little precision for speed |
-| `"batch"` | ✗ | ✗ | ✗ | many different structures |
-| `"traineval"` | ✗ | ✗ | ✗ | reproducing fairchem's training/eval numbers |
+| `inference_settings` | on CUDA | model | Use for |
+|---|:--:|---|---|
+| `"nitro"` (default) | TF32 | UMA Nitro kernels + CUDA graphs | MD and relaxation — one system, many steps |
+| `"default"` | TF32 | fairchem's alias of `"nitro"` | — |
+| `"multigpu"` | TF32 | `merge_mole` + `compile` | multi-worker inference (`workers > 1`) |
+| `"high-precision"` | FP32 | `merge_mole` + `compile` | model comparisons, Hessians |
+| `"batch"` | FP32 | unmerged | many different structures |
+| `"traineval"` | FP32 | unmerged, graph generation v1 | reproducing fairchem's training/eval numbers |
 
 ```python
-atoms.calc = get_calculator("uma", task="omat")                          # MD
-atoms.calc = get_calculator("uma", task="omat", inference_settings="turbo")
+atoms.calc = get_calculator("uma", task="omat")                          # MD (Nitro)
+atoms.calc = get_calculator("uma", task="omat", inference_settings="high-precision")
 atoms.calc = get_calculator("uma", task="omat", inference_settings="batch")
 ```
 
-Two things about this are easy to get backwards.
+**The default is UMA Nitro** (since 0.6.3, which requires fairchem-core 2.24).
+Nitro is a standalone inference model for `uma-s-1p2p1` — the kit's default
+checkpoint — with fused Triton/CuTe kernels and CUDA graphs, for one system per
+call on a CUDA GPU of compute capability 8.x or newer. When it cannot serve a
+request (another checkpoint, the CPU, an older GPU, a change of composition,
+task, charge or spin), fairchem logs `UMA Nitro cannot serve this request` and
+runs `"multigpu"` instead, falling further back to the unmerged model if
+needed. The call still succeeds; on the CPU every UMA calculator takes this
+path. `"turbo"` was removed in fairchem-core 2.24 and is refused here with a
+pointer to `"nitro"` / `"multigpu"`.
 
-**The default is already the MD fast path.** Since fairchem-core 2.22,
-`"default"` merges the MOLE experts *and* compiles the model; `"turbo"` is that
-same path with TF32 switched on. So `turbo` is not what turns compilation on.
+Measured with fairchem-core 2.24.0 and torch 2.13.0 on an H100 (MIG 3g.47gb)
+with [`tests/tsubame_validation_063_nitro.py`](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/tests/tsubame_validation_063_nitro.py):
+rattled fcc Cu, `task="omat"`, twelve frames of the same system, steady state
+averaged over the last eight, differences against `"high-precision"` (FP32):
 
-Measured on an H100 (MIG 4g.47gb), 27-atom fcc Cu, `task="omat"`, twelve frames
-of the same system, averaged over the last eight:
+| `inference_settings` | 27 atoms: first step | steady | 512 atoms: steady | max ΔE | ΔF rmse |
+|---|--:|--:|--:|--:|--:|
+| `"high-precision"` | 37.5 s | 21.8 ms | 96.6 ms | — | — |
+| `"nitro"` (default) | 9.3 s | **5.4 ms** | **31.4 ms** | 0.15 meV/atom | 0.0004 eV/Å |
+| `"multigpu"` | 25.4 s | 13.3 ms | 41.7 ms | 0.14 meV/atom | 0.0004 eV/Å |
+| `"batch"` | 0.26 s | 55.5 ms | 269 ms | 0.0003 meV/atom | 0.0000005 eV/Å |
 
-| `inference_settings` | first step | steady state | ΔE vs `default` | ΔF rmse |
-|---|--:|--:|--:|--:|
-| `"default"` | 59.4 s | **13.5 ms** | — | — |
-| `"turbo"` | 48.2 s | **12.8 ms** | 3.69 meV (0.137 meV/atom) | 0.0004 eV/Å |
-| `"batch"` | 0.38 s | **56.7 ms** | 0.005 meV | 0.000001 eV/Å |
+First-step times are with the Triton/inductor caches already populated by an
+earlier run; from a cold cache the same job took 85.5 s (`high-precision`),
+21.3 s (`nitro`) and 60.6 s (`multigpu`). Steady-state `multigpu` also varied
+between runs on different GPUs (13.3 vs 26.9 ms); Nitro against FP32 did not
+(5.4 vs 21.8 ms here, 4.1 vs 22.8 ms in the first run).
 
-So on this hardware `turbo` bought about 5 %, and cost 0.137 meV/atom. That
-error is the same size as the gap between two *different* models — OrbMol-v2 and
-UMA differ by 0.08–0.8 meV/atom on small molecules — so turning it on by default
-would put a numerical artefact where a model difference is supposed to be. It
-stays opt-in here, as it does in fairchem. Turn it on when you are running one
-model and want throughput; leave it off when the number is going into a
-comparison. On CPU it does nothing at all.
+Nitro is 4× faster than the FP32 path for 27 atoms and 3× for 512, and its
+error is the TF32 error `multigpu` already has. The run also confirmed that the
+default really ran `UMANitroModel`, that a vacancy (same element fractions)
+keeps Nitro, and that substituting one Cu with Ni falls back with `Compositions
+differ from merged model` and still answers. (The 2.22 `default` — merge +
+compile in FP32 — measured 13.5 ms on the same 27-atom system on a MIG
+4g.47gb slice.)
 
-The same table says `merge_mole` + `compile` is numerically honest: `"batch"`,
-which uses neither, lands within 0.005 meV of `"default"`. The 4× per-step cost
-is what you give up for skipping them.
+**Nitro computes in TF32, which is reduced precision.** Up to 0.6.2 this package
+kept TF32 opt-in, because it exists to compare models and a 0.1 meV/atom
+artefact is the size of a model difference. With Nitro the speed gain is no
+longer a few per cent, so the default follows fairchem; fairchem logs `Running
+in a reduced-precision mode` when it applies. **When a number goes into a
+comparison between models, pass `inference_settings="high-precision"`**, the
+FP32 fast path. Use it for Hessians too: Nitro has no double backward. TF32 is
+applied inside a context manager around UMA's own forward pass, which restores
+`torch.get_float32_matmul_precision()` afterwards — so it does not leak reduced
+precision into other calculators sharing the process. On CPU it does nothing.
 
-TF32 is applied inside a context manager around UMA's own forward pass, which
-restores `torch.get_float32_matmul_precision()` afterwards — so `turbo` does not
-leak reduced precision into other calculators sharing the process.
-
-**`merge_mole` assumes the system never changes.** Composition, task, total
+**The fast paths assume the system never changes.** Composition, task, total
 charge and spin must all stay fixed — true of an MD trajectory, false of a loop
-over structures. fairchem notices and falls back, logging `The UMA fast path
-(merge_mole + compile) is only available for fixed composition, task, charge,
-and spin`. Nothing is wrong when you see that, but a merge and a compile were
-paid for and thrown away: pass `inference_settings="batch"` when the structures
-vary. On CPU that was 18.8 s per single point against 2.6 s; on the H100 above,
-0.38 s to the first result against 59.4 s. Which is why
+over structures. fairchem notices and falls back with a warning. Nothing is
+wrong when you see that, but a Nitro build or a merge and a compile were paid
+for and thrown away: pass `inference_settings="batch"` when the structures
+vary. With fairchem-core 2.22 on CPU that was 18.8 s per single point against
+2.6 s. Which is why
 [`examples/run_all_models.py`](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/examples/run_all_models.py)
 uses `"batch"` for its UMA lines.
 
-Anything the four names do not cover — `max_atoms`, `edge_chunk_size`,
+Anything the named presets do not cover — `max_atoms`, `edge_chunk_size`,
 `execution_mode`, a different `base_precision_dtype` — goes through as a
 `fairchem.core` `InferenceSettings` object:
 
@@ -393,8 +411,8 @@ atoms.calc = get_calculator(
 )
 ```
 
-A misspelled name raises `ValueError` listing the four, before the checkpoint is
-downloaded. fairchem checks it with a bare `assert`, which `python -O` removes.
+A misspelled name raises `ValueError` listing the presets, before the checkpoint
+is downloaded. fairchem checks it with a bare `assert`, which `python -O` removes.
 
 ### eSEN-30M-OMat is not available through this package
 
@@ -476,7 +494,7 @@ Also selectable with `model=`: `esen-sm-direct-all-omol` and
 `esen-md-direct-all-omol`. Direct models predict forces separately and should
 not be assumed to conserve energy. All three use `task="omol"` only and reject
 additional D3: OMol25's omegaB97M-V/def2-TZVPD reference already includes VV10.
-They use fairchem-core 2.22+, with `inference_settings="batch"` by default,
+They use fairchem-core 2.24+, with `inference_settings="batch"` by default,
 CPU/CUDA devices, and Hugging Face `facebook/OMol25` access. No MPS support is
 claimed. `[esen]` is an alias for the same dependency as `[uma]`, already in
 `[all]`; it adds no conflicting stack. Legacy eSEN-30M-OMat remains unsupported.

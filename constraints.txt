@@ -16,7 +16,7 @@ chgnet==0.4.2
 matgl==4.0.3
 mattersim==1.2.5
 nequip==0.18.0
-fairchem-core==2.22.0
+fairchem-core==2.24.0
 torch-dftd==0.5.3
 
 # orb-models is not in `all` (it pins dm-tree==0.1.8, which has no wheel past

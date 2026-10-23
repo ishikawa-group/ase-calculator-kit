@@ -141,11 +141,14 @@ CASES = [
      lambda: _hydroxide(charge=-1, spin=1)),
     ("orb-orbmol-v2-radical", "orb", {"compile": False},
      lambda: _hydroxide(charge=0, spin=2)),
-    # uma-omat keeps the "default" preset so the MD fast path is exercised;
-    # the rest use "batch", which skips a MOLE merge and a compile this suite
-    # discards after one single point anyway (18.8 s vs 2.6 s on CPU).
+    # uma-omat keeps the default "nitro" preset, which on CPU exercises
+    # fairchem's fallback to multigpu (merge_mole + compile); high-precision is
+    # the FP32 fast path. The rest use "batch", which skips a MOLE merge and a
+    # compile this suite discards after one single point anyway (18.8 s vs
+    # 2.6 s on CPU).
     ("uma-omat", "uma", {"task": "omat"}, _bulk),
-    ("uma-omat-turbo", "uma", {"task": "omat", "inference_settings": "turbo"}, _bulk),
+    ("uma-omat-high-precision", "uma",
+     {"task": "omat", "inference_settings": "high-precision"}, _bulk),
     ("uma-oc20", "uma", {"task": "oc20", **_UMA_BATCH}, _bulk),
     ("uma-oc22", "uma", {"task": "oc22", **_UMA_BATCH}, _bulk),
     ("uma-oc25", "uma", {"task": "oc25", **_UMA_BATCH}, _bulk),

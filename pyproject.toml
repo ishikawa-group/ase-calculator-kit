@@ -61,8 +61,8 @@ matgl = ["matgl>=4.0.3,<5"]
 sevennet = ["sevenn>=0.13"]
 mattersim = ["mattersim>=1.2,<2"]
 nequip = ["nequip>=0.18,<0.19"]
-uma = ["fairchem-core>=2.22,<3"]
-esen = ["fairchem-core>=2.22,<3"]
+uma = ["fairchem-core>=2.24,<3"]
+esen = ["fairchem-core>=2.24,<3"]
 dispersion = ["torch-dftd>=0.5,<0.6"]
 # orb-models is deliberately absent from `all` below too, for a different
 # reason: it pins dm-tree==0.1.8, whose newest wheels are cp312, so an `all`
@@ -83,7 +83,7 @@ all = [
     "sevenn>=0.13",
     "mattersim>=1.2,<2",
     "nequip>=0.18,<0.19",
-    "fairchem-core>=2.22,<3",
+    "fairchem-core>=2.24,<3",
     "torch-dftd>=0.5,<0.6",
 ]
 # Development tooling is not a library dependency, so it stays exactly pinned:

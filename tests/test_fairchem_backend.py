@@ -54,12 +54,12 @@ def test_uma_rejects_mps():
         get_calculator("uma", device="mps")
 
 
-def test_default_checkpoint_is_uma_s_1p2p1(monkeypatch):
-    """The documented default, and the reason the extra needs fairchem >=2.22.
+def test_default_is_uma_nitro_on_uma_s_1p2p1(monkeypatch):
+    """The documented default, and the reason the extra needs fairchem >=2.24.
 
-    `uma-s-1p2p1` entered fairchem-core's registry in 2.22.0; an older install
-    answers the name with a KeyError listing what it does have. Pinning the
-    string here means a silent revert to an earlier checkpoint cannot pass.
+    UMA Nitro runs only `uma-s-1p2p1`, and the `nitro` preset name exists from
+    fairchem-core 2.24.0. Pinning both strings here means a silent revert to an
+    earlier checkpoint or to a non-Nitro preset cannot pass.
     """
     seen: dict = {}
     fake = _install_fake_fairchem(monkeypatch, seen)
@@ -70,7 +70,7 @@ def test_default_checkpoint_is_uma_s_1p2p1(monkeypatch):
     assert seen["model"] == "uma-s-1p2p1"
     assert seen["device"] == "cpu"
     assert seen["kwargs"] == {"task_name": "omat"}
-    assert seen["predict_unit_kwargs"] == {"inference_settings": "default"}
+    assert seen["predict_unit_kwargs"] == {"inference_settings": "nitro"}
 
 
 def test_an_earlier_checkpoint_stays_selectable(monkeypatch):
@@ -83,7 +83,9 @@ def test_an_earlier_checkpoint_stays_selectable(monkeypatch):
     assert seen["kwargs"] == {"task_name": "oc20"}
 
 
-@pytest.mark.parametrize("name", ["default", "turbo", "batch", "traineval"])
+@pytest.mark.parametrize(
+    "name", ["nitro", "default", "multigpu", "high-precision", "batch", "traineval"]
+)
 def test_every_inference_preset_reaches_the_predict_unit(monkeypatch, name):
     """The preset belongs to `get_predict_unit`, not to the ASE calculator.
 
@@ -101,7 +103,7 @@ def test_every_inference_preset_reaches_the_predict_unit(monkeypatch, name):
 
 
 def test_an_inference_settings_object_passes_through(monkeypatch):
-    """Anything the four names do not cover goes through untouched."""
+    """Anything the named presets do not cover goes through untouched."""
     seen: dict = {}
     _install_fake_fairchem(monkeypatch, seen)
     settings = object()   # stands in for fairchem's InferenceSettings
@@ -116,8 +118,21 @@ def test_a_misspelled_preset_is_refused_before_the_download(monkeypatch):
     seen: dict = {}
     _install_fake_fairchem(monkeypatch, seen)
 
-    with pytest.raises(ValueError, match="'default', 'turbo', 'batch', 'traineval'"):
-        get_calculator("uma", device="cpu", inference_settings="trubo")
+    with pytest.raises(
+        ValueError,
+        match="'nitro', 'default', 'multigpu', 'high-precision', 'batch', 'traineval'",
+    ):
+        get_calculator("uma", device="cpu", inference_settings="nitor")
+    assert "model" not in seen
+
+
+def test_turbo_is_refused_with_its_replacements(monkeypatch):
+    """fairchem-core 2.24 removed `turbo`; the kit names what replaced it."""
+    seen: dict = {}
+    _install_fake_fairchem(monkeypatch, seen)
+
+    with pytest.raises(ValueError, match="removed in fairchem-core 2.24.*'nitro'.*'multigpu'"):
+        get_calculator("uma", device="cpu", inference_settings="turbo")
     assert "model" not in seen
 
 

@@ -20,8 +20,23 @@ if TYPE_CHECKING:  # never imported at runtime - see invariant 3
 #: ``guess_inference_settings`` validates the name with a bare ``assert``, which
 #: ``python -O`` strips: the typo then reaches ``NAME_TO_INFERENCE_SETTING[...]``
 #: as a ``KeyError`` with no list of what was valid. Checking the name here also
-#: means the error arrives before the checkpoint download.
-INFERENCE_SETTINGS = ("default", "turbo", "batch", "traineval")
+#: means the error arrives before the checkpoint download. The tuple matches
+#: fairchem-core 2.24's ``NAME_TO_INFERENCE_SETTING``, which is why the ``uma``
+#: extra requires ``>=2.24``: an older install has no ``nitro``, ``multigpu`` or
+#: ``high-precision`` and still accepts the ``turbo`` refused below.
+INFERENCE_SETTINGS = (
+    "nitro", "default", "multigpu", "high-precision", "batch", "traineval",
+)
+
+#: Removed in fairchem-core 2.24. Refused here with the same advice upstream
+#: gives, because the name check above runs before fairchem is imported.
+_REMOVED_INFERENCE_SETTINGS = {
+    "turbo": (
+        "inference_settings='turbo' was removed in fairchem-core 2.24. Use the "
+        "default 'nitro' for single-GPU MD, or 'multigpu' (turbo's former "
+        "settings) for multi-worker inference."
+    ),
+}
 
 
 class FairChemBackend(BaseBackend):
@@ -33,7 +48,7 @@ class FairChemBackend(BaseBackend):
         device: str = "auto",
         model: str = "uma-s-1p2p1",
         task: str = "omat",
-        inference_settings: str | InferenceSettings = "default",
+        inference_settings: str | InferenceSettings = "nitro",
         dispersion: bool = False,
         dispersion_xc: str | None = None,
         dispersion_damping: str | None = None,
@@ -56,12 +71,12 @@ class FairChemBackend(BaseBackend):
             before this wrapper runs.
         model:
             UMA model name. Defaults to ``"uma-s-1p2p1"``, the newest small
-            UMA checkpoint. It is only in fairchem-core's model registry from
-            **2.22.0** onwards — an older install answers this name with
-            ``KeyError: Model 'uma-s-1p2p1' not found``, listing the
-            checkpoints it does carry — which is why the ``uma`` extra requires
-            ``fairchem-core>=2.22``. The earlier checkpoints stay selectable by
-            name: ``"uma-s-1p2"``, ``"uma-s-1p1"``, ``"uma-m-1p1"``. Anything
+            UMA checkpoint and the one UMA Nitro is built for. It entered
+            fairchem-core's model registry in 2.22.0 and Nitro arrived in
+            2.24.0, which is why the ``uma`` extra requires
+            ``fairchem-core>=2.24``. The earlier checkpoints stay selectable by
+            name: ``"uma-s-1p2"``, ``"uma-s-1p1"``, ``"uma-m-1p1"``; they run
+            without Nitro (fairchem warns and uses ``multigpu``). Anything
             not in the registry is rejected by fairchem itself; this package
             adds no aliases, so one checkpoint has exactly one name.
         task:
@@ -98,39 +113,43 @@ class FairChemBackend(BaseBackend):
             ``InferenceSettings`` object for anything they do not cover
             (``max_atoms``, ``edge_chunk_size``, ``execution_mode`` ...).
 
-            ============= ==== ========== ======= ==========================
-            name          TF32 merge_mole compile Use for
-            ============= ==== ========== ======= ==========================
-            ``default``   no   yes        yes     MD and relaxation
-            ``turbo``     yes  yes        yes     MD, trading precision for speed
-            ``batch``     no   no         no      Many different structures
-            ``traineval`` no   no         no      Reproducing training numbers
-            ============= ==== ========== ======= ==========================
+            ================== ==== ====================== ==================
+            name               CUDA Model                  Use for
+            ================== ==== ====================== ==================
+            ``nitro``          TF32 UMA Nitro kernels      MD and relaxation
+            ``default``        TF32 fairchem's alias of    (same as ``nitro``)
+                                    ``nitro``
+            ``multigpu``       TF32 merge_mole + compile   ``workers > 1``
+            ``high-precision`` FP32 merge_mole + compile   model comparisons
+            ``batch``          FP32 unmerged               varying structures
+            ``traineval``      FP32 unmerged, graph v1     training numbers
+            ================== ==== ====================== ==================
 
-            **The default is already the MD fast path.** As of fairchem-core
-            2.22, ``default`` merges the MOLE experts and compiles the model;
-            ``turbo`` is the same path with TF32 enabled on top, so it is not
-            the switch that turns compilation on. Measured on an H100 with a
-            27-atom fcc Cu cell and ``task="omat"``, ``turbo`` ran 12.8 ms per
-            step against ``default``'s 13.5 ms — about 5 % — and moved the
-            energy by 0.137 meV/atom. That is the size of a *model* difference,
-            so it stays opt-in here as it does in fairchem: reduced precision
-            belongs in a throughput run, not in a comparison. On CPU it changes
-            nothing. fairchem scopes TF32 to its own forward pass and restores
+            **The default is UMA Nitro** (since 0.6.3, fairchem-core 2.24):
+            a standalone ``uma-s-1p2p1`` model with fused Triton/CuTe kernels
+            and CUDA graphs, for one system per call on a CUDA GPU of compute
+            capability 8.x or newer. Where it cannot run — another checkpoint,
+            the CPU, an older GPU, a change of composition, task, charge or
+            spin — fairchem warns and falls back to ``multigpu``, and from there
+            to the unmerged model, so the call still succeeds. ``turbo`` was
+            removed upstream in 2.24 and is refused here with that advice.
+
+            **Nitro and multigpu compute in TF32 on CUDA.** That is reduced
+            precision, and fairchem logs ``Running in a reduced-precision
+            mode`` when it applies. Use ``"high-precision"`` (merge_mole +
+            compile in FP32) when the number is going into a comparison
+            between models, and for Hessians: Nitro has no double backward.
+            fairchem scopes TF32 to its own forward pass and restores
             ``torch.get_float32_matmul_precision()`` afterwards, so it does not
-            leak into other calculators in the same process.
+            leak into other calculators in the same process. TF32 does not
+            apply on the CPU.
 
-            **``merge_mole`` assumes a fixed system.** Composition, task, total
+            **The fast paths assume a fixed system.** Composition, task, total
             charge and spin must all stay constant, which MD satisfies and a
             loop over different structures does not. fairchem notices and falls
-            back to an unmerged model, logging ``The UMA fast path (merge_mole
-            + compile) is only available for fixed composition, task, charge,
-            and spin``. That is a warning, not an error, but paying for a merge
-            and a compile before discarding them is waste: use ``"batch"`` when
-            the structures vary. On the H100 above it reached the first result
-            in 0.38 s against 59.4 s, at 4x the per-step cost afterwards — and
-            within 0.005 meV of ``default``, so the fast path costs no accuracy
-            when it does apply.
+            back with a warning, but paying for a Nitro build or a merge and a
+            compile before discarding them is waste: use ``"batch"`` when the
+            structures vary.
         dispersion, dispersion_xc:
             Add a Grimme-D3(BJ) correction. The D3 ``xc`` depends on the task's
             DFT level (e.g. ``omat``→pbe, ``oc20``→rpbe). Rejected for the tasks
@@ -151,6 +170,10 @@ class FairChemBackend(BaseBackend):
             so that the correction added here is the same quantity PFP
             adds. See ``ase_calculator_kit.dispersion.DEFAULT_CUTOFF``.
         """
+        if isinstance(inference_settings, str) and (
+            inference_settings in _REMOVED_INFERENCE_SETTINGS
+        ):
+            raise ValueError(_REMOVED_INFERENCE_SETTINGS[inference_settings])
         if isinstance(inference_settings, str) and (
             inference_settings not in INFERENCE_SETTINGS
         ):

@@ -114,10 +114,11 @@ VARIANTS = [
     ("orb orbmol-v2", "orb", {"compile": False}, lambda: make_molecule(charge=0, spin=1)),
     ("orb orbmol-v2 OH-", "orb", {"compile": False}, lambda: make_ion(charge=-1, spin=1)),
     ("orb orbmol-v2 OH radical", "orb", {"compile": False}, lambda: make_ion(charge=0, spin=2)),
-    # inference_settings="batch" throughout: UMA's default merges the MOLE
-    # experts and compiles for one fixed system, which is right for MD and
-    # wasted here, where every line is a different task and structure. On CPU
-    # that was 18.8 s per single point against 2.6 s with "batch".
+    # inference_settings="batch" throughout: UMA's default builds UMA Nitro
+    # (or, without a supported GPU, merges the MOLE experts and compiles) for one
+    # fixed system, which is right for MD and wasted here, where every line is a
+    # different task and structure. On CPU that was 18.8 s per single point
+    # against 2.6 s with "batch".
     ("uma-s-1p2p1/omat", "uma", {"task": "omat", **UMA_BATCH}, make_bulk),
     ("uma-s-1p2p1/oc20", "uma", {"task": "oc20", **UMA_BATCH}, make_bulk),
     ("uma-s-1p2p1/oc22", "uma", {"task": "oc22", **UMA_BATCH}, make_bulk),

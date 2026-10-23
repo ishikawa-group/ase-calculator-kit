@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.6.3
+
+Make UMA Nitro the default UMA inference mode (release preparation: 2026-10-23).
+
+- **The `uma` backend now defaults to `inference_settings="nitro"`**, fairchem-core
+  2.24's standalone UMA Nitro model for `uma-s-1p2p1` (fused Triton/CuTe kernels
+  and CUDA graphs, one system per call, CUDA capability 8.x+). Where Nitro cannot
+  run (another checkpoint, CPU, older GPU, a change of composition, task, charge
+  or spin) fairchem warns and falls back to `multigpu`, then to the unmerged
+  model. **Nitro computes in TF32: UMA numbers from the default differ from
+  0.6.2's FP32 default. For comparisons between models and for Hessians, pass
+  `inference_settings="high-precision"`** (FP32 merge_mole + compile).
+- Accept fairchem-core 2.24's preset names `nitro`, `default` (its alias of
+  nitro), `multigpu`, `high-precision`, `batch` and `traineval`, still checked
+  before the checkpoint download. **`turbo` was removed upstream and now raises
+  `ValueError`**, pointing to `nitro` for single-GPU MD or `multigpu` (turbo's
+  former settings) for multi-worker inference.
+- Require `fairchem-core>=2.24,<3` in the `uma`, `esen` and `all` extras and pin
+  2.24.0 in `constraints.txt`. It brings `torch~=2.13.0` and, on Linux,
+  `nvidia-cutlass-dsl==4.7.1` and `cuda-python>=12.8`. eSEN keeps `"batch"`.
+- The CPU slow suite runs `uma-omat` on the default (exercising the fallback)
+  and on `high-precision` instead of the removed `turbo`.
+- Measured on TSUBAME4 (H100 MIG 3g.47gb, fairchem-core 2.24.0, torch 2.13.0+cu130,
+  `tests/tsubame_validation_063_nitro.py`; rattled fcc Cu, `omat`): the default
+  ran `UMANitroModel` at 5.4 ms/step for 27 atoms and 31.4 ms for 512, against
+  21.8 / 96.6 ms for `high-precision` and 13.3 / 41.7 ms for `multigpu`
+  (steady state; `multigpu` varied to 26.9 ms in a run on another GPU). Against
+  FP32, Nitro moved energies by at most 0.15 meV/atom (force rmse 0.0004 eV/Å),
+  the same as `multigpu`. A vacancy kept Nitro; a Cu→Ni substitution fell back
+  and still answered. Mac CPU slow suite (UMA cases) passed with 2.24.0.
+
 ## 0.6.2
 
 Make SevenNet's FlashTP acceleration a checked option (release preparation: 2026-10-15).

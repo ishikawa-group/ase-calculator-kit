@@ -9,8 +9,8 @@ abstract: >-
   stays unchanged.
 type: software
 license: MIT
-version: 0.6.2
-date-released: "2026-10-15"
+version: 0.6.3
+date-released: "2026-10-23"
 repository-code: "https://github.com/ishikawa-group/ase-calculator-kit"
 url: "https://github.com/ishikawa-group/ase-calculator-kit"
 keywords:

@@ -191,48 +191,61 @@ SevenNetにはcharge/spinの入力が無いため、イオンや任意の開殻�
 `inference_settings=`はfairchemの`get_predict_unit()`の引数で、UMAの速度と精度の
 交換条件がここにある。calculatorを作る時にしか指定できない。
 
-| 値 | TF32 | merge_mole | compile | 用途 |
-|---|:--:|:--:|:--:|---|
-| `"default"` | ✗ | ✅ | ✅ | MD・構造最適化（系が固定） |
-| `"turbo"` | ✅ | ✅ | ✅ | 同上、精度を少し落として速度を取る |
-| `"batch"` | ✗ | ✗ | ✗ | 構造を次々変える場合 |
-| `"traineval"` | ✗ | ✗ | ✗ | fairchemの学習・評価値の再現 |
+| 値 | CUDAでの精度 | model | 用途 |
+|---|:--:|---|---|
+| `"nitro"`（既定） | TF32 | UMA Nitro（専用kernel + CUDA graph） | MD・構造最適化（系が固定） |
+| `"default"` | TF32 | fairchem側の`"nitro"`の別名 | — |
+| `"multigpu"` | TF32 | merge_mole + compile | 複数worker（`workers > 1`） |
+| `"high-precision"` | FP32 | merge_mole + compile | model比較、Hessian |
+| `"batch"` | FP32 | mergeしない | 構造を次々変える場合 |
+| `"traineval"` | FP32 | mergeしない、graph生成v1 | fairchemの学習・評価値の再現 |
 
-誤解しやすい点が2つある。
+**0.6.3から既定はUMA Nitroである**（fairchem-core 2.24が必要）。Nitroは
+`uma-s-1p2p1`専用の推論modelで、compute capability 8.x以上のCUDA GPUで1系ずつ
+計算する。使えない要求（別checkpoint、CPU、古いGPU、composition・task・電荷・
+スピンの変更）ではfairchemが`UMA Nitro cannot serve this request`と警告して
+`"multigpu"`に落ち、必要ならさらにmergeしないmodelに落ちる。計算自体は成功する。
+CPUでは常にこの経路になる。`"turbo"`はfairchem-core 2.24で削除されたので、kitも
+`"nitro"`/`"multigpu"`を案内する`ValueError`で拒否する。
 
-**既定が既にMDのfast pathである。** fairchem-core 2.22では`default`がMOLE expertの
-mergeとcompileを両方有効にしており、`turbo`はそこにTF32を足しただけである。
-つまり`turbo`は「compileを有効にするスイッチ」ではない。昔のfairchemではそうだったが
-今は違う。
+fairchem-core 2.24.0・torch 2.13.0、H100（MIG 3g.47gb）で
+`tests/tsubame_validation_063_nitro.py`により実測した。fcc Cuをrattleした同一系
+12フレーム、`task="omat"`、定常は最後の8フレーム平均、差は`"high-precision"`（FP32）比:
 
-H100（MIG 4g.47gb）でfcc Cu 27原子・`task="omat"`・同一系12フレームを回した実測:
+| 設定 | 27原子: 初回 | 定常 | 512原子: 定常 | 最大⊿E | ⊿F rmse |
+|---|--:|--:|--:|--:|--:|
+| `"high-precision"` | 37.5 s | 21.8 ms | 96.6 ms | — | — |
+| `"nitro"`（既定） | 9.3 s | **5.4 ms** | **31.4 ms** | 0.15 meV/atom | 0.0004 eV/Å |
+| `"multigpu"` | 25.4 s | 13.3 ms | 41.7 ms | 0.14 meV/atom | 0.0004 eV/Å |
+| `"batch"` | 0.26 s | 55.5 ms | 269 ms | 0.0003 meV/atom | 0.0000005 eV/Å |
 
-| 設定 | 初回 | 定常 | `default`との⊿E | ⊿F rmse |
-|---|--:|--:|--:|--:|
-| `"default"` | 59.4 s | 13.5 ms | — | — |
-| `"turbo"` | 48.2 s | 12.8 ms | 3.69 meV (0.137 meV/atom) | 0.0004 eV/Å |
-| `"batch"` | 0.38 s | 56.7 ms | 0.005 meV | 0.000001 eV/Å |
+初回の時間は前回の実行でTriton/inductorのcacheが埋まった状態の値で、cacheが空の
+状態では`high-precision`85.5 s、`nitro`21.3 s、`multigpu`60.6 sだった。定常の
+`multigpu`は別GPUでの実行間で13.3 msと26.9 msとばらついたが、NitroとFP32の比は
+安定していた（今回5.4対21.8 ms、1回目4.1対22.8 ms）。
 
-`turbo`の利得は約5%で、代償が0.137 meV/atom。これは**別のmodel同士の差と同じ桁**で
-ある（OrbMol-v2とUMAの差が小分子で0.08〜0.8 meV/atom）。既定で入れると、model差を
-見たい場所に数値誤差を置くことになる。opt-inのままにする理由はこれで、MACEで
-`float64`を既定にしているのと同じ判断である。CPUでは何も起きない。
+NitroはFP32経路より27原子で4倍、512原子で3倍速く、誤差は`multigpu`と同じTF32由来の
+大きさである。既定で実際に`UMANitroModel`が動いたこと、空孔（元素比が同じ）では
+Nitroが続くこと、Cu1個をNiに置換すると`Compositions differ from merged model`で
+fallbackしつつ計算が返ることも確認した。
 
-なおTF32はUMAのforward計算を囲むcontext managerの中だけで有効になり、抜けるときに
+**NitroはTF32で計算する。つまり精度を落としている。** 0.6.2まではTF32をopt-inに
+していた。このpackageはmodel比較のためにあり、0.1 meV/atom程度の数値誤差はmodel差と
+同じ桁だからである。Nitroでは利得が数%ではなくなったので、既定はfairchemに合わせた。
+fairchemは該当するとき`Running in a reduced-precision mode`とlogに出す。
+**model同士を比較する数値には`inference_settings="high-precision"`を使う。**
+FP32のfast pathである。Nitroは二階微分を持たないので、Hessianにもこちらを使う。
+TF32はUMAのforward計算を囲むcontext managerの中だけで有効になり、抜けるときに
 `torch.get_float32_matmul_precision()`を戻す。同じprocessの他のcalculatorには
-漏れない。
+漏れない。CPUでは何も起きない。
 
-同じ表から、merge+compile自体は数値的に忠実だと分かる。どちらも使わない`"batch"`が
-`default`と0.005 meVしか違わない。
-
-**`merge_mole`は系が変わらない前提である。** composition・task・電荷・スピンが
+**fast pathは系が変わらない前提である。** composition・task・電荷・スピンが
 固定でなければならない。MDは満たすが、構造をループする用途は満たさない。fairchemは
-気づいてfallbackし、`The UMA fast path (merge_mole + compile) is only available
-for fixed composition, task, charge, and spin`とlogに出す。エラーではないが、
-mergeとcompileを払って捨てているだけなので、そこは`"batch"`が正しい。CPUで
-1点計算あたり18.8秒対2.6秒、上のH100では最初の結果まで0.38秒対59.4秒だった。
+気づいてfallbackし警告を出す。エラーではないが、Nitroの構築やmergeとcompileを
+払って捨てているだけなので、そこは`"batch"`が正しい。fairchem-core 2.22のCPUでは
+1点計算あたり18.8秒対2.6秒だった。
 
-4つの名前は`backends/mlip/fairchem.py`側で検証する。上流は`assert`で見ているため
+名前は`backends/mlip/fairchem.py`側で検証する。上流は`assert`で見ているため
 `python -O`で消えるからである。名前で足りない設定（`max_atoms`など）は
 `InferenceSettings`オブジェクトをそのまま渡せる。
 

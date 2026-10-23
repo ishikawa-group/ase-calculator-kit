@@ -75,8 +75,9 @@ the 3.12 results, to the last digit — once `dm-tree` is allowed to be newer.
 The molecular GPU extra uses a validated CuPy version without cp314 wheels.
 `uma` (and therefore `all`) used to be
 ❌ on 3.14, because `fairchem-core` declared `requires-python = ">=3.11,<3.14"`
-and pinned `torch~=2.8.0`, which has no cp314 wheels; fairchem-core 2.22.0 —
-the floor this release requires — lifted the cap and moved to `torch~=2.13.0`.
+and pinned `torch~=2.8.0`, which has no cp314 wheels; fairchem-core 2.22.0
+lifted the cap and moved to `torch~=2.13.0`. The floor is now 2.24.0, the first
+release with UMA Nitro.
 
 A backend that lags a Python release is left to cap itself rather than hidden
 behind an environment marker: pip then names the backend in the error, while a

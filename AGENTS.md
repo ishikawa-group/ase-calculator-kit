@@ -251,23 +251,24 @@ Three things make this go wrong, and all three have happened here:
 
 ## Known upstream quirks
 
-- **UMA's `"default"` inference preset is already the fast path; `"turbo"` only
-  adds TF32.** In fairchem-core 2.22 `inference_settings_default()` sets
-  `merge_mole=True, compile=True`, and `inference_settings_turbo()` is the same
-  dataclass with `tf32=True`. Earlier fairchem releases made `turbo` the one
-  that enabled compilation, so "switch to turbo for MD" is stale advice worth
-  not repeating. `turbo` stays opt-in here for the same reason MACE defaults to
-  float64: this package exists to compare models, and a silently reduced
-  precision corrupts the comparison. Measured on an H100 (27-atom fcc Cu,
-  `task="omat"`): `turbo` 12.8 ms/step against `default` 13.5 ms, for 0.137
-  meV/atom of energy shift — a 5 % gain bought with an error the size of a
-  model difference. The same run shows the fast path itself is faithful:
-  `"batch"`, with neither merge nor compile, lands within 0.005 meV of
-  `default`. `merge_mole` also assumes fixed
-  composition/task/charge/spin — true for MD, false for a loop over structures,
-  where fairchem logs a fallback and `"batch"` is the right preset. The four
-  names are validated in `backends/mlip/fairchem.py` because upstream checks
-  them with a bare `assert`, which `python -O` strips.
+- **UMA's default is Nitro, which is TF32; `"high-precision"` is the FP32
+  path.** Since 0.6.3 (fairchem-core 2.24) the kit passes `"nitro"`, and
+  fairchem's own `"default"` is an alias of it. Nitro runs only `uma-s-1p2p1`
+  on CUDA capability 8.x+ for a fixed composition/task/charge/spin; anything
+  else falls back with a warning to `"multigpu"` (merge_mole + compile in TF32,
+  turbo's former settings) and then to the unmerged model, so CPU runs always
+  take the fallback. Up to 0.6.2 TF32 stayed opt-in because this package exists
+  to compare models (turbo bought 5 % for 0.137 meV/atom on an H100); the user
+  chose Nitro as the default for 0.6.3, so the docs now send comparisons and
+  Hessians (Nitro has no double backward) to `"high-precision"`. Do not quietly
+  revert either way. `"turbo"` was removed upstream and is refused before
+  import with a pointer to `nitro`/`multigpu`. The preset names are validated
+  in `backends/mlip/fairchem.py` because upstream checks them with a bare
+  `assert`, which `python -O` strips; keep that tuple equal to fairchem's
+  `NAME_TO_INFERENCE_SETTING`. Prove Nitro engaged by
+  `calc.predictor.inference_settings.nitro` and the model class
+  `UMANitroModel` (`tests/tsubame_validation_063_nitro.py`), not by the
+  returned numbers.
 
 - **eSEN-30M-OMat cannot be added to the `uma` backend** (checked 2026-08-11, so
   it does not get re-investigated). `esen_30m_omat.pt` lives in the gated repo
