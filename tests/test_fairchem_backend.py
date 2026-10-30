@@ -136,6 +136,70 @@ def test_turbo_is_refused_with_its_replacements(monkeypatch):
     assert "model" not in seen
 
 
+@pytest.mark.parametrize(
+    "model,task", [("uma-s-1p2p1-ft-d4rev", "omol"), ("uma-s-1p2p1-ft-r2scan", "omat")]
+)
+def test_a_fine_tune_gets_its_only_task_by_default(monkeypatch, model, task):
+    """Each fine-tune carries one task, so leaving `task` out selects it."""
+    seen: dict = {}
+    _install_fake_fairchem(monkeypatch, seen)
+
+    get_calculator("uma", device="cpu", model=model)
+
+    assert seen["model"] == model
+    assert seen["kwargs"] == {"task_name": task}
+    assert seen["predict_unit_kwargs"] == {"inference_settings": "nitro"}
+    get_calculator("uma", device="cpu", model=model, task=task)  # explicit is fine
+    assert seen["kwargs"] == {"task_name": task}
+
+
+@pytest.mark.parametrize(
+    "model,task", [("uma-s-1p2p1-ft-d4rev", "omat"), ("uma-s-1p2p1-ft-r2scan", "omol")]
+)
+def test_a_fine_tune_refuses_another_task_before_the_download(monkeypatch, model, task):
+    seen: dict = {}
+    _install_fake_fairchem(monkeypatch, seen)
+
+    with pytest.raises(ValueError, match="has only the"):
+        get_calculator("uma", device="cpu", model=model, task=task)
+    assert "model" not in seen
+
+
+def test_the_d4rev_fine_tune_refuses_d3_before_the_download(monkeypatch):
+    """ωB97M-D4rev already contains dispersion; the `omol` row is not the key."""
+    from ase_calculator_kit.errors import DispersionError
+
+    seen: dict = {}
+    _install_fake_fairchem(monkeypatch, seen)
+
+    with pytest.raises(DispersionError, match="D4rev"):
+        get_calculator("uma", device="cpu", model="uma-s-1p2p1-ft-d4rev", dispersion=True)
+    assert "model" not in seen
+
+
+def test_the_r2scan_fine_tune_keys_d3_on_the_model_not_the_task():
+    """`omat` alone would select PBE parameters for an r2SCAN model."""
+    from ase_calculator_kit.backends.mlip.fairchem import _resolve_task
+    from ase_calculator_kit.dispersion import precheck_dispersion_xc
+
+    task, key = _resolve_task("uma-s-1p2p1-ft-r2scan", "auto")
+    assert (task, key) == ("omat", "uma-s-1p2p1-ft-r2scan")
+    assert precheck_dispersion_xc("uma", key, dispersion=True, dispersion_xc=None) == "r2scan"
+    assert _resolve_task("uma-s-1p2p1", "auto") == ("omat", "omat")
+
+
+def test_the_d4rev_fine_tune_requires_electronic_state(monkeypatch):
+    seen: dict = {}
+    _install_fake_fairchem(monkeypatch, seen)
+    atoms = Atoms("OH")
+    atoms.calc = get_calculator("uma", device="cpu", model="uma-s-1p2p1-ft-d4rev")
+
+    with pytest.raises(ValueError):
+        atoms.get_potential_energy()
+    atoms.info.update(charge=0, spin=2)
+    assert atoms.get_potential_energy() == -1.
+
+
 def test_esen_is_separate_and_omol_only(monkeypatch):
     from ase_calculator_kit.backends.mlip.esen import ESEN_MODELS
     from ase_calculator_kit.errors import DispersionError

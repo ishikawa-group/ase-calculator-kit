@@ -307,7 +307,7 @@ print(atoms.get_potential_energy())
 
 | `task` | Use for |
 |---|---|
-| `omat` (default) | Inorganic bulk/materials, stress, cell optimization |
+| `omat` (default for the multi-task checkpoints) | Inorganic bulk/materials, stress, cell optimization |
 | `omol` | Molecules and polymers |
 | `oc20` | Catalyst surfaces and adsorption |
 | `oc22` | Oxide catalysis |
@@ -318,6 +318,54 @@ print(atoms.get_potential_energy())
 For the molecular task (`omol`), set `atoms.info["charge"]` and
 `atoms.info["spin"]` before computing — see
 [Molecular systems](molecular.md) for why this matters.
+
+### UMA fine-tunes: r²SCAN and ωB97M-D4rev
+
+fairchem-core 2.24 ships two single-task fine-tunes of `uma-s-1p2p1` that move
+the level of theory. Both run on UMA Nitro and are selected with `model=`; the
+default `task="auto"` picks the one task each carries, and any other task is a
+`ValueError` before the download.
+
+| `model` | `task` | Level of theory | Training data | Use for |
+|---|---|---|---|---|
+| `uma-s-1p2p1-ft-r2scan` | `omat` | r²SCAN, no dispersion, **not spin-polarized** | MAD-1.6 ([arXiv:2603.02089](https://arxiv.org/abs/2603.02089)) | most inorganic and mixed systems |
+| `uma-s-1p2p1-ft-d4rev` | `omol` | ωB97M-D4rev, dispersion included | ~4M OMol25 structures relabelled | molecules, noncovalent interactions, molecular liquids and crystals |
+
+```python
+atoms.calc = get_calculator("uma", model="uma-s-1p2p1-ft-r2scan", dispersion=True)  # r²SCAN + D3(BJ)
+
+molecule.info.update(charge=0, spin=1)
+molecule.calc = get_calculator("uma", model="uma-s-1p2p1-ft-d4rev")                 # ωB97M-D4rev
+```
+
+- **Dispersion follows the model, not the task.** `dispersion=True` on
+  `ft-r2scan` adds D3(BJ) with **r²SCAN** parameters, as fairchem recommends —
+  not the PBE parameters that `omat` selects on `uma-s-1p2p1`. On `ft-d4rev` it
+  is refused, because D4rev is already in the reference data.
+- **`ft-r2scan` treats every system as non-magnetic.** Do not use it for
+  magnetic systems, or for cohesive energies (isolated atoms are often strongly
+  magnetic); use `uma-s-1p2p1` with `omat` there.
+- **`ft-d4rev` needs charge and multiplicity**, exactly like the `omol` task:
+  the kit refuses a missing or inconsistent electronic state before inference.
+- Both were fine-tuned on less data than `uma-s-1p2p1`, which is often more
+  accurate at its own levels of theory, and neither ships isolated-atom
+  reference energies, so single-atom energies may be unreliable.
+
+Checked on an H100 (MIG 4g.47gb), fairchem-core 2.24.0, torch 2.13.0, with
+[`tests/tsubame_validation_064_finetunes.py`](https://github.com/ishikawa-group/ase-calculator-kit/blob/main/tests/tsubame_validation_064_finetunes.py):
+twelve rattled frames per system, the kit default (task `"auto"`, Nitro) against
+`"high-precision"` (FP32):
+
+| `model` | system | Nitro ran | steady (Nitro / FP32) | max ΔE | ΔF rmse |
+|---|---|:--:|--:|--:|--:|
+| `uma-s-1p2p1-ft-r2scan` | 27-atom fcc Cu | ✅ | 3.9 / 13.1 ms | 0.10 meV/atom | 0.0003 eV/Å |
+| `uma-s-1p2p1-ft-d4rev` | ethanol, singlet | ✅ | 4.3 / 14.7 ms | 0.05 meV/atom | 0.0006 eV/Å |
+| `uma-s-1p2p1-ft-d4rev` | OH radical, doublet | ✅ | 4.3 ms / — | 0.30 meV/atom | 0.0007 eV/Å |
+
+The OH radical's FP32 steady state (184 ms) is left out: on two atoms the
+compiled FP32 path kept recompiling across frames, so it is not a comparable
+number. On the Cu cell, `dispersion=True` added −7.3053 eV, the r²SCAN D3(BJ) term
+computed on its own (−7.3053 eV), not the PBE one (−15.7485 eV).
 
 ### UMA `inference_settings`
 

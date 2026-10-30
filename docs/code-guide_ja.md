@@ -186,6 +186,28 @@ SevenNetにはcharge/spinの入力が無いため、イオンや任意の開殻�
 なお`get_calculator`にcharge/spin引数は用意していない。SevenNetでは黙って捨てるしか
 なくなり、「引数を渡したのに効かない」という最悪の失敗の仕方になるためである。
 
+## UMAのfine-tune（r²SCAN・ωB97M-D4rev）
+
+fairchem-core 2.24で`uma-s-1p2p1`の単一task fine-tuneが2つ入った。どちらも
+UMA Nitroで動き、`model=`で選ぶ。既定の`task="auto"`がそのmodelの唯一のtaskを選び、
+別のtaskを渡すとdownload前に`ValueError`にする。
+
+| `model` | `task` | 理論レベル | 用途 |
+|---|---|---|---|
+| `uma-s-1p2p1-ft-r2scan` | `omat` | r²SCAN、分散なし、**スピン分極なし** | 無機・混合系の大半 |
+| `uma-s-1p2p1-ft-d4rev` | `omol` | ωB97M-D4rev、分散込み | 分子、非共有結合、分子性液体・結晶 |
+
+**D3の方針はtaskではなくmodelで決まる。** `dispersion.py`の表は普段
+`("uma", task)`で引くが、fine-tuneは同じtask名で理論レベルが変わる。`omat`で引くと
+r²SCANのmodelにPBEのD3を足してしまうので、fine-tuneだけはmodel名をkeyにする
+（`_resolve_task`）。`ft-r2scan`は`xc=r2scan`のD3(BJ)を許可し（fairchemの推奨）、
+`ft-d4rev`はD4revが参照データに入っているので拒否する。
+
+`ft-r2scan`は全系を非磁性として扱うので、磁性系や凝集エネルギー（孤立原子は磁性を
+持つことが多い）には使わず、`uma-s-1p2p1`の`omat`を使う。`ft-d4rev`は`omol`と
+同じく電荷と多重度が必須である。どちらも`uma-s-1p2p1`より少ないデータで学習されており、
+孤立原子の参照エネルギーも同梱されていない。
+
 ## UMAのinference_settings
 
 `inference_settings=`はfairchemの`get_predict_unit()`の引数で、UMAの速度と精度の

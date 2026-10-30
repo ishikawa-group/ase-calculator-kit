@@ -9,7 +9,7 @@ two MUST be kept in sync.
 
 Three tiers (keyed by ``(backend, key)`` where ``key`` is the model's functional
 discriminator — CHGNet model, MatterSim model, NequIP model, OrbMol model,
-SevenNet modal, MACE head, or UMA task):
+SevenNet modal, MACE head, UMA task, or UMA fine-tune name):
 
 1. Allowed   -> a default D3 ``xc`` is known; ``dispersion=True`` wraps the model.
 2. Included  -> dispersion is already in the training functional; always an error.
@@ -174,6 +174,14 @@ _POLICIES: dict[tuple[str, str], DispersionPolicy] = {
     ),
     ("uma", "omc"): _included(
         "PBE+D3", "OMC25 is computed at the PBE+D3 level"
+    ),
+    # UMA single-task fine-tunes: the model name keys them, because the
+    # fine-tune moves the level of theory away from its task's.
+    ("uma", "uma-s-1p2p1-ft-r2scan"): _allowed("r2SCAN", "r2scan"),
+    ("uma", "uma-s-1p2p1-ft-d4rev"): _included(
+        "ωB97M-D4rev",
+        "uma-s-1p2p1-ft-d4rev is trained on ωB97M-D4rev, so D4 dispersion is "
+        "already in the reference data",
     ),
 }
 

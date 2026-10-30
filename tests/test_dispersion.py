@@ -39,6 +39,7 @@ from ase_calculator_kit.dispersion import (
         ("uma", "omat", "pbe"),
         ("uma", "oc20", "rpbe"),
         ("uma", "oc22", "pbe"),
+        ("uma", "uma-s-1p2p1-ft-r2scan", "r2scan"),
     ],
 )
 def test_allowed_returns_default_xc(backend, key, expected_xc):
@@ -52,6 +53,7 @@ def test_allowed_returns_default_xc(backend, key, expected_xc):
         ("uma", "omol"),
         ("uma", "odac"),
         ("uma", "omc"),
+        ("uma", "uma-s-1p2p1-ft-d4rev"),
         ("sevennet", "omol25_low"),
         ("sevennet", "omol25_high"),
         ("sevennet", "spice"),

@@ -137,7 +137,7 @@ any extra keywords to the underlying calculator.
 | `nequip` | `model="L"` (`S`/`M`/`L`/`XL`), `model_path=None`, `compile_mode="eager"`, `neighborlist_backend="matscipy"`, `allow_tf32=False` |
 | `orb` | `model="orbmol-v2"`, `precision="float32-high"`, `compile=None` |
 | `mace` | `model="mh-1"`, `head="auto"`, `default_dtype="float64"`, `accelerator="auto"` |
-| `uma` | `model="uma-s-1p2p1"`, `task="omat"`, `inference_settings="nitro"` (UMA Nitro; see [presets](backends.md#uma-inference_settings)) |
+| `uma` | `model="uma-s-1p2p1"`, `task="auto"` (`omat`, or a fine-tune's only task), `inference_settings="nitro"` (UMA Nitro; see [presets](backends.md#uma-inference_settings)) |
 
 ### DFT keyword arguments
 

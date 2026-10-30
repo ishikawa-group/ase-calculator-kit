@@ -60,6 +60,8 @@ interaction and give wrong energies. So such models reject `dispersion=True`.
 | **UMA** `omol` | OMol25 | ωB97M-V | ✓ yes (VV10 nonlocal) | ⛔ error (double-counting) |
 | **UMA** `odac` | ODAC23 | PBE-D3 | ✓ yes (D3 included) | ⛔ error (double-counting) |
 | **UMA** `omc` | OMC25 | PBE+D3 | ✓ yes (D3 included) | ⛔ error (double-counting) |
+| **UMA** `uma-s-1p2p1-ft-r2scan` (omat task only) | MAD-1.6 | r²SCAN (not spin-polarized) | ✗ none | ✅ allowed — D3 `xc=r2scan` |
+| **UMA** `uma-s-1p2p1-ft-d4rev` (omol task only) | OMol25-4M relabelled | ωB97M-D4rev | ✓ yes (D4rev included) | ⛔ error (double-counting) |
 
 Legend: ✅ allowed (auto `xc`) · ⚠️ unverified (refused by default, override with an
 explicit `dispersion_xc`) · ⛔ always refused (model already includes dispersion).

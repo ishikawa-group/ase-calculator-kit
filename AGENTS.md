@@ -270,6 +270,16 @@ Three things make this go wrong, and all three have happened here:
   `UMANitroModel` (`tests/tsubame_validation_063_nitro.py`), not by the
   returned numbers.
 
+- **UMA fine-tunes key the D3 policy by model name, not task.**
+  `uma-s-1p2p1-ft-r2scan` (`omat` only, r²SCAN, not spin-polarized) and
+  `uma-s-1p2p1-ft-d4rev` (`omol` only, ωB97M-D4rev) reuse a task name at a
+  different level of theory, so `("uma", "omat")` would hand the r²SCAN model
+  PBE D3 parameters. `FINE_TUNED_MODELS` / `_resolve_task` in
+  `backends/mlip/fairchem.py` map each to its one task (`task="auto"`), refuse
+  any other task before the download, and return the model name as the
+  `dispersion.py` key. A new fine-tune needs its entry there plus a
+  `dispersion.py` row and a `docs/models.md` row.
+
 - **eSEN-30M-OMat cannot be added to the `uma` backend** (checked 2026-08-11, so
   it does not get re-investigated). `esen_30m_omat.pt` lives in the gated repo
   `facebook/OMAT24` and is a fairchem-core **1.x** checkpoint used through

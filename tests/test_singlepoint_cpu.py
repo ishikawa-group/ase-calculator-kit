@@ -157,6 +157,10 @@ CASES = [
      lambda: _molecule(charge=0, spin=1)),
     ("uma-omc", "uma", {"task": "omc", **_UMA_BATCH},
      lambda: _molecule(charge=0, spin=1)),
+    # Single-task fine-tunes: no task is passed, so "auto" has to select it.
+    ("uma-ft-r2scan", "uma", {"model": "uma-s-1p2p1-ft-r2scan", **_UMA_BATCH}, _bulk),
+    ("uma-ft-d4rev", "uma", {"model": "uma-s-1p2p1-ft-d4rev", **_UMA_BATCH},
+     lambda: _molecule(charge=0, spin=1)),
 ]
 
 
@@ -182,8 +186,10 @@ def test_cpu_single_point(model, kwargs, make_system, singlepoint_progress):
 
 @pytest.mark.parametrize(
     "model,kwargs",
-    [("chgnet", {}), ("uma", {"task": "oc20"}), ("mace", {"head": "omat_pbe"})],
-    ids=["chgnet", "uma-oc20", "mace-omat_pbe"],
+    [("chgnet", {}), ("uma", {"task": "oc20"}),
+     ("uma", {"model": "uma-s-1p2p1-ft-r2scan", "inference_settings": "batch"}),
+     ("mace", {"head": "omat_pbe"})],
+    ids=["chgnet", "uma-oc20", "uma-ft-r2scan", "mace-omat_pbe"],
 )
 def test_dispersion_changes_energy(model, kwargs, singlepoint_progress):
     """dispersion=True must add a (negative) D3 contribution vs the bare model."""

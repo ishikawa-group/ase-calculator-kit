@@ -39,6 +39,16 @@ _REMOVED_INFERENCE_SETTINGS = {
 }
 
 
+#: Single-task fine-tunes of uma-s-1p2p1 (fairchem-core 2.24), mapped to the one
+#: task each carries. A fine-tune changes the level of theory, so its model name
+#: rather than its task keys the D3 policy: ``omat`` on the r2SCAN fine-tune is
+#: not ``omat`` on PBE+U, and ``omol`` on the D4rev fine-tune is ωB97M-D4rev.
+FINE_TUNED_MODELS = {
+    "uma-s-1p2p1-ft-d4rev": "omol",
+    "uma-s-1p2p1-ft-r2scan": "omat",
+}
+
+
 class FairChemBackend(BaseBackend):
     name = "uma"
 
@@ -47,7 +57,7 @@ class FairChemBackend(BaseBackend):
         *,
         device: str = "auto",
         model: str = "uma-s-1p2p1",
-        task: str = "omat",
+        task: str = "auto",
         inference_settings: str | InferenceSettings = "nitro",
         dispersion: bool = False,
         dispersion_xc: str | None = None,
@@ -79,9 +89,36 @@ class FairChemBackend(BaseBackend):
             without Nitro (fairchem warns and uses ``multigpu``). Anything
             not in the registry is rejected by fairchem itself; this package
             adds no aliases, so one checkpoint has exactly one name.
+
+            Two single-task fine-tunes of ``uma-s-1p2p1`` (fairchem-core 2.24)
+            move the level of theory, and both run on UMA Nitro:
+
+            ========================= ======== ===============================
+            ``model``                 ``task`` Level of theory
+            ========================= ======== ===============================
+            ``uma-s-1p2p1-ft-d4rev``  ``omol`` ωB97M-D4rev, dispersion included
+            ``uma-s-1p2p1-ft-r2scan`` ``omat`` r²SCAN, no dispersion, not
+                                               spin-polarized
+            ========================= ======== ===============================
+
+            ``ft-d4rev`` was fine-tuned on about 4M OMol25 structures relabelled
+            at ωB97M-D4rev: molecules, noncovalent interactions, molecular
+            liquids and crystals. Charge and multiplicity work as for the
+            ``omol`` task, and ``dispersion=True`` is refused. ``ft-r2scan`` was
+            trained on MAD-1.6 (arXiv:2603.02089) and treats every system as
+            non-magnetic: do not use it for magnetic systems or for cohesive
+            energies (isolated atoms are often magnetic) — use ``uma-s-1p2p1``
+            with ``omat`` there. ``dispersion=True`` adds D3(BJ) with r²SCAN
+            parameters, as fairchem recommends. Both were trained on less data
+            than ``uma-s-1p2p1``, which is often more accurate at its own
+            levels of theory, and neither ships isolated-atom reference
+            energies, so single-atom energies may be unreliable.
         task:
-            The ``task_name`` selecting the domain-specific head. A single UMA
-            model serves many domains; pick the task matching your system:
+            The ``task_name`` selecting the domain-specific head. ``"auto"``
+            (the default) means ``"omat"`` for the multi-task checkpoints and
+            the one task a fine-tune carries; any other task on a fine-tune is
+            a ``ValueError`` before the download. A single UMA model serves
+            many domains; pick the task matching your system:
 
             ======= ==================================================
             ``task`` Use for
@@ -152,7 +189,8 @@ class FairChemBackend(BaseBackend):
             structures vary.
         dispersion, dispersion_xc:
             Add a Grimme-D3(BJ) correction. The D3 ``xc`` depends on the task's
-            DFT level (e.g. ``omat``→pbe, ``oc20``→rpbe). Rejected for the tasks
+            DFT level (e.g. ``omat``→pbe, ``oc20``→rpbe), and for a fine-tune on
+            the model's (``ft-r2scan``→r2scan; ``ft-d4rev`` is rejected). Rejected for the tasks
             whose reference data already accounts for dispersion: ``oc25``
             (RPBE+D3 with zero damping), ``omol`` (ωB97M-V nonlocal),
             ``odac`` (PBE-D3) and ``omc``
@@ -182,9 +220,10 @@ class FairChemBackend(BaseBackend):
                 f"Unknown inference_settings {inference_settings!r}. "
                 f"Supported: {valid}, or an InferenceSettings object."
             )
+        task, policy_key = _resolve_task(model, task)
         # Validate the dispersion policy before loading the model (fail fast).
         d3_xc = precheck_dispersion_xc(
-            self.name, task, dispersion=dispersion, dispersion_xc=dispersion_xc,
+            self.name, policy_key, dispersion=dispersion, dispersion_xc=dispersion_xc,
             dispersion_damping=dispersion_damping,
             dispersion_cutoff=dispersion_cutoff,
             dispersion_cutoff_smoothing=dispersion_cutoff_smoothing,
@@ -212,3 +251,22 @@ class FairChemBackend(BaseBackend):
                 cutoff_smoothing=dispersion_cutoff_smoothing,
             )
         return bare
+
+
+def _resolve_task(model: str, task: str) -> tuple[str, str]:
+    """Return ``(task, dispersion policy key)`` for a UMA checkpoint.
+
+    A fine-tune carries exactly one task, so ``"auto"`` resolves to it and any
+    other task is refused before the download. Its model name keys the D3
+    policy, because the fine-tune's level of theory is not its task's.
+    """
+    fine_tune_task = FINE_TUNED_MODELS.get(model)
+    if fine_tune_task is None:
+        task = "omat" if task == "auto" else task
+        return task, task
+    if task not in ("auto", fine_tune_task):
+        raise ValueError(
+            f"{model} has only the {fine_tune_task!r} task; got task={task!r}. "
+            "Omit task, or use uma-s-1p2p1 for the other tasks."
+        )
+    return fine_tune_task, model

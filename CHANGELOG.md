@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.6.4
+
+Add fairchem-core 2.24's two UMA fine-tunes (release preparation: 2026-10-30).
+
+- `get_calculator("uma", model="uma-s-1p2p1-ft-r2scan")` (r²SCAN, `omat` only,
+  trained on MAD-1.6, not spin-polarized) and `model="uma-s-1p2p1-ft-d4rev"`
+  (ωB97M-D4rev, `omol` only, ~4M relabelled OMol25 structures). Both run on UMA
+  Nitro by default.
+- `task` now defaults to `"auto"`: `"omat"` for the multi-task checkpoints, as
+  before, and a fine-tune's only task otherwise. Any other task on a fine-tune
+  raises `ValueError` before the download.
+- **The D3 policy is keyed by the fine-tune's model name, not its task.**
+  `dispersion=True` on `ft-r2scan` adds D3(BJ) with r²SCAN parameters (fairchem's
+  recommendation), not the PBE ones `omat` selects on `uma-s-1p2p1`; on
+  `ft-d4rev` it raises `DispersionError`, since D4rev is in the reference data.
+  `dispersion.py` and `docs/models.md` each gain the two rows.
+- `ft-d4rev` requires explicit charge and multiplicity, like the `omol` task.
+- Unit tests for task selection, refusal and the D3 key; CPU slow cases for both
+  fine-tunes (passed on Mac CPU with fairchem-core 2.24.0, including r²SCAN D3).
+- Measured on TSUBAME4 (H100 MIG 4g.47gb, fairchem-core 2.24.0,
+  `tests/tsubame_validation_064_finetunes.py`): both fine-tunes ran
+  `UMANitroModel` with the default settings and agreed with `high-precision`
+  to at most 0.30 meV/atom (force rmse ≤ 0.0007 eV/Å) on fcc Cu (`ft-r2scan`,
+  3.9 vs 13.1 ms/step), ethanol and the OH radical (`ft-d4rev`). On the Cu cell
+  `dispersion=True` added −7.3053 eV, the r²SCAN D3(BJ) term (PBE's is
+  −15.7485 eV).
+
 ## 0.6.3
 
 Make UMA Nitro the default UMA inference mode (release preparation: 2026-10-23).
